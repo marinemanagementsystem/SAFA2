@@ -1,12 +1,15 @@
 node_modules
 .next
+out
 dist
 coverage
 .env
 .env.local
+.firebase
 .DS_Store
 storage
 *.log
 *.tsbuildinfo
+apps/web/out
 apps/api/generated
 apps/api/prisma/dev.db

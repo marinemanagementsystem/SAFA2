@@ -83,6 +83,22 @@ Render ile yayinlama:
 
 `render.yaml` icinde gizli Trendyol veya GIB sifresi yoktur. Bu bilgiler canli ortamda paneldeki `Baglantilar` bolumunden girilebilir; PostgreSQL icinde `APP_SECRET_KEY` ile sifreli saklanir. Render'in ucretsiz servisleri test/hobi kullanim icindir; servisler uyuyabilir, aylik limitlere takilabilir ve canli ticari kullanim icin garanti vermez.
 
+## Firebase Hosting
+
+Firebase Hosting icin statik panel deploy'u hazirdir:
+
+```bash
+pnpm --filter @safa/web build:firebase
+firebase deploy --only hosting --project safa-8f76e
+```
+
+Canli panel:
+
+- https://safa-8f76e.web.app
+- https://safa-8f76e.firebaseapp.com
+
+Firebase Hosting yalnizca statik paneli yayinlar. Trendyol senkronizasyonu, PDF uretimi, sifreli baglanti kaydi ve veritabani islemleri icin `apps/api` servisinin PostgreSQL ve Redis ile ayrica yayinlanmasi gerekir.
+
 ## Canli GIB entegrasyonuna gecis
 
 1. `.env` icinde `USE_MOCK_INTEGRATIONS=false` yapin.
