@@ -1,0 +1,127 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum DraftStatus {
+  NEEDS_REVIEW
+  READY
+  APPROVED
+  ISSUING
+  ISSUED
+  ERROR
+}
+
+enum InvoiceStatus {
+  ISSUED
+  TRENDYOL_SENT
+  TRENDYOL_SEND_FAILED
+}
+
+enum JobStatus {
+  PENDING
+  PROCESSING
+  SUCCESS
+  FAILED
+}
+
+model Setting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
+}
+
+model Order {
+  id                 String        @id @default(cuid())
+  shipmentPackageId  String        @unique
+  orderNumber        String
+  status             String
+  customerName       String
+  customerEmail      String?
+  customerIdentifier String?
+  invoiceAddress     Json
+  raw                Json
+  totalGrossCents    Int
+  totalDiscountCents Int
+  totalPayableCents  Int
+  currency           String        @default("TRY")
+  lastModifiedAt     DateTime?
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+  invoiceDraft       InvoiceDraft?
+
+  @@index([status])
+  @@index([orderNumber])
+  @@index([lastModifiedAt])
+}
+
+model InvoiceDraft {
+  id           String    @id @default(cuid())
+  orderId      String    @unique
+  order        Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  documentType String    @default("E_ARCHIVE")
+  status       DraftStatus
+  validation   Json
+  lines        Json
+  totals       Json
+  approvedAt   DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  invoice      Invoice?
+
+  @@index([status])
+}
+
+model Invoice {
+  id                String        @id @default(cuid())
+  draftId           String        @unique
+  draft             InvoiceDraft  @relation(fields: [draftId], references: [id], onDelete: Cascade)
+  provider          String
+  providerInvoiceId String
+  invoiceNumber     String        @unique
+  invoiceDate       DateTime
+  status            InvoiceStatus
+  pdfPath           String?
+  pdfUrl            String?
+  trendyolSentAt    DateTime?
+  trendyolStatus    String?
+  error             String?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  @@index([status])
+  @@index([invoiceDate])
+}
+
+model IntegrationJob {
+  id        String    @id @default(cuid())
+  type      String
+  target    String
+  status    JobStatus
+  attempts  Int       @default(0)
+  lastError String?
+  payload   Json?
+  response  Json?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@index([status])
+  @@index([type])
+}
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  action      String
+  subjectType String
+  subjectId   String
+  message     String
+  metadata    Json?
+  createdAt   DateTime @default(now())
+
+  @@index([subjectType, subjectId])
+  @@index([createdAt])
+}

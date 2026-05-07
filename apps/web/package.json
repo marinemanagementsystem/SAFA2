@@ -1,0 +1,25 @@
+{
+  "name": "@safa/web",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "dev": "next dev -p 3000",
+    "build": "next build",
+    "start": "next start -p ${PORT:-3000}",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "echo \"web: no tests\""
+  },
+  "dependencies": {
+    "@safa/shared": "workspace:*",
+    "lucide-react": "^0.555.0",
+    "next": "^16.2.4",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "@types/react": "^19.2.7",
+    "@types/react-dom": "^19.2.3",
+    "typescript": "^5.9.3"
+  }
+}
