@@ -4,6 +4,7 @@ services:
     runtime: node
     plan: free
     region: frankfurt
+    healthCheckPath: /api/settings
     buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm db:generate && pnpm --filter @safa/api build
     preDeployCommand: pnpm --filter @safa/api db:migrate
     startCommand: pnpm --filter @safa/api start
@@ -33,6 +34,7 @@ services:
     runtime: node
     plan: free
     region: frankfurt
+    healthCheckPath: /
     buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter @safa/web build
     startCommand: pnpm --filter @safa/web start
     envVars:
