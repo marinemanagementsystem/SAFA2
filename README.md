@@ -15,6 +15,7 @@ Trendyol siparislerini cekip kontrollu e-Arsiv fatura akisi olusturan yerel uygu
 - Kesilen/kesilmeyen, bugun kesilen/onceki fatura, durum, sehir, tarih ve metin filtreleri
 - Siralanabilir liste ve satira tiklayinca siparis/fatura detay paneli
 - Harici e-Arsiv/Trendyol fatura sorgulama ve siparis eslestirme altyapisi
+- GIB e-Arsiv Portal'a imzasiz taslak yukleme ve portaldan manuel toplu imza akisi
 - Resmi GIB "Bilgi Islem Sisteminin Entegrasyonu" akisi icin `gib-direct` saglayici iskeleti
 - Fatura PDF dosyasini saklama ve Trendyol'a PDF yukleme altyapisi
 - PostgreSQL + Redis + BullMQ job altyapisi
@@ -61,8 +62,10 @@ pnpm start:web
 5. `Baglantilar` bolumunde e-Arsiv Portal kullanici kodu ve sifresini kaydedin.
 6. `Trendyol cek` ile teslim edilmis siparisleri cekin.
 7. Taslaklari kontrol edip onaylayin.
-8. `e-Arsiv ac` veya `Portal ac` ile tokenli portal oturumunu acin.
-9. Gerekirse taslak kartindaki `e-Arsiv XML` ciktisini kullanin.
+8. Fatura ekraninda secili taslaklari `GIB taslagina yukle` ile e-Arsiv Portal Duzenlenen Belgeler alanina taslak olarak aktarabilirsiniz.
+9. `e-Arsiv ac` veya `Portal ac` ile tokenli portal oturumunu acin ve Duzenlenen Belgeler ekraninda taslaklari toplu imzalayin.
+10. Imzadan sonra `e-Arsiv sorgula` ile kesilen resmi faturayi geri okuyup siparisle eslestirin.
+11. Gerekirse taslak kartindaki `e-Arsiv XML` ciktisini kullanin.
 
 ## Ucretsiz hosting
 
@@ -108,7 +111,8 @@ Firebase Hosting URL'sinden yerel API'ye (`http://localhost:4000`) baglanirken C
 3. Entegrasyonlar ekranindan GIB direct servis URL, VKN/TCKN, SOAP sablonu, fatura seri/sira, mali muhur/NES belge imzalama komutu, SOAP/WSS imzalama komutu ve GIB test/canli yetki teyitlerini kaydedin. Ayni bilgiler `.env` ile de verilebilir: `GIB_EARSIV_TAX_ID`, `GIB_EARSIV_SERVICE_URL`, `GIB_EARSIV_SIGNER_COMMAND`, `GIB_EARSIV_SOAP_SIGNER_COMMAND`, `GIB_EARSIV_SOAP_BODY_TEMPLATE` veya `GIB_EARSIV_SOAP_BODY_TEMPLATE_PATH`, `GIB_EARSIV_INVOICE_PREFIX`, `GIB_EARSIV_NEXT_SEQUENCE`, `GIB_EARSIV_TEST_ACCESS_CONFIRMED`, `GIB_EARSIV_PRODUCTION_ACCESS_CONFIRMED`, `GIB_EARSIV_AUTHORIZATION_REFERENCE`.
 4. Imzalama komutlari `{input}` ve `{output}` alanlarini kullanir; SAFA once imzasiz UBL XML'i, sonra SOAP zarfini verir. Komutlar imzali UBL XML ve WSS imzali SOAP zarfini uretir.
 5. Mevcut e-Arsiv portal erisimi harici fatura kayitlarini okumak ve siparislerle eslestirmek icin korunur; bu, daha once portalda kesilmis faturalar icin tekrar kesimi engeller.
-6. Muhasebeciyle KDV, fatura aciklamasi, teslim tarihine gore faturalandirma, fatura seri/sira ve e-Arsiv kullanim statulerini netlestirin.
+6. GIB direct hazir degilken portal taslak yukleme akisi kullanilabilir: SAFA taslagi GIB portalina yukler, resmi imza ve onay portaldan manuel/toplu atilir.
+7. Muhasebeciyle KDV, fatura aciklamasi, teslim tarihine gore faturalandirma, fatura seri/sira ve e-Arsiv kullanim statulerini netlestirin.
 
 ## GIB entegrasyon notu
 

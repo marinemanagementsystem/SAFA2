@@ -177,19 +177,34 @@ export class InvoiceService {
       candidates.push({ draft, previousStatus: draft.status });
     }
 
+    const claimedCandidates: PortalDraftCandidate[] = [];
     for (const candidate of candidates) {
-      await this.prisma.invoiceDraft.update({
-        where: { id: candidate.draft.id },
+      const claim = await this.prisma.invoiceDraft.updateMany({
+        where: {
+          id: candidate.draft.id,
+          status: candidate.previousStatus,
+          portalDraftUuid: null
+        },
         data: { status: DraftStatus.ISSUING }
+      });
+
+      if (claim.count === 1) {
+        claimedCandidates.push(candidate);
+        continue;
+      }
+
+      failures.push({
+        draftId: candidate.draft.id,
+        error: "Bu taslak baska bir istek tarafindan isleniyor veya zaten GIB portalina yuklenmis."
       });
     }
 
     let portalResults: Awaited<ReturnType<EarsivPortalService["createInvoiceDrafts"]>> = [];
     try {
       portalResults =
-        candidates.length > 0
+        claimedCandidates.length > 0
           ? await this.earsivPortal.createInvoiceDrafts(
-              candidates.map((candidate) => ({
+              claimedCandidates.map((candidate) => ({
                 localDraftId: candidate.draft.id,
                 payload: buildGibPortalInvoiceDraftPayload(this.toProviderPayload(candidate.draft))
               }))
@@ -197,7 +212,7 @@ export class InvoiceService {
           : [];
     } catch (error) {
       const message = error instanceof Error ? error.message : "GIB portal taslagi yuklenemedi.";
-      for (const candidate of candidates) {
+      for (const candidate of claimedCandidates) {
         failures.push({ draftId: candidate.draft.id, error: message });
         await this.prisma.invoiceDraft.update({
           where: { id: candidate.draft.id },
@@ -217,7 +232,7 @@ export class InvoiceService {
       };
     }
 
-    const candidateById = new Map(candidates.map((candidate) => [candidate.draft.id, candidate]));
+    const candidateById = new Map(claimedCandidates.map((candidate) => [candidate.draft.id, candidate]));
     let uploaded = 0;
 
     for (const result of portalResults) {

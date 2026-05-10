@@ -105,6 +105,25 @@ export function InvoicesView({
             </div>
           ) : null}
 
+          <div className="sticky-actionbar">
+            <button className="ui-button ghost" onClick={approveSelected} disabled={selectedDrafts.length === 0 || busyAction === "approve"}>
+              {busyAction === "approve" ? <Loader2 size={18} className="spin" /> : <Check size={18} />}
+              Seciliyi onayla
+            </button>
+            <button
+              className="ui-button primary"
+              onClick={uploadPortalSelected}
+              disabled={selectedDrafts.length === 0 || busyAction === "portal-draft-upload"}
+            >
+              {busyAction === "portal-draft-upload" ? <Loader2 size={18} className="spin" /> : <UploadCloud size={18} />}
+              GIB taslagina yukle
+            </button>
+            <button className="ui-button ghost" onClick={issueSelected} disabled={selectedDrafts.length === 0 || busyAction === "issue"}>
+              {busyAction === "issue" ? <Loader2 size={18} className="spin" /> : <CircleDollarSign size={18} />}
+              Fatura kes
+            </button>
+          </div>
+
           <div className="draft-stack">
             {portalDraftedDrafts.length > 0 ? (
               <div className="form-alert table-note">
@@ -141,24 +160,6 @@ export function InvoicesView({
             ) : null}
           </div>
 
-          <div className="sticky-actionbar">
-            <button className="ui-button ghost" onClick={approveSelected} disabled={selectedDrafts.length === 0 || busyAction === "approve"}>
-              {busyAction === "approve" ? <Loader2 size={18} className="spin" /> : <Check size={18} />}
-              Seciliyi onayla
-            </button>
-            <button className="ui-button primary" onClick={issueSelected} disabled={selectedDrafts.length === 0 || busyAction === "issue"}>
-              {busyAction === "issue" ? <Loader2 size={18} className="spin" /> : <CircleDollarSign size={18} />}
-              Fatura kes
-            </button>
-            <button
-              className="ui-button primary"
-              onClick={uploadPortalSelected}
-              disabled={selectedDrafts.length === 0 || busyAction === "portal-draft-upload"}
-            >
-              {busyAction === "portal-draft-upload" ? <Loader2 size={18} className="spin" /> : <UploadCloud size={18} />}
-              GIB taslagina yukle
-            </button>
-          </div>
         </article>
 
         <article className="surface-panel">

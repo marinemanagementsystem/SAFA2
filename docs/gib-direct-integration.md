@@ -88,6 +88,16 @@ SAFA can already read issued e-Arsiv records from the GIB portal credentials and
 match them to Trendyol orders. That capability must stay in place: it prevents
 duplicate issuing for orders that already have a portal or Trendyol invoice.
 
+SAFA also supports a manual-signature bridge for the current operator workflow:
+approved Trendyol invoice drafts can be uploaded to the GIB e-Arsiv portal with
+`EARSIV_PORTAL_FATURA_OLUSTUR` / `RG_BASITFATURA`. This creates an unsigned
+portal draft under Duzenlenen Belgeler. SAFA stores the portal draft UUID and
+marks the local draft as `PORTAL_DRAFTED`; it does not create a local `Invoice`,
+does not mark the draft as `ISSUED`, and does not send a PDF to Trendyol. The
+legal issue step remains the operator's manual portal signature. After signing,
+the existing portal sync/import flow should be used to read the issued invoice
+back and match it to the Trendyol order.
+
 Direct issuing is a stricter path. Portal username/password proves the operator
 can manually use the portal, but direct web-service issuing still needs the GIB
 test/live authorization, document signing, SOAP/WSS signing, and schema-valid
@@ -107,12 +117,13 @@ success.
 - Response hashes and command hashes are stored in the trace manifest; generated
   fake provider IDs are not used.
 
-## Why portal bot is not the default
+## Portal automation boundary
 
 The public e-Arsiv portal is a web UI. Automating hidden portal endpoints is brittle:
 field names, tokens, session behavior, CAPTCHA, or signing flows can change without
-API versioning. The application therefore treats direct GIB web service integration
-as the production path and fails closed until that path is authorized.
+API versioning. SAFA therefore only uses the portal bridge for unsigned draft
+upload and keeps the irreversible legal signature in the portal UI unless the
+direct GIB web-service path is fully authorized and configured.
 
 Official references:
 
