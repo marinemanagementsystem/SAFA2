@@ -1,11 +1,40 @@
 "use client";
 
-import type { ExternalInvoiceListItem, ExternalInvoiceSource, IntegrationJobListItem, InvoiceDraftListItem, InvoiceListItem } from "@safa/shared";
-import { AlertTriangle, Check, CircleDollarSign, FileSearch, FileText, Link2, Loader2, RefreshCw, RotateCcw, UploadCloud } from "lucide-react";
+import type {
+  ExternalInvoiceListItem,
+  ExternalInvoiceSource,
+  IntegrationJobListItem,
+  InvoiceDraftListItem,
+  InvoiceListItem,
+  InvoiceStatus
+} from "@safa/shared";
+import {
+  AlertTriangle,
+  Check,
+  CircleDollarSign,
+  FileSearch,
+  FileText,
+  Link2,
+  ListFilter,
+  Loader2,
+  RefreshCw,
+  RotateCcw,
+  Search,
+  UploadCloud,
+  X
+} from "lucide-react";
 import { useMemo, useState } from "react";
 import { api } from "../../lib/api";
-import { cx, formatDateTime, money, startOfToday, statusLabel, statusTone } from "../../lib/platform/format";
+import { cx, dateMatches, formatDateTime, money, numberValue, startOfToday, statusLabel, statusTone, stringValue } from "../../lib/platform/format";
 import { InvoiceProcessBar, latestInvoiceJob } from "./invoice-process";
+
+type DraftDeskFilter = "actionable" | "all" | "ready" | "approved" | "failed" | "issuing" | "portal" | "external" | "issued";
+type DraftExternalFilter = "all" | "no-external" | "external" | ExternalInvoiceSource;
+type DraftSortField = "process" | "order" | "customer" | "status" | "amount-desc" | "amount-asc";
+type DateFilter = "all" | "today" | "last7" | "last30";
+type ArchiveStatusFilter = "all" | InvoiceStatus;
+type ExternalMatchFilter = "all" | "matched" | "unmatched";
+type ExternalListSourceFilter = "all" | ExternalInvoiceSource;
 
 interface InvoicesViewProps {
   drafts: InvoiceDraftListItem[];
@@ -24,6 +53,50 @@ interface InvoicesViewProps {
   onMatchExternalInvoice: (id: string, target: string) => void;
 }
 
+function isSelectableDraft(draft: InvoiceDraftListItem) {
+  return (
+    (draft.status === "READY" || draft.status === "APPROVED" || (draft.status === "ERROR" && draft.errors.length === 0)) &&
+    draft.externalInvoiceCount === 0
+  );
+}
+
+function matchesDraftDeskFilter(
+  draft: InvoiceDraftListItem,
+  filter: DraftDeskFilter,
+  job?: IntegrationJobListItem,
+  invoice?: InvoiceListItem
+) {
+  if (filter === "all") return true;
+  if (filter === "actionable") return isSelectableDraft(draft);
+  if (filter === "ready") return draft.status === "READY";
+  if (filter === "approved") return draft.status === "APPROVED";
+  if (filter === "failed") return draft.status === "ERROR" || job?.status === "FAILED";
+  if (filter === "issuing") return draft.status === "ISSUING" || job?.status === "PENDING" || job?.status === "PROCESSING";
+  if (filter === "portal") return draft.status === "PORTAL_DRAFTED";
+  if (filter === "external") return draft.externalInvoiceCount > 0;
+  if (filter === "issued") return draft.status === "ISSUED" || Boolean(invoice);
+  return true;
+}
+
+function matchesDraftExternalFilter(draft: InvoiceDraftListItem, filter: DraftExternalFilter) {
+  if (filter === "all") return true;
+  if (filter === "no-external") return draft.externalInvoiceCount === 0;
+  if (filter === "external") return draft.externalInvoiceCount > 0;
+  return draft.externalInvoiceSources.includes(filter);
+}
+
+function draftProcessPriority(draft: InvoiceDraftListItem, job?: IntegrationJobListItem, invoice?: InvoiceListItem) {
+  if (job?.status === "FAILED" || draft.status === "ERROR") return 0;
+  if (job?.status === "PROCESSING" || draft.status === "ISSUING") return 1;
+  if (job?.status === "PENDING") return 2;
+  if (draft.status === "READY") return 3;
+  if (draft.status === "APPROVED") return 4;
+  if (draft.status === "PORTAL_DRAFTED") return 5;
+  if (draft.externalInvoiceCount > 0) return 6;
+  if (invoice || draft.status === "ISSUED") return 7;
+  return 8;
+}
+
 export function InvoicesView({
   drafts,
   invoices,
@@ -40,6 +113,17 @@ export function InvoicesView({
   onMatchExternalInvoice
 }: InvoicesViewProps) {
   const [selectedDrafts, setSelectedDrafts] = useState<string[]>([]);
+  const [draftQuery, setDraftQuery] = useState("");
+  const [draftDeskFilter, setDraftDeskFilter] = useState<DraftDeskFilter>("actionable");
+  const [draftExternalFilter, setDraftExternalFilter] = useState<DraftExternalFilter>("all");
+  const [draftSort, setDraftSort] = useState<DraftSortField>("process");
+  const [showSelectedOnly, setShowSelectedOnly] = useState(false);
+  const [archiveQuery, setArchiveQuery] = useState("");
+  const [archiveStatusFilter, setArchiveStatusFilter] = useState<ArchiveStatusFilter>("all");
+  const [archiveDateFilter, setArchiveDateFilter] = useState<DateFilter>("all");
+  const [externalQuery, setExternalQuery] = useState("");
+  const [externalListSource, setExternalListSource] = useState<ExternalListSourceFilter>("all");
+  const [externalMatchFilter, setExternalMatchFilter] = useState<ExternalMatchFilter>("all");
   const [externalSource, setExternalSource] = useState<ExternalInvoiceSource>("GIB_PORTAL");
   const [externalText, setExternalText] = useState("");
   const [externalDays, setExternalDays] = useState(30);
@@ -47,11 +131,7 @@ export function InvoicesView({
   const externallyInvoicedDrafts = drafts.filter(
     (draft) => (draft.status === "READY" || draft.status === "APPROVED") && draft.externalInvoiceCount > 0
   );
-  const actionableDrafts = drafts.filter(
-    (draft) =>
-      (draft.status === "READY" || draft.status === "APPROVED" || (draft.status === "ERROR" && draft.errors.length === 0)) &&
-      draft.externalInvoiceCount === 0
-  );
+  const actionableDrafts = drafts.filter(isSelectableDraft);
   const portalDraftedDrafts = drafts.filter((draft) => draft.status === "PORTAL_DRAFTED");
   const matchedExternalInvoices = externalInvoices.filter((invoice) => invoice.matchedOrderId).length;
   const draftById = useMemo(() => new Map(drafts.map((draft) => [draft.id, draft])), [drafts]);
@@ -60,16 +140,141 @@ export function InvoicesView({
   const selectedReadyCount = selectedDraftItems.filter((draft) => draft.status === "READY").length;
   const selectedRetryCount = selectedDraftItems.filter((draft) => draft.status === "ERROR").length;
   const selectedApprovedCount = selectedDraftItems.filter((draft) => draft.status === "APPROVED").length;
+  const archiveStatuses = useMemo(() => Array.from(new Set(invoices.map((invoice) => invoice.status))).sort(), [invoices]);
+
+  const filteredDrafts = useMemo(() => {
+    const search = stringValue(draftQuery);
+
+    const filtered = drafts.filter((draft) => {
+      const latestJob = latestInvoiceJob(jobs, draft.id);
+      const invoice = invoiceByDraftId.get(draft.id);
+      const haystack = [
+        draft.shipmentPackageId,
+        draft.orderNumber,
+        draft.customerName,
+        draft.status,
+        statusLabel(draft.status),
+        draft.externalInvoiceNumber,
+        draft.externalInvoiceSources.join(" "),
+        draft.portalDraftNumber,
+        draft.portalDraftUuid,
+        latestJob?.lastError,
+        invoice?.invoiceNumber
+      ]
+        .map(stringValue)
+        .join(" ");
+
+      if (search && !haystack.includes(search)) return false;
+      if (showSelectedOnly && !selectedDrafts.includes(draft.id)) return false;
+      if (!matchesDraftDeskFilter(draft, draftDeskFilter, latestJob, invoice)) return false;
+      if (!matchesDraftExternalFilter(draft, draftExternalFilter)) return false;
+      return true;
+    });
+
+    return [...filtered].sort((left, right) => {
+      const leftJob = latestInvoiceJob(jobs, left.id);
+      const rightJob = latestInvoiceJob(jobs, right.id);
+      const leftInvoice = invoiceByDraftId.get(left.id);
+      const rightInvoice = invoiceByDraftId.get(right.id);
+
+      if (draftSort === "process") {
+        const priority = draftProcessPriority(left, leftJob, leftInvoice) - draftProcessPriority(right, rightJob, rightInvoice);
+        if (priority !== 0) return priority;
+        return stringValue(left.orderNumber).localeCompare(stringValue(right.orderNumber), "tr-TR");
+      }
+
+      if (draftSort === "amount-desc") return numberValue(right.totalPayableCents) - numberValue(left.totalPayableCents);
+      if (draftSort === "amount-asc") return numberValue(left.totalPayableCents) - numberValue(right.totalPayableCents);
+      if (draftSort === "customer") return stringValue(left.customerName).localeCompare(stringValue(right.customerName), "tr-TR");
+      if (draftSort === "status") return stringValue(statusLabel(left.status)).localeCompare(stringValue(statusLabel(right.status)), "tr-TR");
+      return stringValue(left.orderNumber).localeCompare(stringValue(right.orderNumber), "tr-TR");
+    });
+  }, [draftDeskFilter, draftExternalFilter, draftQuery, draftSort, drafts, invoiceByDraftId, jobs, selectedDrafts, showSelectedOnly]);
+
+  const filteredSelectableDrafts = filteredDrafts.filter(isSelectableDraft);
+
+  const filteredInvoices = useMemo(() => {
+    const search = stringValue(archiveQuery);
+
+    return invoices
+      .filter((invoice) => {
+        const haystack = [invoice.invoiceNumber, invoice.orderNumber, invoice.shipmentPackageId, invoice.status, invoice.trendyolStatus]
+          .map(stringValue)
+          .join(" ");
+
+        if (search && !haystack.includes(search)) return false;
+        if (archiveStatusFilter !== "all" && invoice.status !== archiveStatusFilter) return false;
+        if (!dateMatches(invoice.invoiceDate, archiveDateFilter)) return false;
+        return true;
+      })
+      .sort((left, right) => new Date(right.invoiceDate).getTime() - new Date(left.invoiceDate).getTime());
+  }, [archiveDateFilter, archiveQuery, archiveStatusFilter, invoices]);
+
+  const filteredExternalInvoices = useMemo(() => {
+    const search = stringValue(externalQuery);
+
+    return externalInvoices
+      .filter((invoice) => {
+        const haystack = [
+          invoice.invoiceNumber,
+          invoice.buyerName,
+          invoice.buyerIdentifier,
+          invoice.orderNumber,
+          invoice.shipmentPackageId,
+          invoice.matchedOrderNumber,
+          invoice.matchedShipmentPackageId,
+          invoice.source,
+          sourceLabel(invoice.source),
+          invoice.matchReason
+        ]
+          .map(stringValue)
+          .join(" ");
+
+        if (search && !haystack.includes(search)) return false;
+        if (externalListSource !== "all" && invoice.source !== externalListSource) return false;
+        if (externalMatchFilter === "matched" && !invoice.matchedOrderId) return false;
+        if (externalMatchFilter === "unmatched" && invoice.matchedOrderId) return false;
+        return true;
+      })
+      .sort((left, right) => new Date(right.invoiceDate ?? right.updatedAt).getTime() - new Date(left.invoiceDate ?? left.updatedAt).getTime());
+  }, [externalInvoices, externalListSource, externalMatchFilter, externalQuery]);
+
+  const visibleExternalInvoices = filteredExternalInvoices.slice(0, 40);
 
   const invoiceGroups = useMemo(() => {
     const today = startOfToday();
-    const newInvoices = invoices.filter((invoice) => new Date(invoice.invoiceDate) >= today);
-    const previousInvoices = invoices.filter((invoice) => new Date(invoice.invoiceDate) < today);
+    const newInvoices = filteredInvoices.filter((invoice) => new Date(invoice.invoiceDate) >= today);
+    const previousInvoices = filteredInvoices.filter((invoice) => new Date(invoice.invoiceDate) < today);
     return { newInvoices, previousInvoices };
-  }, [invoices]);
+  }, [filteredInvoices]);
 
   function toggleDraft(id: string, checked: boolean) {
     setSelectedDrafts((current) => (checked ? [...current, id] : current.filter((draftId) => draftId !== id)));
+  }
+
+  function selectVisibleDrafts() {
+    const visibleIds = filteredSelectableDrafts.map((draft) => draft.id);
+    setSelectedDrafts((current) => Array.from(new Set([...current, ...visibleIds])));
+  }
+
+  function resetDraftFilters() {
+    setDraftQuery("");
+    setDraftDeskFilter("actionable");
+    setDraftExternalFilter("all");
+    setDraftSort("process");
+    setShowSelectedOnly(false);
+  }
+
+  function resetArchiveFilters() {
+    setArchiveQuery("");
+    setArchiveStatusFilter("all");
+    setArchiveDateFilter("all");
+  }
+
+  function resetExternalFilters() {
+    setExternalQuery("");
+    setExternalListSource("all");
+    setExternalMatchFilter("all");
   }
 
   function approveSelected() {
@@ -104,9 +309,86 @@ export function InvoicesView({
           <div className="section-head">
             <div>
               <span className="micro-label">Onay masasi</span>
-              <h2>{actionableDrafts.length} islenebilir taslak</h2>
+              <h2>{filteredDrafts.length} taslak gosteriliyor</h2>
+              <p>
+                {actionableDrafts.length} islenebilir taslak · {filteredSelectableDrafts.length} bu filtrede secilebilir
+              </p>
             </div>
-            <span className="mode-pill">{selectedDrafts.length} secili</span>
+            <div className="section-actions">
+              <span className="mode-pill">{selectedDrafts.length} secili</span>
+              <button className="ui-button ghost compact" onClick={resetDraftFilters}>
+                <X size={16} />
+                Filtre temizle
+              </button>
+            </div>
+          </div>
+
+          <div className="filter-dock draft-filter-dock" aria-label="Taslak filtreleri">
+            <label className="field search-field">
+              <span>
+                <Search size={17} />
+                Arama
+              </span>
+              <input
+                value={draftQuery}
+                onChange={(event) => setDraftQuery(event.target.value)}
+                placeholder="Siparis, paket, alici, fatura no, hata"
+              />
+            </label>
+            <label className="field">
+              <span>
+                <ListFilter size={17} />
+                Surec
+              </span>
+              <select value={draftDeskFilter} onChange={(event) => setDraftDeskFilter(event.target.value as DraftDeskFilter)}>
+                <option value="actionable">Islenebilir</option>
+                <option value="all">Tum taslaklar</option>
+                <option value="failed">Hata / tekrar dene</option>
+                <option value="ready">Hazir</option>
+                <option value="approved">Onayli</option>
+                <option value="issuing">Kuyruk / kesiliyor</option>
+                <option value="portal">Portal imza bekliyor</option>
+                <option value="external">Harici faturali</option>
+                <option value="issued">SAFA'da kesilen</option>
+              </select>
+            </label>
+            <label className="field">
+              <span>
+                <ListFilter size={17} />
+                Harici
+              </span>
+              <select value={draftExternalFilter} onChange={(event) => setDraftExternalFilter(event.target.value as DraftExternalFilter)}>
+                <option value="all">Tum kaynaklar</option>
+                <option value="no-external">Harici fatura yok</option>
+                <option value="external">Harici fatura var</option>
+                <option value="GIB_PORTAL">e-Arsiv eslesen</option>
+                <option value="TRENDYOL">Trendyol eslesen</option>
+                <option value="MANUAL">Manuel eslesen</option>
+              </select>
+            </label>
+            <label className="field">
+              <span>
+                <ListFilter size={17} />
+                Siralama
+              </span>
+              <select value={draftSort} onChange={(event) => setDraftSort(event.target.value as DraftSortField)}>
+                <option value="process">Surec onceligi</option>
+                <option value="order">Siparis no</option>
+                <option value="customer">Alici adi</option>
+                <option value="status">Durum</option>
+                <option value="amount-desc">Tutar yuksek</option>
+                <option value="amount-asc">Tutar dusuk</option>
+              </select>
+            </label>
+            <label className="field check-field">
+              <span>Secim</span>
+              <div className="check-row">
+                <label>
+                  <input type="checkbox" checked={showSelectedOnly} onChange={(event) => setShowSelectedOnly(event.target.checked)} />
+                  Yalniz secililer
+                </label>
+              </div>
+            </label>
           </div>
 
           {externallyInvoicedDrafts.length > 0 ? (
@@ -129,6 +411,16 @@ export function InvoicesView({
           ) : null}
 
           <div className="sticky-actionbar">
+            <button className="ui-button ghost compact" onClick={selectVisibleDrafts} disabled={filteredSelectableDrafts.length === 0}>
+              <Check size={18} />
+              Gorunenleri sec
+            </button>
+            {selectedDrafts.length > 0 ? (
+              <button className="ui-button ghost compact" onClick={() => setSelectedDrafts([])}>
+                <X size={18} />
+                Secimi temizle
+              </button>
+            ) : null}
             <button className="ui-button ghost" onClick={approveSelected} disabled={selectedDrafts.length === 0 || busyAction === "approve"}>
               {busyAction === "approve" ? <Loader2 size={18} className="spin" /> : <Check size={18} />}
               Seciliyi onayla
@@ -154,17 +446,19 @@ export function InvoicesView({
                 ekranindan toplu imzalanacak.
               </div>
             ) : null}
-            {actionableDrafts.map((draft) => {
+            {filteredDrafts.map((draft) => {
               const latestJob = latestInvoiceJob(jobs, draft.id);
               const invoice = invoiceByDraftId.get(draft.id);
               const failed = latestJob?.status === "FAILED" || draft.status === "ERROR";
+              const selectable = isSelectableDraft(draft);
 
               return (
-              <div className={cx("draft-card", failed && "needs-action")} key={draft.id}>
+              <div className={cx("draft-card", failed && "needs-action", !selectable && "locked")} key={draft.id}>
                 <input
                   type="checkbox"
                   aria-label={`${draft.orderNumber} taslagini sec`}
                   checked={selectedDrafts.includes(draft.id)}
+                  disabled={!selectable}
                   onChange={(event) => toggleDraft(draft.id, event.target.checked)}
                 />
                 <div className="draft-body">
@@ -173,6 +467,19 @@ export function InvoicesView({
                   <small>
                     {draft.customerName} · {money(draft.totalPayableCents, draft.currency)} · {draft.lineCount} satir
                   </small>
+                  {draft.externalInvoiceCount > 0 ? (
+                    <em>
+                      Harici fatura: {draft.externalInvoiceSources.map(sourceLabel).join(", ")}
+                      {draft.externalInvoiceNumber ? ` · ${draft.externalInvoiceNumber}` : ""}
+                    </em>
+                  ) : null}
+                  {draft.status === "PORTAL_DRAFTED" ? (
+                    <em>
+                      GIB portal taslagi yuklendi
+                      {draft.portalDraftNumber ? ` · ${draft.portalDraftNumber}` : ""}
+                    </em>
+                  ) : null}
+                  {invoice ? <em>SAFA faturasi: {invoice.invoiceNumber}</em> : null}
                   {draft.warnings.length > 0 ? <em>{draft.warnings[0]}</em> : null}
                   {failed ? (
                     <div className="draft-warning">
@@ -192,11 +499,11 @@ export function InvoicesView({
               </div>
               );
             })}
-            {actionableDrafts.length === 0 ? (
+            {filteredDrafts.length === 0 ? (
               <div className="empty-state">
                 <FileText size={24} />
-                <strong>Onaya hazir taslak yok</strong>
-                <p>Trendyol cek sonrasi hazir taslaklar burada listelenir.</p>
+                <strong>Taslak bulunamadi</strong>
+                <p>Arama veya filtreleri temizleyin; Trendyol cek sonrasi yeni taslaklar burada listelenir.</p>
               </div>
             ) : null}
           </div>
@@ -207,9 +514,56 @@ export function InvoicesView({
           <div className="section-head">
             <div>
               <span className="micro-label">PDF arsivi</span>
-              <h2>{invoices.length} kesilmis fatura</h2>
+              <h2>{filteredInvoices.length} kesilmis fatura</h2>
+              <p>{invoices.length} toplam resmi fatura icinde filtreleniyor</p>
             </div>
-            <FileText size={20} />
+            <div className="section-actions">
+              <FileText size={20} />
+              <button className="ui-button ghost compact" onClick={resetArchiveFilters}>
+                <X size={16} />
+                Temizle
+              </button>
+            </div>
+          </div>
+
+          <div className="archive-filter-bar" aria-label="PDF arsivi filtreleri">
+            <label className="field search-field">
+              <span>
+                <Search size={17} />
+                Arama
+              </span>
+              <input
+                value={archiveQuery}
+                onChange={(event) => setArchiveQuery(event.target.value)}
+                placeholder="Fatura no, siparis, paket"
+              />
+            </label>
+            <label className="field">
+              <span>
+                <ListFilter size={17} />
+                Durum
+              </span>
+              <select value={archiveStatusFilter} onChange={(event) => setArchiveStatusFilter(event.target.value as ArchiveStatusFilter)}>
+                <option value="all">Tum faturalar</option>
+                {archiveStatuses.map((status) => (
+                  <option value={status} key={status}>
+                    {statusLabel(status)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="field">
+              <span>
+                <ListFilter size={17} />
+                Tarih
+              </span>
+              <select value={archiveDateFilter} onChange={(event) => setArchiveDateFilter(event.target.value as DateFilter)}>
+                <option value="all">Tum zamanlar</option>
+                <option value="today">Bugun kesilen</option>
+                <option value="last7">Son 7 gun</option>
+                <option value="last30">Son 30 gun</option>
+              </select>
+            </label>
           </div>
 
           <InvoiceArchiveSection title="Bugun kesilenler" invoices={invoiceGroups.newInvoices} />
@@ -221,15 +575,21 @@ export function InvoicesView({
         <div className="section-head">
           <div>
             <span className="micro-label">Harici fatura sorgulama</span>
-            <h2>{externalInvoices.length} dis fatura kaydi</h2>
+            <h2>{filteredExternalInvoices.length} dis fatura kaydi</h2>
             <p className="section-copy">
               e-Arsiv Portal'dan canli sorgula, Trendyol siparis verisinde fatura izi ara veya gercek dis fatura listesini aktar.
               Eslesen kayitlar siparis ekraninda "Harici bulundu" olarak gorunur.
             </p>
           </div>
-          <span className={cx("status-pill", matchedExternalInvoices > 0 ? "success" : "warning")}>
-            {matchedExternalInvoices} eslesme
-          </span>
+          <div className="section-actions">
+            <span className={cx("status-pill", matchedExternalInvoices > 0 ? "success" : "warning")}>
+              {matchedExternalInvoices} eslesme
+            </span>
+            <button className="ui-button ghost compact" onClick={resetExternalFilters}>
+              <X size={16} />
+              Temizle
+            </button>
+          </div>
         </div>
 
         <div className="external-tools">
@@ -291,16 +651,60 @@ export function InvoicesView({
             </button>
           </div>
 
-          <div className="external-invoice-list">
-            {externalInvoices.slice(0, 12).map((invoice) => (
-              <ExternalInvoiceRow
-                invoice={invoice}
-                busy={busyAction === `external-match-${invoice.id}`}
-                onMatch={(target) => onMatchExternalInvoice(invoice.id, target)}
-                key={invoice.id}
-              />
-            ))}
-            {externalInvoices.length === 0 ? <div className="mini-empty">Harici fatura kaydi yok.</div> : null}
+          <div className="external-list-panel">
+            <div className="external-list-tools" aria-label="Harici fatura filtreleri">
+              <label className="field search-field">
+                <span>
+                  <Search size={17} />
+                  Arama
+                </span>
+                <input
+                  value={externalQuery}
+                  onChange={(event) => setExternalQuery(event.target.value)}
+                  placeholder="Fatura no, alici, siparis, paket"
+                />
+              </label>
+              <label className="field">
+                <span>
+                  <ListFilter size={17} />
+                  Kaynak
+                </span>
+                <select value={externalListSource} onChange={(event) => setExternalListSource(event.target.value as ExternalListSourceFilter)}>
+                  <option value="all">Tum kaynaklar</option>
+                  <option value="GIB_PORTAL">e-Arsiv</option>
+                  <option value="TRENDYOL">Trendyol</option>
+                  <option value="MANUAL">Manuel</option>
+                </select>
+              </label>
+              <label className="field">
+                <span>
+                  <ListFilter size={17} />
+                  Eslesme
+                </span>
+                <select value={externalMatchFilter} onChange={(event) => setExternalMatchFilter(event.target.value as ExternalMatchFilter)}>
+                  <option value="all">Tum kayitlar</option>
+                  <option value="matched">Eslesenler</option>
+                  <option value="unmatched">Acik kalanlar</option>
+                </select>
+              </label>
+            </div>
+            <div className="external-invoice-list">
+              {visibleExternalInvoices.map((invoice) => (
+                <ExternalInvoiceRow
+                  invoice={invoice}
+                  busy={busyAction === `external-match-${invoice.id}`}
+                  onMatch={(target) => onMatchExternalInvoice(invoice.id, target)}
+                  key={invoice.id}
+                />
+              ))}
+              {externalInvoices.length === 0 ? <div className="mini-empty">Harici fatura kaydi yok.</div> : null}
+              {externalInvoices.length > 0 && filteredExternalInvoices.length === 0 ? (
+                <div className="mini-empty">Bu filtrelerle harici fatura bulunamadi.</div>
+              ) : null}
+              {filteredExternalInvoices.length > visibleExternalInvoices.length ? (
+                <div className="mini-empty">Ilk 40 kayit gosteriliyor; aramayla listeyi daraltabilirsiniz.</div>
+              ) : null}
+            </div>
           </div>
         </div>
       </section>
