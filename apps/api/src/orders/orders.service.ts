@@ -107,6 +107,10 @@ export class OrdersService {
             lines,
             totals: order.invoiceDraft.totals,
             approvedAt: order.invoiceDraft.approvedAt?.toISOString(),
+            portalDraftUuid: order.invoiceDraft.portalDraftUuid ?? undefined,
+            portalDraftNumber: order.invoiceDraft.portalDraftNumber ?? undefined,
+            portalDraftUploadedAt: order.invoiceDraft.portalDraftUploadedAt?.toISOString(),
+            portalDraftStatus: order.invoiceDraft.portalDraftStatus ?? undefined,
             createdAt: order.invoiceDraft.createdAt.toISOString(),
             updatedAt: order.invoiceDraft.updatedAt.toISOString()
           }

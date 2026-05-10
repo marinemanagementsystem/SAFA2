@@ -12,6 +12,7 @@ enum DraftStatus {
   READY
   APPROVED
   ISSUING
+  PORTAL_DRAFTED
   ISSUED
   ERROR
 }
@@ -76,11 +77,18 @@ model InvoiceDraft {
   lines        Json
   totals       Json
   approvedAt   DateTime?
+  portalDraftUuid       String?
+  portalDraftNumber     String?
+  portalDraftUploadedAt DateTime?
+  portalDraftStatus     String?
+  portalDraftResponse   Json?
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
   invoice      Invoice?
 
   @@index([status])
+  @@index([portalDraftUuid])
+  @@index([portalDraftUploadedAt])
 }
 
 model Invoice {

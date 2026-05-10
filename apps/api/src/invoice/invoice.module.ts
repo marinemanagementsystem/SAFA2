@@ -1,4 +1,5 @@
 import { Module } from "@nestjs/common";
+import { EarsivPortalModule } from "../earsiv-portal/earsiv-portal.module";
 import { SettingsModule } from "../settings/settings.module";
 import { TrendyolModule } from "../trendyol/trendyol.module";
 import { InvoiceController } from "./invoice.controller";
@@ -7,7 +8,7 @@ import { GibDirectInvoiceProvider } from "./providers/gib-direct-invoice.provide
 import { invoiceProviderFactory } from "./providers/invoice-provider.token";
 
 @Module({
-  imports: [TrendyolModule, SettingsModule],
+  imports: [TrendyolModule, SettingsModule, EarsivPortalModule],
   controllers: [InvoiceController],
   providers: [
     InvoiceService,

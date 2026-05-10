@@ -3,6 +3,7 @@ export type InvoiceDraftStatus =
   | "READY"
   | "APPROVED"
   | "ISSUING"
+  | "PORTAL_DRAFTED"
   | "ISSUED"
   | "ERROR";
 
@@ -89,6 +90,10 @@ export interface OrderDetail {
     lines: Array<Record<string, unknown>>;
     totals: Record<string, unknown>;
     approvedAt?: string;
+    portalDraftUuid?: string;
+    portalDraftNumber?: string;
+    portalDraftUploadedAt?: string;
+    portalDraftStatus?: string;
     createdAt: string;
     updatedAt: string;
   } | null;
@@ -122,6 +127,10 @@ export interface InvoiceDraftListItem {
   totalPayableCents: number;
   currency: string;
   approvedAt?: string;
+  portalDraftUuid?: string;
+  portalDraftNumber?: string;
+  portalDraftUploadedAt?: string;
+  portalDraftStatus?: string;
   externalInvoiceCount: number;
   externalInvoiceSources: ExternalInvoiceSource[];
   externalInvoiceNumber?: string;
@@ -138,6 +147,18 @@ export interface InvoiceListItem {
   status: InvoiceStatus;
   pdfUrl?: string;
   trendyolStatus?: string;
+}
+
+export interface PortalDraftUploadFailure {
+  draftId: string;
+  error: string;
+}
+
+export interface PortalDraftUploadResult {
+  requested: number;
+  uploaded: number;
+  failed: number;
+  failures: PortalDraftUploadFailure[];
 }
 
 export interface IntegrationJobListItem {

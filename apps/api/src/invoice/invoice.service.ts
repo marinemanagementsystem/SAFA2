@@ -2,6 +2,8 @@ import { BadRequestException, Inject, Injectable, NotFoundException } from "@nes
 import { DraftStatus, InvoiceStatus, JobStatus, Prisma } from "@prisma/client";
 import fs from "node:fs/promises";
 import path from "node:path";
+import { EarsivPortalService } from "../earsiv-portal/earsiv-portal.service";
+import { buildGibPortalInvoiceDraftPayload } from "../earsiv-portal/portal-draft-payload";
 import { PrismaService } from "../prisma/prisma.service";
 import { TrendyolService } from "../trendyol/trendyol.service";
 import { ArchiveInvoicePayload, InvoiceProvider } from "./invoice-provider";
@@ -13,11 +15,30 @@ interface ValidationJson {
   warnings?: string[];
 }
 
+interface PortalDraftCandidate {
+  draft: Prisma.InvoiceDraftGetPayload<{
+    include: {
+      order: {
+        include: {
+          externalInvoices: true;
+        };
+      };
+      invoice: true;
+    };
+  }>;
+  previousStatus: DraftStatus;
+}
+
+function json(value: unknown): Prisma.InputJsonValue {
+  return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
+}
+
 @Injectable()
 export class InvoiceService {
   constructor(
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(TrendyolService) private readonly trendyol: TrendyolService,
+    @Inject(EarsivPortalService) private readonly earsivPortal: EarsivPortalService,
     @Inject(INVOICE_PROVIDER) private readonly provider: InvoiceProvider
   ) {}
 
@@ -54,6 +75,10 @@ export class InvoiceService {
         totalPayableCents: draft.order.totalPayableCents,
         currency: draft.order.currency,
         approvedAt: draft.approvedAt?.toISOString(),
+        portalDraftUuid: draft.portalDraftUuid ?? undefined,
+        portalDraftNumber: draft.portalDraftNumber ?? undefined,
+        portalDraftUploadedAt: draft.portalDraftUploadedAt?.toISOString(),
+        portalDraftStatus: draft.portalDraftStatus ?? undefined,
         externalInvoiceCount: draft.order._count.externalInvoices,
         externalInvoiceSources: Array.from(new Set(draft.order.externalInvoices.map((invoice) => invoice.source))),
         externalInvoiceNumber: draft.order.externalInvoices[0]?.invoiceNumber ?? undefined,
@@ -95,6 +120,174 @@ export class InvoiceService {
       where: { id },
       data: { status: DraftStatus.APPROVED, approvedAt: new Date() }
     });
+  }
+
+  async uploadDraftsToGibPortal(draftIds: string[]) {
+    const uniqueDraftIds = Array.from(new Set(draftIds));
+    const drafts = await this.prisma.invoiceDraft.findMany({
+      where: { id: { in: uniqueDraftIds } },
+      include: {
+        order: {
+          include: {
+            externalInvoices: {
+              orderBy: [{ invoiceDate: "desc" }, { updatedAt: "desc" }]
+            }
+          }
+        },
+        invoice: true
+      }
+    });
+    const draftsById = new Map(drafts.map((draft) => [draft.id, draft]));
+    const failures: Array<{ draftId: string; error: string }> = [];
+    const candidates: PortalDraftCandidate[] = [];
+
+    for (const draftId of uniqueDraftIds) {
+      const draft = draftsById.get(draftId);
+      if (!draft) {
+        failures.push({ draftId, error: "Fatura taslagi bulunamadi." });
+        continue;
+      }
+
+      const validation = draft.validation as ValidationJson;
+      if ((validation.errors ?? []).length > 0) {
+        failures.push({ draftId, error: "Hata iceren taslak GIB portalina yuklenemez." });
+        continue;
+      }
+
+      if (draft.invoice) {
+        failures.push({ draftId, error: "Bu taslak SAFA tarafinda zaten kesilmis." });
+        continue;
+      }
+
+      if (draft.order.externalInvoices.length > 0) {
+        failures.push({ draftId, error: "Bu siparis icin harici e-Arsiv faturasi bulundu; tekrar taslak yukleme engellendi." });
+        continue;
+      }
+
+      if (draft.portalDraftUuid || draft.status === DraftStatus.PORTAL_DRAFTED) {
+        failures.push({ draftId, error: "Bu taslak daha once GIB portalina yuklenmis." });
+        continue;
+      }
+
+      if (draft.status !== DraftStatus.READY && draft.status !== DraftStatus.APPROVED) {
+        failures.push({ draftId, error: "GIB portalina yuklemek icin taslak hazir veya onayli olmali." });
+        continue;
+      }
+
+      candidates.push({ draft, previousStatus: draft.status });
+    }
+
+    for (const candidate of candidates) {
+      await this.prisma.invoiceDraft.update({
+        where: { id: candidate.draft.id },
+        data: { status: DraftStatus.ISSUING }
+      });
+    }
+
+    let portalResults: Awaited<ReturnType<EarsivPortalService["createInvoiceDrafts"]>> = [];
+    try {
+      portalResults =
+        candidates.length > 0
+          ? await this.earsivPortal.createInvoiceDrafts(
+              candidates.map((candidate) => ({
+                localDraftId: candidate.draft.id,
+                payload: buildGibPortalInvoiceDraftPayload(this.toProviderPayload(candidate.draft))
+              }))
+            )
+          : [];
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "GIB portal taslagi yuklenemedi.";
+      for (const candidate of candidates) {
+        failures.push({ draftId: candidate.draft.id, error: message });
+        await this.prisma.invoiceDraft.update({
+          where: { id: candidate.draft.id },
+          data: {
+            status: candidate.previousStatus,
+            portalDraftStatus: "YUKLEME_HATASI",
+            portalDraftResponse: json({ error: message })
+          }
+        });
+      }
+
+      return {
+        requested: uniqueDraftIds.length,
+        uploaded: 0,
+        failed: failures.length,
+        failures
+      };
+    }
+
+    const candidateById = new Map(candidates.map((candidate) => [candidate.draft.id, candidate]));
+    let uploaded = 0;
+
+    for (const result of portalResults) {
+      const candidate = candidateById.get(result.localDraftId);
+      if (!candidate) continue;
+
+      if (result.ok) {
+        const updated = await this.prisma.invoiceDraft.update({
+          where: { id: candidate.draft.id },
+          data: {
+            status: DraftStatus.PORTAL_DRAFTED,
+            approvedAt: candidate.draft.approvedAt ?? new Date(),
+            portalDraftUuid: result.uuid,
+            portalDraftNumber: result.documentNumber,
+            portalDraftUploadedAt: new Date(),
+            portalDraftStatus: result.status ?? "Onaylanmadı",
+            portalDraftResponse: json({
+              command: result.command,
+              pageName: result.pageName,
+              message: result.message,
+              response: result.response
+            })
+          }
+        });
+
+        uploaded += 1;
+        await this.prisma.auditLog.create({
+          data: {
+            action: "invoice-draft.gib-portal.upload",
+            subjectType: "invoiceDraft",
+            subjectId: updated.id,
+            message: `${candidate.draft.order.orderNumber} siparisi GIB e-Arsiv portalina taslak olarak yuklendi; imza portaldan beklenecek.`,
+            metadata: {
+              draftId: updated.id,
+              orderNumber: candidate.draft.order.orderNumber,
+              shipmentPackageId: candidate.draft.order.shipmentPackageId,
+              portalDraftUuid: result.uuid,
+              portalDraftStatus: result.status
+            }
+          }
+        });
+      } else {
+        failures.push({
+          draftId: candidate.draft.id,
+          error: result.error ?? result.message ?? "GIB portal taslagi yuklenemedi."
+        });
+
+        await this.prisma.invoiceDraft.update({
+          where: { id: candidate.draft.id },
+          data: {
+            status: candidate.previousStatus,
+            portalDraftStatus: "YUKLEME_HATASI",
+            portalDraftResponse: json({
+              command: result.command,
+              pageName: result.pageName,
+              error: result.error,
+              message: result.message,
+              response: result.response
+            })
+          }
+        });
+      }
+    }
+
+    return {
+      requested: uniqueDraftIds.length,
+      uploaded,
+      failed: failures.length,
+      failures
+    };
   }
 
   async issueDraft(draftId: string, integrationJobId?: string) {

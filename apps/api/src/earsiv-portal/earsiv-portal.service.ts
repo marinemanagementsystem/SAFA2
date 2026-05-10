@@ -3,6 +3,7 @@ import axios from "axios";
 import { randomUUID } from "node:crypto";
 import { SettingsService } from "../settings/settings.service";
 import type { GibPortalConnection } from "../settings/connection-types";
+import type { GibPortalInvoiceDraftPayload } from "./portal-draft-payload";
 
 interface AssosLoginResponse {
   token?: string;
@@ -17,6 +18,24 @@ interface DispatchResponse {
   rows?: unknown;
   error?: unknown;
   messages?: Array<{ text?: string }>;
+}
+
+interface PortalDraftUploadInput {
+  localDraftId: string;
+  payload: GibPortalInvoiceDraftPayload;
+}
+
+export interface PortalDraftUploadResult {
+  localDraftId: string;
+  ok: boolean;
+  uuid: string;
+  documentNumber?: string;
+  status?: string;
+  message?: string;
+  command: string;
+  pageName: string;
+  response?: DispatchResponse;
+  error?: string;
 }
 
 function loginEndpoint(portalUrl: string) {
@@ -64,6 +83,26 @@ function findArrays(value: unknown, output: Record<string, unknown>[][] = []) {
   }
 
   return output;
+}
+
+function stringifyResponseData(response: DispatchResponse) {
+  const value = response.data ?? response.result ?? response.rows ?? response;
+  if (typeof value === "string") return value;
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+}
+
+function successText(value: string) {
+  const normalized = value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/ı/g, "i")
+    .toLowerCase();
+
+  return normalized.includes("basari");
 }
 
 @Injectable()
@@ -125,6 +164,60 @@ export class EarsivPortalService {
     );
   }
 
+  async createInvoiceDrafts(inputs: PortalDraftUploadInput[]): Promise<PortalDraftUploadResult[]> {
+    if (inputs.length === 0) return [];
+
+    const { connection, response } = await this.login("SAFA live e-arsiv portal draft upload");
+    if (!response.token) {
+      throw new ServiceUnavailableException("e-Arsiv portali oturum tokeni donmedi; portal taslagi yuklenemedi.");
+    }
+
+    const command = "EARSIV_PORTAL_FATURA_OLUSTUR";
+    const pageName = "RG_BASITFATURA";
+    const results: PortalDraftUploadResult[] = [];
+
+    for (const input of inputs) {
+      try {
+        const dispatch = await this.dispatch(
+          connection,
+          response.token,
+          command,
+          pageName,
+          input.payload as unknown as Record<string, unknown>,
+          "SAFA live e-arsiv portal draft upload"
+        );
+        const message = stringifyResponseData(dispatch);
+        const errorMessage = dispatch.error ? JSON.stringify(dispatch.error) : undefined;
+        const ok = !dispatch.error && successText(message);
+
+        results.push({
+          localDraftId: input.localDraftId,
+          ok,
+          uuid: input.payload.faturaUuid,
+          documentNumber: input.payload.belgeNumarasi || undefined,
+          status: ok ? "Onaylanmadı" : "YUKLEME_HATASI",
+          message,
+          command,
+          pageName,
+          response: dispatch,
+          error: ok ? undefined : errorMessage ?? message
+        });
+      } catch (error) {
+        results.push({
+          localDraftId: input.localDraftId,
+          ok: false,
+          uuid: input.payload.faturaUuid,
+          status: "YUKLEME_HATASI",
+          command,
+          pageName,
+          error: error instanceof Error ? error.message : "e-Arsiv portal taslagi yuklenemedi."
+        });
+      }
+    }
+
+    return results;
+  }
+
   private async login(userAgent: string): Promise<{ connection: GibPortalConnection; response: AssosLoginResponse }> {
     const connection = await this.settings.getGibPortalConnection();
     if (!connection?.username || !connection.password) {
@@ -161,7 +254,14 @@ export class EarsivPortalService {
     return { connection, response: response.data };
   }
 
-  private async dispatch(connection: GibPortalConnection, token: string, cmd: string, pageName: string, jp: Record<string, unknown>) {
+  private async dispatch(
+    connection: GibPortalConnection,
+    token: string,
+    cmd: string,
+    pageName: string,
+    jp: Record<string, unknown>,
+    userAgent = "SAFA live e-arsiv invoice query"
+  ) {
     const form = new URLSearchParams({
       cmd,
       callid: randomUUID(),
@@ -173,7 +273,7 @@ export class EarsivPortalService {
     const response = await axios.post<DispatchResponse>(dispatchEndpoint(connection.portalUrl), form.toString(), {
       headers: {
         "Content-Type": "application/x-www-form-urlencoded;charset=utf-8",
-        "User-Agent": "SAFA live e-arsiv invoice query"
+        "User-Agent": userAgent
       },
       timeout: 30_000,
       validateStatus: () => true
