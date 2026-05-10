@@ -1239,6 +1239,11 @@ a {
   background: var(--surface);
 }
 
+.draft-card.needs-action {
+  border-color: rgba(180, 35, 24, 0.32);
+  background: rgba(255, 247, 246, 0.82);
+}
+
 .draft-card input {
   width: 18px;
   height: 18px;
@@ -1262,6 +1267,144 @@ a {
 .draft-body em {
   font-size: 13px;
   line-height: 1.4;
+}
+
+.invoice-selection-note {
+  display: grid;
+  gap: 4px;
+}
+
+.draft-warning,
+.job-error-callout {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid rgba(180, 35, 24, 0.24);
+  border-radius: 8px;
+  color: var(--danger);
+  background: rgba(255, 247, 246, 0.92);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.draft-warning span,
+.job-error-callout span {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.invoice-process {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(247, 250, 249, 0.86);
+}
+
+.invoice-process.compact {
+  padding: 10px;
+}
+
+.invoice-process-head,
+.job-process-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.invoice-process-head span,
+.job-process-head h3 {
+  font-weight: 800;
+}
+
+.invoice-process-head strong {
+  font-size: 13px;
+}
+
+.invoice-progress-track {
+  height: 9px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(12, 32, 29, 0.1);
+}
+
+.invoice-progress-track span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--brand);
+  transition: width 260ms ease;
+}
+
+.invoice-process.warning .invoice-progress-track span {
+  background: var(--amber);
+}
+
+.invoice-process.danger .invoice-progress-track span {
+  background: var(--danger);
+}
+
+.invoice-process.success .invoice-progress-track span {
+  background: var(--success);
+}
+
+.invoice-process-steps {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.invoice-process-steps span {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 26px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: rgba(12, 32, 29, 0.06);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.invoice-process-steps span.done,
+.invoice-process-steps span.current {
+  color: var(--ink);
+  background: rgba(6, 122, 111, 0.12);
+}
+
+.invoice-process.danger .invoice-process-steps span.current {
+  color: var(--danger);
+  background: rgba(180, 35, 24, 0.12);
+}
+
+.invoice-process p,
+.invoice-process small {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.job-process-row {
+  padding-bottom: 20px;
+}
+
+.job-process-card {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.job-process-head h3 {
+  margin: 7px 0 0;
 }
 
 .sticky-actionbar {

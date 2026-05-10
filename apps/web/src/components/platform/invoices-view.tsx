@@ -1,15 +1,17 @@
 "use client";
 
-import type { ExternalInvoiceListItem, ExternalInvoiceSource, InvoiceDraftListItem, InvoiceListItem } from "@safa/shared";
-import { Check, CircleDollarSign, FileSearch, FileText, Link2, Loader2, RefreshCw, UploadCloud } from "lucide-react";
+import type { ExternalInvoiceListItem, ExternalInvoiceSource, IntegrationJobListItem, InvoiceDraftListItem, InvoiceListItem } from "@safa/shared";
+import { AlertTriangle, Check, CircleDollarSign, FileSearch, FileText, Link2, Loader2, RefreshCw, RotateCcw, UploadCloud } from "lucide-react";
 import { useMemo, useState } from "react";
 import { api } from "../../lib/api";
 import { cx, formatDateTime, money, startOfToday, statusLabel, statusTone } from "../../lib/platform/format";
+import { InvoiceProcessBar, latestInvoiceJob } from "./invoice-process";
 
 interface InvoicesViewProps {
   drafts: InvoiceDraftListItem[];
   invoices: InvoiceListItem[];
   externalInvoices: ExternalInvoiceListItem[];
+  jobs: IntegrationJobListItem[];
   settings: Record<string, unknown>;
   busyAction: string | null;
   onApprove: (ids: string[]) => void;
@@ -26,6 +28,7 @@ export function InvoicesView({
   drafts,
   invoices,
   externalInvoices,
+  jobs,
   busyAction,
   onApprove,
   onIssue,
@@ -44,11 +47,19 @@ export function InvoicesView({
   const externallyInvoicedDrafts = drafts.filter(
     (draft) => (draft.status === "READY" || draft.status === "APPROVED") && draft.externalInvoiceCount > 0
   );
-  const readyOrApproved = drafts.filter(
-    (draft) => (draft.status === "READY" || draft.status === "APPROVED") && draft.externalInvoiceCount === 0
+  const actionableDrafts = drafts.filter(
+    (draft) =>
+      (draft.status === "READY" || draft.status === "APPROVED" || (draft.status === "ERROR" && draft.errors.length === 0)) &&
+      draft.externalInvoiceCount === 0
   );
   const portalDraftedDrafts = drafts.filter((draft) => draft.status === "PORTAL_DRAFTED");
   const matchedExternalInvoices = externalInvoices.filter((invoice) => invoice.matchedOrderId).length;
+  const draftById = useMemo(() => new Map(drafts.map((draft) => [draft.id, draft])), [drafts]);
+  const invoiceByDraftId = useMemo(() => new Map(invoices.map((invoice) => [invoice.draftId, invoice])), [invoices]);
+  const selectedDraftItems = selectedDrafts.map((id) => draftById.get(id)).filter((draft): draft is InvoiceDraftListItem => Boolean(draft));
+  const selectedReadyCount = selectedDraftItems.filter((draft) => draft.status === "READY").length;
+  const selectedRetryCount = selectedDraftItems.filter((draft) => draft.status === "ERROR").length;
+  const selectedApprovedCount = selectedDraftItems.filter((draft) => draft.status === "APPROVED").length;
 
   const invoiceGroups = useMemo(() => {
     const today = startOfToday();
@@ -93,7 +104,7 @@ export function InvoicesView({
           <div className="section-head">
             <div>
               <span className="micro-label">Onay masasi</span>
-              <h2>{readyOrApproved.length} islenebilir taslak</h2>
+              <h2>{actionableDrafts.length} islenebilir taslak</h2>
             </div>
             <span className="mode-pill">{selectedDrafts.length} secili</span>
           </div>
@@ -102,6 +113,18 @@ export function InvoicesView({
             <div className="form-alert table-note">
               {externallyInvoicedDrafts.length} taslak harici e-Arsiv faturasiyla eslestigi icin tekrar fatura kesimine kapatildi.
               Bunlar siparis ekraninda "Harici bulundu" olarak gorunur.
+            </div>
+          ) : null}
+
+          {selectedDrafts.length > 0 ? (
+            <div className="form-alert table-note invoice-selection-note">
+              <strong>{selectedDrafts.length} taslak secildi.</strong>
+              <span>
+                {selectedReadyCount > 0 ? `${selectedReadyCount} hazir taslak fatura keserken otomatik onaylanacak. ` : ""}
+                {selectedApprovedCount > 0 ? `${selectedApprovedCount} taslak dogrudan kuyruga alinabilir. ` : ""}
+                {selectedRetryCount > 0 ? `${selectedRetryCount} basarisiz taslak tekrar denenecek. ` : ""}
+                Sonucu her karttaki surec cubugundan takip edebilirsiniz.
+              </span>
             </div>
           ) : null}
 
@@ -120,7 +143,7 @@ export function InvoicesView({
             </button>
             <button className="ui-button ghost" onClick={issueSelected} disabled={selectedDrafts.length === 0 || busyAction === "issue"}>
               {busyAction === "issue" ? <Loader2 size={18} className="spin" /> : <CircleDollarSign size={18} />}
-              Fatura kes
+              Onayla ve fatura kes
             </button>
           </div>
 
@@ -131,27 +154,45 @@ export function InvoicesView({
                 ekranindan toplu imzalanacak.
               </div>
             ) : null}
-            {readyOrApproved.map((draft) => (
-              <label className="draft-card" key={draft.id}>
+            {actionableDrafts.map((draft) => {
+              const latestJob = latestInvoiceJob(jobs, draft.id);
+              const invoice = invoiceByDraftId.get(draft.id);
+              const failed = latestJob?.status === "FAILED" || draft.status === "ERROR";
+
+              return (
+              <div className={cx("draft-card", failed && "needs-action")} key={draft.id}>
                 <input
                   type="checkbox"
+                  aria-label={`${draft.orderNumber} taslagini sec`}
                   checked={selectedDrafts.includes(draft.id)}
                   onChange={(event) => toggleDraft(draft.id, event.target.checked)}
                 />
-                <span className="draft-body">
+                <div className="draft-body">
                   <span className={cx("status-pill", statusTone(draft.status))}>{statusLabel(draft.status)}</span>
                   <strong>{draft.orderNumber}</strong>
                   <small>
                     {draft.customerName} · {money(draft.totalPayableCents, draft.currency)} · {draft.lineCount} satir
                   </small>
                   {draft.warnings.length > 0 ? <em>{draft.warnings[0]}</em> : null}
+                  {failed ? (
+                    <div className="draft-warning">
+                      <AlertTriangle size={16} />
+                      <span>{latestJob?.lastError ?? "Son fatura denemesi basarisiz oldu."}</span>
+                      <button className="ui-button ghost compact" type="button" onClick={() => onIssue([draft.id])}>
+                        <RotateCcw size={16} />
+                        Tekrar dene
+                      </button>
+                    </div>
+                  ) : null}
+                  <InvoiceProcessBar draft={draft} invoice={invoice} job={latestJob} compact />
                   <a className="text-link" href={api.draftPdfUrl(draft.id)} target="_blank" rel="noreferrer">
                     Taslak PDF
                   </a>
-                </span>
-              </label>
-            ))}
-            {readyOrApproved.length === 0 ? (
+                </div>
+              </div>
+              );
+            })}
+            {actionableDrafts.length === 0 ? (
               <div className="empty-state">
                 <FileText size={24} />
                 <strong>Onaya hazir taslak yok</strong>

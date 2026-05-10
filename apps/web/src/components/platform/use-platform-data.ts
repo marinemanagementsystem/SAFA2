@@ -429,8 +429,13 @@ export function usePlatformData() {
 
       try {
         const result = await api.issue(draftIds);
-        setMessage(`${result.enqueued} fatura isi kuyruga alindi. Kisa sure sonra liste yenilenecek.`);
-        window.setTimeout(() => void load(), 1400);
+        const autoApprovedText = result.autoApproved > 0 ? ` ${result.autoApproved} hazir taslak otomatik onaylandi.` : "";
+        const failedText = result.failed > 0 ? ` ${result.failed} taslak kuyruga alinamadi; kart uzerindeki uyariyi kontrol edin.` : "";
+        setMessage(`${result.enqueued} fatura isi kuyruga alindi.${autoApprovedText}${failedText} Sureci kartlardaki cubuktan izleyebilirsiniz.`);
+        await load();
+        window.setTimeout(() => void load(), 1500);
+        window.setTimeout(() => void load(), 4500);
+        window.setTimeout(() => void load(), 9000);
       } catch (error) {
         setMessage(errorMessage(error, "Fatura kesme isi kuyruga alinamadi."));
       } finally {

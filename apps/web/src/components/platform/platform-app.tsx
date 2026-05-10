@@ -58,6 +58,7 @@ export function PlatformApp({ view }: PlatformAppProps) {
               drafts={snapshot.drafts}
               invoices={snapshot.invoices}
               externalInvoices={snapshot.externalInvoices}
+              jobs={snapshot.jobs}
               settings={snapshot.settings}
               busyAction={platform.busyAction}
               onApprove={(ids) => void platform.approveDrafts(ids)}
@@ -104,7 +105,15 @@ export function PlatformApp({ view }: PlatformAppProps) {
               ownerUsername={session.username}
             />
           ) : null}
-          {view === "operations" ? <OperationsView jobs={snapshot.jobs} orders={snapshot.orders} drafts={snapshot.drafts} /> : null}
+          {view === "operations" ? (
+            <OperationsView
+              jobs={snapshot.jobs}
+              orders={snapshot.orders}
+              drafts={snapshot.drafts}
+              invoices={snapshot.invoices}
+              onRetryInvoice={(id) => void platform.issueDrafts([id])}
+            />
+          ) : null}
           {view === "settings" ? (
             <SettingsView snapshot={snapshot} loadState={platform.loadState} apiAvailable={platform.apiAvailable} />
           ) : null}

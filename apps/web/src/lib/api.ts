@@ -406,10 +406,13 @@ export const api = {
   sync: () => request<{ packageCount: number; upserted: number; draftsCreated: number }>("/sync/trendyol", { method: "POST" }),
   approve: (id: string) => request(`/invoice-drafts/${id}/approve`, { method: "POST" }),
   issue: (draftIds: string[]) =>
-    request<{ enqueued: number }>("/invoices/issue", {
+    request<{ requested: number; enqueued: number; autoApproved: number; failed: number; failures: Array<{ draftId: string; error: string }> }>(
+      "/invoices/issue",
+      {
       method: "POST",
       body: JSON.stringify({ draftIds })
-    }),
+      }
+    ),
   uploadPortalDrafts: (draftIds: string[]) =>
     request<PortalDraftUploadResult>("/invoice-drafts/gib-portal-drafts", {
       method: "POST",

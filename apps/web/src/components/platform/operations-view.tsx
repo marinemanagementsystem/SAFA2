@@ -1,20 +1,25 @@
 "use client";
 
-import type { IntegrationJobListItem, InvoiceDraftListItem, OrderListItem } from "@safa/shared";
+import type { IntegrationJobListItem, InvoiceDraftListItem, InvoiceListItem, OrderListItem } from "@safa/shared";
 import { Activity, AlertTriangle, CheckCircle2, Clock3, PackageCheck } from "lucide-react";
-import { cx, formatDateTime, statusLabel, statusTone } from "../../lib/platform/format";
+import { cx, formatDateTime, statusTone } from "../../lib/platform/format";
+import { FailedJobRetryButton, InvoiceProcessBar, JobStatusPill } from "./invoice-process";
 
 interface OperationsViewProps {
   jobs: IntegrationJobListItem[];
   orders: OrderListItem[];
   drafts: InvoiceDraftListItem[];
+  invoices: InvoiceListItem[];
+  onRetryInvoice: (draftId: string) => void;
 }
 
-export function OperationsView({ jobs, orders, drafts }: OperationsViewProps) {
+export function OperationsView({ jobs, orders, drafts, invoices, onRetryInvoice }: OperationsViewProps) {
   const failed = jobs.filter((job) => job.status === "FAILED");
   const processing = jobs.filter((job) => job.status === "PROCESSING" || job.status === "PENDING");
   const reviewDrafts = drafts.filter((draft) => draft.status === "NEEDS_REVIEW" || draft.errors.length > 0);
   const ordersWithoutKnownInvoice = orders.filter((order) => !order.invoiceId && order.externalInvoiceCount === 0);
+  const draftById = new Map(drafts.map((draft) => [draft.id, draft]));
+  const invoiceByDraftId = new Map(invoices.map((invoice) => [invoice.draftId, invoice]));
 
   return (
     <div className="view-stack">
@@ -52,20 +57,39 @@ export function OperationsView({ jobs, orders, drafts }: OperationsViewProps) {
           </div>
 
           <div className="timeline-list">
-            {jobs.slice(0, 16).map((job) => (
-              <div className="timeline-row" key={job.id}>
+            {jobs.slice(0, 16).map((job) => {
+              const draft = draftById.get(job.target);
+              const invoice = invoiceByDraftId.get(job.target);
+              const orderNumber = draft?.orderNumber ?? job.target;
+
+              return (
+              <div className={cx("timeline-row job-process-row", statusTone(job.status))} key={job.id}>
                 <span className={cx("timeline-marker", statusTone(job.status))} />
-                <div>
-                  <span className={cx("status-pill", statusTone(job.status))}>{statusLabel(job.status)}</span>
-                  <h3>{job.type}</h3>
-                  <p className="mono">{job.target}</p>
-                  {job.lastError ? <em>{job.lastError}</em> : null}
+                <div className="job-process-card">
+                  <div className="job-process-head">
+                    <div>
+                      <JobStatusPill job={job} />
+                      <h3>{draft ? `${draft.orderNumber} fatura sureci` : job.type}</h3>
+                      <p className="mono">{draft ? `${draft.customerName} · ${draft.shipmentPackageId}` : job.target}</p>
+                    </div>
+                    <FailedJobRetryButton draft={draft} job={job} onRetry={onRetryInvoice} />
+                  </div>
+                  <InvoiceProcessBar draft={draft} invoice={invoice} job={job} compact />
+                  {job.lastError ? (
+                    <div className="job-error-callout">
+                      <AlertTriangle size={16} />
+                      <span>
+                        {orderNumber}: {job.lastError}
+                      </span>
+                    </div>
+                  ) : null}
                   <small>
                     {formatDateTime(job.updatedAt)} · {job.attempts} deneme
                   </small>
                 </div>
               </div>
-            ))}
+              );
+            })}
             {jobs.length === 0 ? (
               <div className="empty-state">
                 <CheckCircle2 size={24} />
