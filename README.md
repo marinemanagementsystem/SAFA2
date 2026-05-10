@@ -14,12 +14,12 @@ Trendyol siparislerini cekip kontrollu e-Arsiv fatura akisi olusturan yerel uygu
 - Taslak ve kesilmis faturalar icin PDF goruntuleme
 - Kesilen/kesilmeyen, bugun kesilen/onceki fatura, durum, sehir, tarih ve metin filtreleri
 - Siralanabilir liste ve satira tiklayinca siparis/fatura detay paneli
-- Mock GIB e-Arsiv saglayici ile uctan uca test
+- Harici e-Arsiv/Trendyol fatura sorgulama ve siparis eslestirme altyapisi
 - Resmi GIB "Bilgi Islem Sisteminin Entegrasyonu" akisi icin `gib-direct` saglayici iskeleti
 - Fatura PDF dosyasini saklama ve Trendyol'a PDF yukleme altyapisi
 - PostgreSQL + Redis + BullMQ job altyapisi
 
-Gercek fatura kesimi icin ozel entegrator kullanilmiyor. Canli GIB entegrasyonu icin GIB test/onay sureci, web servis erisimi, mali muhur/NES imzalama altyapisi ve canli yetkilendirme tamamlanmalidir.
+Uygulama sahte siparis veya sahte fatura uretmez. Canli GIB entegrasyonu icin GIB test/onay sureci, web servis erisimi, mali muhur/NES imzalama altyapisi ve canli yetkilendirme tamamlanmalidir.
 
 ## Kurulum
 
@@ -99,14 +99,17 @@ Canli panel:
 
 Firebase Hosting yalnizca statik paneli yayinlar. Trendyol senkronizasyonu, PDF uretimi, sifreli baglanti kaydi ve veritabani islemleri icin `apps/api` servisinin PostgreSQL ve Redis ile ayrica yayinlanmasi gerekir.
 
-## Canli GIB entegrasyonuna gecis
+Firebase Hosting URL'sinden yerel API'ye (`http://localhost:4000`) baglanirken Chrome'un Local Network Access izni gerekir. Izin penceresi gelmezse `chrome://settings/content/localNetworkAccess` adresinden `https://safa-8f76e.web.app` icin izni acin. Alternatif olarak paneli `pnpm --filter @safa/web dev` ile `http://localhost:3000` uzerinden acabilir veya `NEXT_PUBLIC_API_BASE_URL` degerini Render'daki public API URL'sine isaret ettirebilirsiniz.
 
-1. `.env` icinde `USE_MOCK_INTEGRATIONS=false` yapin.
-2. Trendyol `TRENDYOL_SELLER_ID`, `TRENDYOL_API_KEY`, `TRENDYOL_API_SECRET`, `TRENDYOL_USER_AGENT` alanlarini doldurun.
-3. `INVOICE_PROVIDER=gib-direct` yapin.
-4. GIB e-Arsiv test WSDL/servis, vergi kimlik, mali muhur/NES ve canli yetki bilgilerini `.env` icine ekleyin.
-5. Muhasebeciyle KDV, fatura aciklamasi, teslim tarihine gore faturalandirma ve e-Arsiv kullanim statulerini netlestirin.
+## Canli GIB entegrasyonu
+
+1. Trendyol `TRENDYOL_SELLER_ID`, `TRENDYOL_API_KEY`, `TRENDYOL_API_SECRET`, `TRENDYOL_USER_AGENT` alanlarini doldurun veya panelden kaydedin.
+2. `INVOICE_PROVIDER=gib-direct` canli saglayici yoludur.
+3. Entegrasyonlar ekranindan GIB direct servis URL, VKN/TCKN, SOAP sablonu, fatura seri/sira, mali muhur/NES belge imzalama komutu, SOAP/WSS imzalama komutu ve GIB test/canli yetki teyitlerini kaydedin. Ayni bilgiler `.env` ile de verilebilir: `GIB_EARSIV_TAX_ID`, `GIB_EARSIV_SERVICE_URL`, `GIB_EARSIV_SIGNER_COMMAND`, `GIB_EARSIV_SOAP_SIGNER_COMMAND`, `GIB_EARSIV_SOAP_BODY_TEMPLATE` veya `GIB_EARSIV_SOAP_BODY_TEMPLATE_PATH`, `GIB_EARSIV_INVOICE_PREFIX`, `GIB_EARSIV_NEXT_SEQUENCE`, `GIB_EARSIV_TEST_ACCESS_CONFIRMED`, `GIB_EARSIV_PRODUCTION_ACCESS_CONFIRMED`, `GIB_EARSIV_AUTHORIZATION_REFERENCE`.
+4. Imzalama komutlari `{input}` ve `{output}` alanlarini kullanir; SAFA once imzasiz UBL XML'i, sonra SOAP zarfini verir. Komutlar imzali UBL XML ve WSS imzali SOAP zarfini uretir.
+5. Mevcut e-Arsiv portal erisimi harici fatura kayitlarini okumak ve siparislerle eslestirmek icin korunur; bu, daha once portalda kesilmis faturalar icin tekrar kesimi engeller.
+6. Muhasebeciyle KDV, fatura aciklamasi, teslim tarihine gore faturalandirma, fatura seri/sira ve e-Arsiv kullanim statulerini netlestirin.
 
 ## GIB entegrasyon notu
 
-GIB'in resmi kaynaklarinda e-Arsiv icin portal, ozel entegrasyon ve bilgi islem sistemi entegrasyonu yollari bulunur. Bu projede ozel entegrator yolu kullanilmaz. GIB portalinin gizli HTTP endpoint'lerine baglanan kirilgan bot yerine resmi entegrasyon yolu hedeflenir. Portal UI otomasyonu istenirse bu ayri bir risk karari olarak ele alinmalidir; varsayilan uygulama canli fatura icin resmi GIB web servis/onay surecini bekler.
+GIB'in resmi kaynaklarinda e-Arsiv icin portal, ozel entegrasyon ve bilgi islem sistemi entegrasyonu yollari bulunur. Bu projede ozel entegrator yolu kullanilmaz. Canli fatura kesimi GIB direct servis + yerel mali muhur/NES/HSM belge ve SOAP/WSS imzalama komutlari uzerinden yapilir; eksik yetki veya imza varsa sistem sahte basarili sonuc uretmez, acik hata verir.

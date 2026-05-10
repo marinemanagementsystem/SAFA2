@@ -2,7 +2,6 @@ import { BadRequestException, Inject, Injectable, NotFoundException } from "@nes
 import { DraftStatus, InvoiceStatus, JobStatus, Prisma } from "@prisma/client";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { envBool } from "../common/env";
 import { PrismaService } from "../prisma/prisma.service";
 import { TrendyolService } from "../trendyol/trendyol.service";
 import { ArchiveInvoicePayload, InvoiceProvider } from "./invoice-provider";
@@ -25,7 +24,17 @@ export class InvoiceService {
   async listDrafts() {
     const drafts = await this.prisma.invoiceDraft.findMany({
       orderBy: [{ updatedAt: "desc" }],
-      include: { order: true },
+      include: {
+        order: {
+          include: {
+            externalInvoices: {
+              orderBy: [{ invoiceDate: "desc" }, { updatedAt: "desc" }],
+              take: 3
+            },
+            _count: { select: { externalInvoices: true } }
+          }
+        }
+      },
       take: 500
     });
 
@@ -44,7 +53,11 @@ export class InvoiceService {
         lineCount: lines.length,
         totalPayableCents: draft.order.totalPayableCents,
         currency: draft.order.currency,
-        approvedAt: draft.approvedAt?.toISOString()
+        approvedAt: draft.approvedAt?.toISOString(),
+        externalInvoiceCount: draft.order._count.externalInvoices,
+        externalInvoiceSources: Array.from(new Set(draft.order.externalInvoices.map((invoice) => invoice.source))),
+        externalInvoiceNumber: draft.order.externalInvoices[0]?.invoiceNumber ?? undefined,
+        externalInvoiceDate: draft.order.externalInvoices[0]?.invoiceDate?.toISOString()
       };
     });
   }
@@ -95,11 +108,24 @@ export class InvoiceService {
     try {
       const draft = await this.prisma.invoiceDraft.findUnique({
         where: { id: draftId },
-        include: { order: true, invoice: true }
+        include: {
+          order: {
+            include: {
+              externalInvoices: {
+                orderBy: [{ invoiceDate: "desc" }, { updatedAt: "desc" }],
+                take: 1
+              }
+            }
+          },
+          invoice: true
+        }
       });
 
       if (!draft) throw new NotFoundException("Fatura taslagi bulunamadi.");
       if (draft.invoice) return draft.invoice;
+      if (draft.order.externalInvoices.length > 0) {
+        throw new BadRequestException("Bu siparis icin harici e-Arsiv faturasi bulundu; tekrar fatura kesimi engellendi.");
+      }
       if (draft.status !== DraftStatus.APPROVED) {
         throw new BadRequestException("Fatura kesmek icin taslak once onaylanmali.");
       }
@@ -183,7 +209,7 @@ export class InvoiceService {
     if (!draft) throw new NotFoundException("Fatura taslagi bulunamadi.");
 
     return buildInvoicePdf(this.toProviderPayload(draft), {
-      title: "e-Arsiv Fatura Taslagi",
+      title: "e-Arşiv Fatura",
       documentNumber: `TASLAK-${draft.order.orderNumber}`,
       documentDate: draft.updatedAt
     });
@@ -220,7 +246,7 @@ export class InvoiceService {
         where: { id: invoice.id },
         data: {
           status: InvoiceStatus.TRENDYOL_SENT,
-          trendyolStatus: response.mode === "mock" ? "MOCK_SENT" : "SENT",
+          trendyolStatus: "SENT",
           trendyolSentAt: new Date(),
           error: null
         }

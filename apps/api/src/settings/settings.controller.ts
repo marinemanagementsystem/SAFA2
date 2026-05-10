@@ -23,6 +23,30 @@ const gibPortalConnectionSchema = z.object({
   portalUrl: z.string().url().default("https://earsivportal.efatura.gov.tr/intragiris.html")
 });
 
+const gibDirectConnectionSchema = z.object({
+  environment: z.enum(["test", "prod"]).default("test"),
+  taxId: z.string().min(10),
+  serviceUrl: z.string().url(),
+  wsdlUrl: z.string().url().optional().or(z.literal("")),
+  soapAction: z.string().optional(),
+  soapBodyTemplate: z.string().optional(),
+  soapBodyTemplatePath: z.string().optional(),
+  signerMode: z.enum(["external-command"]).default("external-command"),
+  signerCommand: z.string().min(1),
+  soapSignerCommand: z.string().min(1),
+  invoicePrefix: z.string().min(1).max(3).default("SAF"),
+  nextInvoiceSequence: z.coerce.number().int().min(1).default(1),
+  unitCode: z.string().min(1).default("C62"),
+  defaultBuyerTckn: z.string().min(10).default("11111111111"),
+  testAccessConfirmed: z.coerce.boolean().default(false),
+  productionAccessConfirmed: z.coerce.boolean().default(false),
+  authorizationReference: z.string().optional(),
+  clientCertPath: z.string().optional(),
+  clientKeyPath: z.string().optional(),
+  clientPfxPath: z.string().optional(),
+  clientCertPassword: z.string().optional()
+});
+
 @Controller("settings")
 export class SettingsController {
   constructor(@Inject(SettingsService) private readonly settingsService: SettingsService) {}
@@ -49,9 +73,33 @@ export class SettingsController {
     return this.settingsService.saveTrendyolConnection(parsed);
   }
 
+  @Put("connections/trendyol/connect")
+  connectTrendyol(@Body() body: unknown) {
+    const parsed = trendyolConnectionSchema.parse(body);
+    return this.settingsService.connectTrendyol(parsed);
+  }
+
   @Put("connections/gib-portal")
   saveGibPortal(@Body() body: unknown) {
     const parsed = gibPortalConnectionSchema.parse(body);
     return this.settingsService.saveGibPortalConnection(parsed);
+  }
+
+  @Put("connections/gib-portal/connect")
+  connectGibPortal(@Body() body: unknown) {
+    const parsed = gibPortalConnectionSchema.parse(body);
+    return this.settingsService.connectGibPortal(parsed);
+  }
+
+  @Put("connections/gib-direct")
+  saveGibDirect(@Body() body: unknown) {
+    const parsed = gibDirectConnectionSchema.parse(body);
+    return this.settingsService.saveGibDirectConnection(parsed);
+  }
+
+  @Put("connections/gib-direct/connect")
+  connectGibDirect(@Body() body: unknown) {
+    const parsed = gibDirectConnectionSchema.parse(body);
+    return this.settingsService.connectGibDirect(parsed);
   }
 }

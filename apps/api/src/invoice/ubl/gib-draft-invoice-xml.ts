@@ -19,12 +19,23 @@ function dateOnly(date: Date): string {
   return date.toISOString().slice(0, 10);
 }
 
-export function buildGibDraftInvoiceXml(payload: ArchiveInvoicePayload): string {
-  const issueDate = dateOnly(new Date());
-  const invoiceId = `SAF${new Date().getFullYear()}${String(Date.now() % 1_000_000_000).padStart(9, "0")}`;
-  const uuid = randomUUID();
-  const sellerTaxId = process.env.GIB_EARSIV_TAX_ID ?? "";
-  const buyerId = payload.buyerIdentifier || process.env.GIB_EARSIV_DEFAULT_BUYER_TCKN || "11111111111";
+interface GibDraftInvoiceXmlOptions {
+  invoiceId?: string;
+  uuid?: string;
+  issueDate?: Date;
+  sellerTaxId?: string;
+  unitCode?: string;
+  defaultBuyerTckn?: string;
+}
+
+export function buildGibDraftInvoiceXml(payload: ArchiveInvoicePayload, options: GibDraftInvoiceXmlOptions = {}): string {
+  const issueDate = dateOnly(options.issueDate ?? new Date());
+  const invoiceId =
+    options.invoiceId ?? `SAF${new Date().getFullYear()}${String(Date.now() % 1_000_000_000).padStart(9, "0")}`;
+  const uuid = options.uuid ?? randomUUID();
+  const sellerTaxId = options.sellerTaxId ?? process.env.GIB_EARSIV_TAX_ID ?? "";
+  const buyerId = payload.buyerIdentifier || options.defaultBuyerTckn || process.env.GIB_EARSIV_DEFAULT_BUYER_TCKN || "11111111111";
+  const unitCode = options.unitCode ?? process.env.GIB_EARSIV_UNIT_CODE ?? "C62";
 
   const lineXml = payload.lines
     .map((line, index) => {
@@ -34,7 +45,7 @@ export function buildGibDraftInvoiceXml(payload: ArchiveInvoicePayload): string 
       return `
     <cac:InvoiceLine>
       <cbc:ID>${index + 1}</cbc:ID>
-      <cbc:InvoicedQuantity unitCode="${xml(process.env.GIB_EARSIV_UNIT_CODE ?? "C62")}">${line.quantity}</cbc:InvoicedQuantity>
+      <cbc:InvoicedQuantity unitCode="${xml(unitCode)}">${line.quantity}</cbc:InvoicedQuantity>
       <cbc:LineExtensionAmount currencyID="${xml(payload.totals.currency)}">${amount(lineExtensionCents)}</cbc:LineExtensionAmount>
       <cac:TaxTotal>
         <cbc:TaxAmount currencyID="${xml(payload.totals.currency)}">${amount(taxCents)}</cbc:TaxAmount>

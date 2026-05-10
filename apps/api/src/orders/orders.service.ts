@@ -22,7 +22,12 @@ export class OrdersService {
       include: {
         invoiceDraft: {
           include: { invoice: true }
-        }
+        },
+        externalInvoices: {
+          orderBy: [{ invoiceDate: "desc" }, { updatedAt: "desc" }],
+          take: 3
+        },
+        _count: { select: { externalInvoices: true } }
       },
       take: 500
     });
@@ -48,7 +53,11 @@ export class OrdersService {
       invoiceId: order.invoiceDraft?.invoice?.id,
       invoiceNumber: order.invoiceDraft?.invoice?.invoiceNumber,
       invoiceDate: order.invoiceDraft?.invoice?.invoiceDate.toISOString(),
-      trendyolStatus: order.invoiceDraft?.invoice?.trendyolStatus
+      trendyolStatus: order.invoiceDraft?.invoice?.trendyolStatus,
+      externalInvoiceCount: order._count.externalInvoices,
+      externalInvoiceSources: Array.from(new Set(order.externalInvoices.map((invoice) => invoice.source))),
+      externalInvoiceNumber: order.externalInvoices[0]?.invoiceNumber ?? undefined,
+      externalInvoiceDate: order.externalInvoices[0]?.invoiceDate?.toISOString()
     }));
   }
 
@@ -58,6 +67,9 @@ export class OrdersService {
       include: {
         invoiceDraft: {
           include: { invoice: true }
+        },
+        externalInvoices: {
+          orderBy: [{ invoiceDate: "desc" }, { updatedAt: "desc" }]
         }
       }
     });
@@ -114,7 +126,29 @@ export class OrdersService {
             createdAt: order.invoiceDraft.invoice.createdAt.toISOString(),
             updatedAt: order.invoiceDraft.invoice.updatedAt.toISOString()
           }
-        : null
+        : null,
+      externalInvoices: order.externalInvoices.map((invoice) => ({
+        id: invoice.id,
+        source: invoice.source,
+        invoiceNumber: invoice.invoiceNumber ?? undefined,
+        invoiceDate: invoice.invoiceDate?.toISOString(),
+        buyerName: invoice.buyerName ?? undefined,
+        buyerIdentifier: invoice.buyerIdentifier ?? undefined,
+        orderNumber: invoice.orderNumber ?? undefined,
+        shipmentPackageId: invoice.shipmentPackageId ?? undefined,
+        totalPayableCents: invoice.totalPayableCents ?? undefined,
+        currency: invoice.currency,
+        status: invoice.status ?? undefined,
+        pdfUrl: invoice.pdfUrl ?? undefined,
+        xmlUrl: invoice.xmlUrl ?? undefined,
+        matchedOrderId: invoice.matchedOrderId ?? undefined,
+        matchedOrderNumber: order.orderNumber,
+        matchedShipmentPackageId: order.shipmentPackageId,
+        matchScore: invoice.matchScore,
+        matchReason: invoice.matchReason ?? undefined,
+        createdAt: invoice.createdAt.toISOString(),
+        updatedAt: invoice.updatedAt.toISOString()
+      }))
     };
   }
 

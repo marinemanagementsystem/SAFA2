@@ -8,6 +8,7 @@ import { InvoiceModule } from "./invoice/invoice.module";
 import { JobsModule } from "./jobs/jobs.module";
 import { SettingsModule } from "./settings/settings.module";
 import { EarsivPortalModule } from "./earsiv-portal/earsiv-portal.module";
+import { ExternalInvoicesModule } from "./external-invoices/external-invoices.module";
 
 @Module({
   imports: [
@@ -19,7 +20,8 @@ import { EarsivPortalModule } from "./earsiv-portal/earsiv-portal.module";
     InvoiceModule,
     JobsModule,
     SettingsModule,
-    EarsivPortalModule
+    EarsivPortalModule,
+    ExternalInvoicesModule
   ]
 })
 export class AppModule {}

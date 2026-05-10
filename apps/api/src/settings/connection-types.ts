@@ -14,6 +14,33 @@ export interface GibPortalConnection {
   portalUrl: string;
 }
 
+export type GibDirectEnvironment = "test" | "prod";
+export type GibDirectSignerMode = "external-command";
+
+export interface GibDirectConnection {
+  environment: GibDirectEnvironment;
+  taxId: string;
+  serviceUrl: string;
+  wsdlUrl?: string;
+  soapAction?: string;
+  soapBodyTemplate?: string;
+  soapBodyTemplatePath?: string;
+  signerMode: GibDirectSignerMode;
+  signerCommand: string;
+  soapSignerCommand: string;
+  invoicePrefix: string;
+  nextInvoiceSequence: number;
+  unitCode: string;
+  defaultBuyerTckn: string;
+  testAccessConfirmed: boolean;
+  productionAccessConfirmed: boolean;
+  authorizationReference?: string;
+  clientCertPath?: string;
+  clientKeyPath?: string;
+  clientPfxPath?: string;
+  clientCertPassword?: string;
+}
+
 export interface StoredSecret<T> {
   encrypted: true;
   version: 1;

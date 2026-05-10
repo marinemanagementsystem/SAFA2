@@ -2,9 +2,8 @@ import { Inject, Injectable, Logger } from "@nestjs/common";
 import axios from "axios";
 import FormData from "form-data";
 import fs from "node:fs";
-import { envBool, envNumber, requiredEnv } from "../common/env";
+import { envNumber, requiredEnv } from "../common/env";
 import { SettingsService } from "../settings/settings.service";
-import { sampleTrendyolPackages } from "./sample-orders";
 
 interface StreamResponse {
   content?: Record<string, unknown>[];
@@ -20,10 +19,6 @@ export class TrendyolService {
 
   async fetchDeliveredPackages(): Promise<Record<string, unknown>[]> {
     const credentials = await this.settings.getTrendyolConnection();
-
-    if (!credentials && envBool("USE_MOCK_INTEGRATIONS", true)) {
-      return sampleTrendyolPackages;
-    }
 
     if (!credentials) {
       requiredEnv("TRENDYOL_SELLER_ID");
@@ -76,11 +71,7 @@ export class TrendyolService {
     invoiceNumber: string;
     invoiceDate: Date;
     pdfPath: string;
-  }): Promise<{ ok: true; mode: "mock" | "api"; response?: unknown }> {
-    if (envBool("USE_MOCK_INTEGRATIONS", true)) {
-      return { ok: true, mode: "mock", response: { message: "Mock Trendyol upload accepted" } };
-    }
-
+  }): Promise<{ ok: true; mode: "api"; response?: unknown }> {
     const credentials = await this.settings.getTrendyolConnection();
     const sellerId = credentials?.sellerId ?? requiredEnv("TRENDYOL_SELLER_ID");
     const apiKey = credentials?.apiKey ?? requiredEnv("TRENDYOL_API_KEY");

@@ -10,6 +10,31 @@ export type InvoiceStatus = "ISSUED" | "TRENDYOL_SENT" | "TRENDYOL_SEND_FAILED";
 
 export type JobStatus = "PENDING" | "PROCESSING" | "SUCCESS" | "FAILED";
 
+export type ExternalInvoiceSource = "GIB_PORTAL" | "TRENDYOL" | "MANUAL";
+
+export interface ExternalInvoiceListItem {
+  id: string;
+  source: ExternalInvoiceSource;
+  invoiceNumber?: string;
+  invoiceDate?: string;
+  buyerName?: string;
+  buyerIdentifier?: string;
+  orderNumber?: string;
+  shipmentPackageId?: string;
+  totalPayableCents?: number;
+  currency: string;
+  status?: string;
+  pdfUrl?: string;
+  xmlUrl?: string;
+  matchedOrderId?: string;
+  matchedOrderNumber?: string;
+  matchedShipmentPackageId?: string;
+  matchScore: number;
+  matchReason?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface OrderListItem {
   id: string;
   shipmentPackageId: string;
@@ -32,6 +57,10 @@ export interface OrderListItem {
   invoiceNumber?: string;
   invoiceDate?: string;
   trendyolStatus?: string;
+  externalInvoiceCount: number;
+  externalInvoiceSources: ExternalInvoiceSource[];
+  externalInvoiceNumber?: string;
+  externalInvoiceDate?: string;
 }
 
 export interface OrderDetail {
@@ -77,6 +106,7 @@ export interface OrderDetail {
     createdAt: string;
     updatedAt: string;
   } | null;
+  externalInvoices: ExternalInvoiceListItem[];
 }
 
 export interface InvoiceDraftListItem {
@@ -92,6 +122,10 @@ export interface InvoiceDraftListItem {
   totalPayableCents: number;
   currency: string;
   approvedAt?: string;
+  externalInvoiceCount: number;
+  externalInvoiceSources: ExternalInvoiceSource[];
+  externalInvoiceNumber?: string;
+  externalInvoiceDate?: string;
 }
 
 export interface InvoiceListItem {

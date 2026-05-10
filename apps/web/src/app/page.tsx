@@ -1,5 +1,5 @@
-import { OpsConsole } from "../components/ops-console";
+import { PlatformApp } from "../components/platform/platform-app";
 
 export default function Home() {
-  return <OpsConsole />;
+  return <PlatformApp view="overview" />;
 }

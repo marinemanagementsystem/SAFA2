@@ -29,6 +29,12 @@ enum JobStatus {
   FAILED
 }
 
+enum ExternalInvoiceSource {
+  GIB_PORTAL
+  TRENDYOL
+  MANUAL
+}
+
 model Setting {
   key       String   @id
   value     Json
@@ -53,6 +59,7 @@ model Order {
   createdAt          DateTime      @default(now())
   updatedAt          DateTime      @updatedAt
   invoiceDraft       InvoiceDraft?
+  externalInvoices   ExternalInvoice[]
 
   @@index([status])
   @@index([orderNumber])
@@ -95,6 +102,37 @@ model Invoice {
 
   @@index([status])
   @@index([invoiceDate])
+}
+
+model ExternalInvoice {
+  id                String                @id @default(cuid())
+  source            ExternalInvoiceSource
+  externalKey       String
+  invoiceNumber     String?
+  invoiceDate       DateTime?
+  buyerName         String?
+  buyerIdentifier   String?
+  orderNumber       String?
+  shipmentPackageId String?
+  totalPayableCents Int?
+  currency          String                @default("TRY")
+  status            String?
+  pdfUrl            String?
+  xmlUrl            String?
+  raw               Json
+  matchedOrderId    String?
+  matchedOrder      Order?                @relation(fields: [matchedOrderId], references: [id], onDelete: SetNull)
+  matchScore        Int                   @default(0)
+  matchReason       String?
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+
+  @@unique([source, externalKey])
+  @@index([invoiceNumber])
+  @@index([invoiceDate])
+  @@index([orderNumber])
+  @@index([shipmentPackageId])
+  @@index([matchedOrderId])
 }
 
 model IntegrationJob {

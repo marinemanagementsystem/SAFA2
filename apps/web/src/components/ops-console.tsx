@@ -59,7 +59,7 @@ function money(cents: number, currency = "TRY") {
 
 function badgeClass(status?: string) {
   if (!status) return "badge";
-  if (["READY", "APPROVED", "ISSUED", "TRENDYOL_SENT", "SUCCESS", "MOCK_SENT"].includes(status)) return "badge success";
+  if (["READY", "APPROVED", "ISSUED", "TRENDYOL_SENT", "SUCCESS"].includes(status)) return "badge success";
   if (["PENDING", "PROCESSING", "ISSUING", "NEEDS_REVIEW"].includes(status)) return "badge processing";
   if (["ERROR", "FAILED", "TRENDYOL_SEND_FAILED", "SEND_FAILED"].includes(status)) return "badge error";
   return "badge";
@@ -130,7 +130,7 @@ export function OpsConsole() {
   const [cityFilter, setCityFilter] = useState("all");
   const [dateFilter, setDateFilter] = useState<DateFilter>("all");
   const [sort, setSort] = useState<SortState>({ field: "updatedAt", direction: "desc" });
-  const [message, setMessage] = useState("Mock mod acik. Canli fatura icin GIB direct entegrasyon yetkisi ve imzalama altyapisi eklenmeli.");
+  const [message, setMessage] = useState("Canli entegrasyon modu acik. Sahte veri uretilmez; baglanti yoksa islem hata verir.");
   const [trendyolForm, setTrendyolForm] = useState<TrendyolConnectionInput>({
     sellerId: "",
     apiKey: "",
@@ -422,7 +422,7 @@ export function OpsConsole() {
       </section>
 
       <p className="notice">
-        {message} {settings.mockIntegrations === false ? "Canli entegrasyon modu acik." : "Mock entegrasyon modu aktif."}
+        {message} {settings.liveIntegrationsOnly === true ? "Canli entegrasyon modu acik." : "Canli mod kontrol ediliyor."}
       </p>
 
       <section className="layout">
@@ -928,7 +928,7 @@ export function OpsConsole() {
               </button>
               <button className="button accent" onClick={() => void issueSelected()} disabled={selectedDrafts.length === 0}>
                 <CircleDollarSign size={18} />
-                {settings.invoiceProvider === "mock" ? "Mock fatura kes" : "Fatura kes"}
+                Fatura kes
               </button>
             </div>
           </div>
