@@ -109,6 +109,10 @@ function keepExistingSensitiveValue(inputValue: unknown, existingValue?: string)
   return next || existingValue?.trim() || undefined;
 }
 
+function isGibConcurrentSessionMessage(message: string) {
+  return /birden fazla/i.test(message) && /güvenli|guvenli/i.test(message);
+}
+
 function envGibDirectConnection(): GibDirectConnection | undefined {
   const taxId = optionalEnv("GIB_EARSIV_TAX_ID");
   const serviceUrl = optionalEnv("GIB_EARSIV_SERVICE_URL");
@@ -523,6 +527,22 @@ export class SettingsService {
 
     if (response.data?.error) {
       const message = response.data.messages?.[0]?.text ?? "e-Arsiv portal girisi basarisiz. Kullanici kodu veya sifreyi kontrol edin.";
+      if (isGibConcurrentSessionMessage(message)) {
+        return {
+          provider: "gib-portal",
+          connected: true,
+          checkedAt: new Date().toISOString(),
+          message:
+            "e-Arsiv portal bilgileri kaydedildi. GIB portali ayni kullanici icin acik oturum bildirdi; tokenli oturum ve taslak yukleme icin portaldan Guvenli Cikis yapin.",
+          details: {
+            tokenReceived: false,
+            redirectReceived: false,
+            activeSessionConflict: true,
+            portalMessage: message
+          }
+        };
+      }
+
       throw new BadRequestException(message);
     }
 
