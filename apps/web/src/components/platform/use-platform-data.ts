@@ -440,6 +440,31 @@ export function usePlatformData() {
     [load]
   );
 
+  const uploadPortalDrafts = useCallback(
+    async (draftIds: string[]) => {
+      if (draftIds.length === 0) return;
+
+      if (!API_AVAILABLE) {
+        setMessage(apiOfflineMessage);
+        return;
+      }
+
+      setBusyAction("portal-draft-upload");
+
+      try {
+        const result = await api.uploadPortalDrafts(draftIds);
+        const failureText = result.failed > 0 ? ` ${result.failed} taslak yuklenemedi; listede tekrar denenebilir.` : "";
+        setMessage(`${result.uploaded} taslak GIB e-Arsiv portalina yuklendi. Imza portaldan toplu atilacak.${failureText}`);
+        await load();
+      } catch (error) {
+        setMessage(errorMessage(error, "GIB portal taslak yukleme basarisiz."));
+      } finally {
+        setBusyAction(null);
+      }
+    },
+    [load]
+  );
+
   const saveTrendyol = useCallback(async () => {
     if (!API_AVAILABLE) {
       writeStoredJson(trendyolDraftStorageKey, trendyolForm);
@@ -695,6 +720,7 @@ export function usePlatformData() {
     syncOrders,
     approveDrafts,
     issueDrafts,
+    uploadPortalDrafts,
     saveTrendyol,
     saveGibPortal,
     saveGibDirect,

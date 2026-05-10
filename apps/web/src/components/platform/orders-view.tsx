@@ -358,6 +358,10 @@ function invoiceStateForOrder(order: OrderListItem) {
     return { label: "Kesiliyor", tone: statusTone("ISSUING") };
   }
 
+  if (order.draftStatus === "PORTAL_DRAFTED") {
+    return { label: "GIB imza bekliyor", tone: statusTone("PORTAL_DRAFTED") };
+  }
+
   if (order.draftStatus === "READY" || order.draftStatus === "APPROVED") {
     return { label: "Kesim bekliyor", tone: statusTone("PENDING") };
   }

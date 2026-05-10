@@ -14,6 +14,7 @@ interface InvoicesViewProps {
   busyAction: string | null;
   onApprove: (ids: string[]) => void;
   onIssue: (ids: string[]) => void;
+  onUploadPortalDrafts: (ids: string[]) => void;
   onImportExternalInvoices: (source: ExternalInvoiceSource, records: Array<Record<string, unknown>>) => void;
   onSyncGibExternalInvoices: (days: number) => void;
   onSyncTrendyolExternalInvoices: () => void;
@@ -28,6 +29,7 @@ export function InvoicesView({
   busyAction,
   onApprove,
   onIssue,
+  onUploadPortalDrafts,
   onImportExternalInvoices,
   onSyncGibExternalInvoices,
   onSyncTrendyolExternalInvoices,
@@ -45,6 +47,7 @@ export function InvoicesView({
   const readyOrApproved = drafts.filter(
     (draft) => (draft.status === "READY" || draft.status === "APPROVED") && draft.externalInvoiceCount === 0
   );
+  const portalDraftedDrafts = drafts.filter((draft) => draft.status === "PORTAL_DRAFTED");
   const matchedExternalInvoices = externalInvoices.filter((invoice) => invoice.matchedOrderId).length;
 
   const invoiceGroups = useMemo(() => {
@@ -65,6 +68,11 @@ export function InvoicesView({
 
   function issueSelected() {
     onIssue(selectedDrafts);
+    setSelectedDrafts([]);
+  }
+
+  function uploadPortalSelected() {
+    onUploadPortalDrafts(selectedDrafts);
     setSelectedDrafts([]);
   }
 
@@ -98,6 +106,12 @@ export function InvoicesView({
           ) : null}
 
           <div className="draft-stack">
+            {portalDraftedDrafts.length > 0 ? (
+              <div className="form-alert table-note">
+                {portalDraftedDrafts.length} taslak GIB portalina yuklendi ve manuel imza bekliyor. Portalda Duzenlenen Belgeler
+                ekranindan toplu imzalanacak.
+              </div>
+            ) : null}
             {readyOrApproved.map((draft) => (
               <label className="draft-card" key={draft.id}>
                 <input
@@ -135,6 +149,14 @@ export function InvoicesView({
             <button className="ui-button primary" onClick={issueSelected} disabled={selectedDrafts.length === 0 || busyAction === "issue"}>
               {busyAction === "issue" ? <Loader2 size={18} className="spin" /> : <CircleDollarSign size={18} />}
               Fatura kes
+            </button>
+            <button
+              className="ui-button primary"
+              onClick={uploadPortalSelected}
+              disabled={selectedDrafts.length === 0 || busyAction === "portal-draft-upload"}
+            >
+              {busyAction === "portal-draft-upload" ? <Loader2 size={18} className="spin" /> : <UploadCloud size={18} />}
+              GIB taslagina yukle
             </button>
           </div>
         </article>

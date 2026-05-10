@@ -59,7 +59,7 @@ export function lineNumber(value: unknown) {
 export function statusTone(status?: string) {
   if (!status) return "neutral";
   if (["READY", "APPROVED", "ISSUED", "TRENDYOL_SENT", "SUCCESS", "SENT"].includes(status)) return "success";
-  if (["PENDING", "PROCESSING", "ISSUING", "NEEDS_REVIEW"].includes(status)) return "warning";
+  if (["PENDING", "PROCESSING", "ISSUING", "NEEDS_REVIEW", "PORTAL_DRAFTED"].includes(status)) return "warning";
   if (["ERROR", "FAILED", "TRENDYOL_SEND_FAILED", "SEND_FAILED"].includes(status)) return "danger";
   return "neutral";
 }
@@ -70,6 +70,7 @@ export function statusLabel(status?: string) {
     APPROVED: "Onayli",
     ISSUED: "Kesildi",
     TRENDYOL_SENT: "Trendyol'a gitti",
+    PORTAL_DRAFTED: "Portal imza bekliyor",
     SUCCESS: "Basarili",
     SENT: "Gonderildi",
     PENDING: "Bekliyor",

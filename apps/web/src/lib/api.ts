@@ -5,7 +5,8 @@ import type {
   InvoiceDraftListItem,
   InvoiceListItem,
   OrderDetail,
-  OrderListItem
+  OrderListItem,
+  PortalDraftUploadResult
 } from "@safa/shared";
 
 const configuredApiBase = process.env.NEXT_PUBLIC_API_BASE_URL?.trim();
@@ -406,6 +407,11 @@ export const api = {
   approve: (id: string) => request(`/invoice-drafts/${id}/approve`, { method: "POST" }),
   issue: (draftIds: string[]) =>
     request<{ enqueued: number }>("/invoices/issue", {
+      method: "POST",
+      body: JSON.stringify({ draftIds })
+    }),
+  uploadPortalDrafts: (draftIds: string[]) =>
+    request<PortalDraftUploadResult>("/invoice-drafts/gib-portal-drafts", {
       method: "POST",
       body: JSON.stringify({ draftIds })
     })
