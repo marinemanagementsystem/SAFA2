@@ -81,8 +81,19 @@ export interface BuildGibPortalDraftPayloadOptions {
   unitCode?: string;
 }
 
+const portalEttnPattern = /^[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}$/;
+
 function digits(value: string) {
   return value.replace(/\D/g, "");
+}
+
+function normalizePortalEttn(value: string) {
+  const ettn = value.trim().replace(/[{}]/g, "").toUpperCase();
+  if (!portalEttnPattern.test(ettn)) {
+    throw new Error("GIB portal ETTN 36 karakterlik UUID formatinda olmali.");
+  }
+
+  return ettn;
 }
 
 function roundAmount(value: number) {
@@ -163,6 +174,7 @@ export function buildGibPortalInvoiceDraftPayload(
   options: BuildGibPortalDraftPayloadOptions = {}
 ): GibPortalInvoiceDraftPayload {
   const issuedAt = options.issuedAt ?? new Date();
+  const ettn = normalizePortalEttn(options.uuid ?? randomUUID());
   const unitCode = options.unitCode ?? "C62";
   const buyerIdentifier = normalizeBuyerIdentifier(payload.buyerIdentifier);
   const isCompany = buyerIdentifier.length === 10;
@@ -176,7 +188,7 @@ export function buildGibPortalInvoiceDraftPayload(
   const payableTotal = roundAmount(taxableTotal + vatTotal);
 
   return {
-    faturaUuid: options.uuid ?? randomUUID(),
+    faturaUuid: ettn,
     belgeNumarasi: "",
     faturaTarihi: formatPortalDate(issuedAt),
     saat: formatPortalTime(issuedAt),
