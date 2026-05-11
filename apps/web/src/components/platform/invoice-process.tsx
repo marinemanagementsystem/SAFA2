@@ -21,7 +21,8 @@ export function latestInvoiceJob(jobs: IntegrationJobListItem[], draftId: string
 }
 
 export function canRetryInvoiceProcess(draft?: InvoiceDraftListItem, job?: IntegrationJobListItem) {
-  return Boolean(draft && (draft.status === "ERROR" || (job?.status === "FAILED" && !isStaleApprovalFailure(draft, job))) && draft.externalInvoiceCount === 0);
+  const visibleJob = visibleInvoiceJob(draft, job);
+  return Boolean(draft && (draft.status === "ERROR" || visibleJob?.status === "FAILED") && draft.externalInvoiceCount === 0);
 }
 
 export function isStaleApprovalFailure(draft?: InvoiceDraftListItem, job?: IntegrationJobListItem) {
@@ -32,6 +33,13 @@ export function isStaleApprovalFailure(draft?: InvoiceDraftListItem, job?: Integ
   if (!draft.approvedAt) return true;
 
   return new Date(job.updatedAt).getTime() <= new Date(draft.approvedAt).getTime();
+}
+
+export function visibleInvoiceJob(draft?: InvoiceDraftListItem, job?: IntegrationJobListItem) {
+  if (!draft || !job) return undefined;
+  if (isStaleApprovalFailure(draft, job)) return undefined;
+  if (draft.status === "PORTAL_DRAFTED" || draft.status === "ISSUED" || draft.externalInvoiceCount > 0) return undefined;
+  return job;
 }
 
 export function resolveInvoiceProcess(
@@ -69,7 +77,7 @@ export function resolveInvoiceProcess(
     };
   }
 
-  const effectiveJob = isStaleApprovalFailure(draft, job) ? undefined : job;
+  const effectiveJob = visibleInvoiceJob(draft, job);
 
   if (effectiveJob?.status === "FAILED" || draft.status === "ERROR") {
     return {
@@ -142,7 +150,7 @@ export function InvoiceProcessBar({
   compact?: boolean;
 }) {
   const process = resolveInvoiceProcess(draft, invoice, job);
-  const visibleJob = isStaleApprovalFailure(draft, job) ? undefined : job;
+  const visibleJob = visibleInvoiceJob(draft, job);
 
   return (
     <div className={cx("invoice-process", compact && "compact", process.tone)}>

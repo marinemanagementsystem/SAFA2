@@ -29,7 +29,7 @@ import {
 import { useMemo, useState } from "react";
 import { api } from "../../lib/api";
 import { cx, dateMatches, formatDateTime, money, numberValue, startOfToday, statusLabel, statusTone, stringValue } from "../../lib/platform/format";
-import { InvoiceProcessBar, isStaleApprovalFailure, latestInvoiceJob } from "./invoice-process";
+import { InvoiceProcessBar, latestInvoiceJob, visibleInvoiceJob } from "./invoice-process";
 
 type DraftDeskFilter = "actionable" | "all" | "ready" | "approved" | "failed" | "issuing" | "portal" | "external" | "issued";
 type DraftExternalFilter = "all" | "no-external" | "external" | ExternalInvoiceSource;
@@ -101,7 +101,7 @@ function matchesDraftDeskFilter(
   job?: IntegrationJobListItem,
   invoice?: InvoiceListItem
 ) {
-  const effectiveJob = isStaleApprovalFailure(draft, job) ? undefined : job;
+  const effectiveJob = visibleInvoiceJob(draft, job);
 
   if (filter === "all") return true;
   if (filter === "actionable") return isSelectableDraft(draft);
@@ -123,7 +123,7 @@ function matchesDraftExternalFilter(draft: InvoiceDraftListItem, filter: DraftEx
 }
 
 function draftProcessPriority(draft: InvoiceDraftListItem, job?: IntegrationJobListItem, invoice?: InvoiceListItem) {
-  const effectiveJob = isStaleApprovalFailure(draft, job) ? undefined : job;
+  const effectiveJob = visibleInvoiceJob(draft, job);
 
   if (effectiveJob?.status === "FAILED" || draft.status === "ERROR") return 0;
   if (effectiveJob?.status === "PROCESSING" || draft.status === "ISSUING") return 1;
@@ -1064,7 +1064,7 @@ export function InvoicesView({
             ) : null}
             {filteredDrafts.map((draft) => {
               const latestJob = latestInvoiceJob(jobs, draft.id);
-              const visibleJob = isStaleApprovalFailure(draft, latestJob) ? undefined : latestJob;
+              const visibleJob = visibleInvoiceJob(draft, latestJob);
               const invoice = invoiceByDraftId.get(draft.id);
               const failed = visibleJob?.status === "FAILED" || draft.status === "ERROR";
               const selectable = isSelectableDraft(draft);
@@ -1129,7 +1129,7 @@ export function InvoicesView({
                       </div>
                     </div>
                   ) : null}
-                  <InvoiceProcessBar draft={draft} invoice={invoice} job={latestJob} compact />
+                  <InvoiceProcessBar draft={draft} invoice={invoice} job={visibleJob} compact />
                   <a className="text-link" href={api.draftPdfUrl(draft.id)} target="_blank" rel="noreferrer">
                     Taslak PDF
                   </a>
