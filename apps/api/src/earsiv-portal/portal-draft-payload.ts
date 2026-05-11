@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { invoiceNote } from "../invoice/invoice-note";
 import type { ArchiveInvoicePayload } from "../invoice/invoice-provider";
 
 type PortalAmount = string;
@@ -316,7 +317,7 @@ export function buildGibPortalInvoiceDraftPayload(
     vergilerDahilToplamTutar: formatPortalAmount(payableTotal),
     toplamMasraflar: zeroAmount,
     odenecekTutar: formatPortalAmount(payableTotal),
-    not: `Trendyol siparis no: ${payload.orderNumber} / Paket: ${payload.shipmentPackageId}`,
+    not: invoiceNote(payload),
     siparisNumarasi: payload.orderNumber,
     siparisTarihi: "",
     irsaliyeNumarasi: "",

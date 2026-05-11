@@ -56,6 +56,7 @@ describe("buildGibPortalInvoiceDraftPayload", () => {
       matrah: "100.00",
       hesaplanankdv: "20.00",
       odenecekTutar: "120.00",
+      not: "yüzyirmitürklirasısıfırkuruş. Trendyol siparis no: 11190835272 / Paket: 3809481475",
       dovzTLkur: "0",
       vergiCesidi: " "
     });

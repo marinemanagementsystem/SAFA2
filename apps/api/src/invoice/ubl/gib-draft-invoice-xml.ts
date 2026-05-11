@@ -1,5 +1,6 @@
 import { centsToDecimal } from "../../common/money";
 import { randomUUID } from "node:crypto";
+import { invoiceNote } from "../invoice-note";
 import { ArchiveInvoicePayload } from "../invoice-provider";
 
 function xml(value: unknown): string {
@@ -84,7 +85,7 @@ export function buildGibDraftInvoiceXml(payload: ArchiveInvoicePayload, options:
   <cbc:UUID>${uuid}</cbc:UUID>
   <cbc:IssueDate>${issueDate}</cbc:IssueDate>
   <cbc:InvoiceTypeCode>SATIS</cbc:InvoiceTypeCode>
-  <cbc:Note>Trendyol siparis no: ${xml(payload.orderNumber)} / Paket: ${xml(payload.shipmentPackageId)}</cbc:Note>
+  <cbc:Note>${xml(invoiceNote(payload))}</cbc:Note>
   <cbc:DocumentCurrencyCode>${xml(payload.totals.currency)}</cbc:DocumentCurrencyCode>
   <cac:AccountingSupplierParty>
     <cac:Party>

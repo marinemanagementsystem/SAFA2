@@ -5,6 +5,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
+import { invoiceNote } from "../invoice-note";
 import { ArchiveInvoicePayload } from "../invoice-provider";
 
 interface InvoicePdfOptions {
@@ -187,34 +188,6 @@ function lineViews(payload: ArchiveInvoicePayload): InvoiceLineView[] {
   });
 }
 
-function amountWordsBelowThousand(value: number) {
-  const ones = ["", "bir", "iki", "üç", "dört", "beş", "altı", "yedi", "sekiz", "dokuz"];
-  const tens = ["", "on", "yirmi", "otuz", "kırk", "elli", "altmış", "yetmiş", "seksen", "doksan"];
-  const hundred = Math.floor(value / 100);
-  const rest = value % 100;
-  const ten = Math.floor(rest / 10);
-  const one = rest % 10;
-  return `${hundred > 1 ? ones[hundred] : ""}${hundred ? "yüz" : ""}${tens[ten]}${ones[one]}`;
-}
-
-function amountWords(value: number): string {
-  if (value === 0) return "sıfır";
-  const millions = Math.floor(value / 1_000_000);
-  const thousands = Math.floor((value % 1_000_000) / 1000);
-  const rest = value % 1000;
-  return [
-    millions ? `${amountWordsBelowThousand(millions)}milyon` : "",
-    thousands ? `${thousands === 1 ? "" : amountWordsBelowThousand(thousands)}bin` : "",
-    rest ? amountWordsBelowThousand(rest) : ""
-  ].join("");
-}
-
-function payableNote(cents: number) {
-  const lira = Math.floor(cents / 100);
-  const kurus = cents % 100;
-  return `${amountWords(lira)}türklirası${kurus ? `${amountWords(kurus)}kuruş` : ""}.`;
-}
-
 function sellerInfo() {
   return {
     name: process.env.INVOICE_SELLER_NAME ?? "SERHAT BEBA",
@@ -392,7 +365,7 @@ function buildHtml(payload: ArchiveInvoicePayload, options: InvoicePdfOptions) {
       <tr><td>Vergiler Dahil Toplam Tutar</td><td>${escapeHtml(formatMoney(payload.totals.payableCents, currency))}</td></tr>
       <tr><td>Ödenecek Tutar</td><td>${escapeHtml(formatMoney(payload.totals.payableCents, currency))}</td></tr>
     </table>
-    <section class="note-box"><strong>Not:</strong> ${escapeHtml(payableNote(payload.totals.payableCents))}</section>
+    <section class="note-box"><strong>Not:</strong> ${escapeHtml(invoiceNote(payload))}</section>
     <footer class="print-footer"><span class="path">${escapeHtml(footerPath)}</span><span>1/1</span></footer>
   </main>
 </body>
