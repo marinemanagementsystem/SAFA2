@@ -44,27 +44,31 @@ describe("buildGibPortalInvoiceDraftPayload", () => {
       faturaUuid: "3b4c1c45-9c7d-4c3c-8cc1-cb9f5b4a09a1",
       faturaTarihi: "10/05/2026",
       saat: "12:34:56",
-      faturaTipi: "SATIS",
-      hangiTip: "5000/30000",
+      faturaTipi: "5000/30000",
+      hangiTip: "Buyuk",
       vknTckn: "11111111111",
       aliciAdi: "Mahmut Ege",
       aliciSoyadi: "Cam",
       sehir: "Izmir",
       mahalleSemtIlce: "Konak",
       siparisNumarasi: "11190835272",
-      matrah: 100,
-      hesaplanankdv: 20,
-      odenecekTutar: 120
+      matrah: "100.00",
+      hesaplanankdv: "20.00",
+      odenecekTutar: "120.00",
+      dovzTLkur: "0",
+      vergiCesidi: " "
     });
     expect(draft.malHizmetTable).toHaveLength(1);
     expect(draft.malHizmetTable[0]).toMatchObject({
       malHizmet: "Trendyol urunu",
       birim: "C62",
-      birimFiyat: 100,
-      fiyat: 100,
-      malHizmetTutari: 100,
-      kdvOrani: 20,
-      kdvTutari: 20
+      birimFiyat: "100.00",
+      fiyat: "100.00",
+      malHizmetTutari: "100.00",
+      kdvOrani: "20",
+      kdvTutari: "20.00",
+      vergiOrani: 0,
+      vergininKdvTutari: "0.00"
     });
   });
 

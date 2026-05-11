@@ -326,7 +326,13 @@ export class EarsivPortalService {
 
     const response = await axios.post<DispatchResponse>(dispatchEndpoint(connection.portalUrl), form.toString(), {
       headers: {
+        Accept: "*/*",
+        "Accept-Language": "tr,en-US;q=0.9,en;q=0.8",
+        "Cache-Control": "no-cache",
         "Content-Type": "application/x-www-form-urlencoded;charset=utf-8",
+        Pragma: "no-cache",
+        "Sec-Fetch-Mode": "cors",
+        "Sec-Fetch-Site": "same-origin",
         "User-Agent": userAgent
       },
       timeout: 30_000,

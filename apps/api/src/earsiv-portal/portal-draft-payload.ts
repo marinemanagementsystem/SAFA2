@@ -1,23 +1,23 @@
 import { randomUUID } from "node:crypto";
 import type { ArchiveInvoicePayload } from "../invoice/invoice-provider";
 
+type PortalAmount = string;
+
 export interface GibPortalInvoiceDraftLine {
   malHizmet: string;
   miktar: number;
   birim: string;
-  birimFiyat: number;
-  fiyat: number;
+  birimFiyat: PortalAmount;
+  fiyat: PortalAmount;
   iskontoArttm: string;
   iskontoOrani: number;
-  iskontoTutari: number;
+  iskontoTutari: PortalAmount;
   iskontoNedeni: string;
-  malHizmetTutari: number;
-  kdvOrani: number;
-  kdvTutari: number;
-  tevkifatKodu: number;
-  ozelMatrahNedeni: number;
-  ozelMatrahTutari: number;
-  gtip: string;
+  malHizmetTutari: PortalAmount;
+  kdvOrani: string;
+  vergiOrani: number;
+  kdvTutari: PortalAmount;
+  vergininKdvTutari: PortalAmount;
 }
 
 export interface GibPortalInvoiceDraftPayload {
@@ -26,7 +26,7 @@ export interface GibPortalInvoiceDraftPayload {
   faturaTarihi: string;
   saat: string;
   paraBirimi: string;
-  dovzTLkur: number;
+  dovzTLkur: string;
   faturaTipi: string;
   hangiTip: string;
   vknTckn: string;
@@ -47,21 +47,57 @@ export interface GibPortalInvoiceDraftPayload {
   fax: string;
   eposta: string;
   websitesi: string;
+  komisyonOrani: number;
+  navlunOrani: number;
+  hammaliyeOrani: number;
+  nakliyeOrani: number;
+  komisyonTutari: PortalAmount;
+  navlunTutari: PortalAmount;
+  hammaliyeTutari: PortalAmount;
+  nakliyeTutari: PortalAmount;
+  komisyonKDVOrani: number;
+  navlunKDVOrani: number;
+  hammaliyeKDVOrani: number;
+  nakliyeKDVOrani: number;
+  komisyonKDVTutari: PortalAmount;
+  navlunKDVTutari: PortalAmount;
+  hammaliyeKDVTutari: PortalAmount;
+  nakliyeKDVTutari: PortalAmount;
+  gelirVergisiOrani: number;
+  bagkurTevkifatiOrani: number;
+  gelirVergisiTevkifatiTutari: PortalAmount;
+  bagkurTevkifatiTutari: PortalAmount;
+  halRusumuOrani: number;
+  ticaretBorsasiOrani: number;
+  milliSavunmaFonuOrani: number;
+  digerOrani: number;
+  halRusumuTutari: PortalAmount;
+  ticaretBorsasiTutari: PortalAmount;
+  milliSavunmaFonuTutari: PortalAmount;
+  digerTutari: PortalAmount;
+  halRusumuKDVOrani: number;
+  ticaretBorsasiKDVOrani: number;
+  milliSavunmaFonuKDVOrani: number;
+  digerKDVOrani: number;
+  halRusumuKDVTutari: PortalAmount;
+  ticaretBorsasiKDVTutari: PortalAmount;
+  milliSavunmaFonuKDVTutari: PortalAmount;
+  digerKDVTutari: PortalAmount;
   iadeTable: unknown[];
-  ozelMatrahTutari: number;
+  ozelMatrahTutari: PortalAmount;
   ozelMatrahOrani: number;
-  ozelMatrahVergiTutari: number;
+  ozelMatrahVergiTutari: PortalAmount;
   vergiCesidi: string;
   malHizmetTable: GibPortalInvoiceDraftLine[];
   tip: string;
-  matrah: number;
-  malhizmetToplamTutari: number;
-  toplamIskonto: number;
-  hesaplanankdv: number;
-  vergilerToplami: number;
-  vergilerDahilToplamTutar: number;
-  toplamMasraflar: number;
-  odenecekTutar: number;
+  matrah: PortalAmount;
+  malhizmetToplamTutari: PortalAmount;
+  toplamIskonto: PortalAmount;
+  hesaplanankdv: PortalAmount;
+  vergilerToplami: PortalAmount;
+  vergilerDahilToplamTutar: PortalAmount;
+  toplamMasraflar: PortalAmount;
+  odenecekTutar: PortalAmount;
   not: string;
   siparisNumarasi: string;
   siparisTarihi: string;
@@ -104,6 +140,10 @@ function centsToAmount(cents: number) {
   return roundAmount(cents / 100);
 }
 
+function formatPortalAmount(value: number) {
+  return roundAmount(value).toFixed(2);
+}
+
 function vatExclusiveCents(inclusiveCents: number, vatRate: number) {
   if (vatRate <= 0) return inclusiveCents;
   return Math.round((inclusiveCents * 100) / (100 + vatRate));
@@ -139,7 +179,7 @@ function normalizeBuyerIdentifier(value: string) {
 function buildPortalLine(
   line: ArchiveInvoicePayload["lines"][number],
   unitCode: string
-): GibPortalInvoiceDraftLine {
+): GibPortalInvoiceDraftLine & { numeric: { fiyat: number; iskontoTutari: number; malHizmetTutari: number; kdvTutari: number } } {
   const quantity = line.quantity > 0 ? line.quantity : 1;
   const grossInclusiveCents = Math.max(line.grossCents, line.payableCents + line.discountCents);
   const discountInclusiveCents = Math.max(0, line.discountCents);
@@ -148,24 +188,33 @@ function buildPortalLine(
   const taxableBaseCents = Math.max(0, grossBaseCents - discountBaseCents);
   const vatCents = Math.max(0, line.payableCents - taxableBaseCents);
   const discountRate = grossBaseCents > 0 ? (discountBaseCents / grossBaseCents) * 100 : 0;
+  const unitPrice = centsToAmount(Math.round(grossBaseCents / quantity));
+  const grossBase = centsToAmount(grossBaseCents);
+  const discountBase = centsToAmount(discountBaseCents);
+  const taxableBase = centsToAmount(taxableBaseCents);
+  const vat = centsToAmount(vatCents);
 
   return {
     malHizmet: line.description || "Urun",
     miktar: quantity,
     birim: unitCode,
-    birimFiyat: centsToAmount(Math.round(grossBaseCents / quantity)),
-    fiyat: centsToAmount(grossBaseCents),
+    birimFiyat: formatPortalAmount(unitPrice),
+    fiyat: formatPortalAmount(grossBase),
     iskontoArttm: "\u0130skonto",
     iskontoOrani: roundAmount(discountRate),
-    iskontoTutari: centsToAmount(discountBaseCents),
+    iskontoTutari: formatPortalAmount(discountBase),
     iskontoNedeni: "",
-    malHizmetTutari: centsToAmount(taxableBaseCents),
-    kdvOrani: line.vatRate,
-    kdvTutari: centsToAmount(vatCents),
-    tevkifatKodu: 0,
-    ozelMatrahNedeni: 0,
-    ozelMatrahTutari: 0,
-    gtip: ""
+    malHizmetTutari: formatPortalAmount(taxableBase),
+    kdvOrani: String(Math.round(line.vatRate)),
+    vergiOrani: 0,
+    kdvTutari: formatPortalAmount(vat),
+    vergininKdvTutari: "0.00",
+    numeric: {
+      fiyat: grossBase,
+      iskontoTutari: discountBase,
+      malHizmetTutari: taxableBase,
+      kdvTutari: vat
+    }
   };
 }
 
@@ -180,12 +229,14 @@ export function buildGibPortalInvoiceDraftPayload(
   const isCompany = buyerIdentifier.length === 10;
   const buyerName = payload.buyerName.trim();
   const personName = splitBuyerName(buyerName);
-  const lines = payload.lines.map((line) => buildPortalLine(line, unitCode));
-  const serviceTotal = roundAmount(lines.reduce((sum, line) => sum + line.fiyat, 0));
-  const discountTotal = roundAmount(lines.reduce((sum, line) => sum + line.iskontoTutari, 0));
-  const taxableTotal = roundAmount(lines.reduce((sum, line) => sum + line.malHizmetTutari, 0));
-  const vatTotal = roundAmount(lines.reduce((sum, line) => sum + line.kdvTutari, 0));
+  const linesWithTotals = payload.lines.map((line) => buildPortalLine(line, unitCode));
+  const serviceTotal = roundAmount(linesWithTotals.reduce((sum, line) => sum + line.numeric.fiyat, 0));
+  const discountTotal = roundAmount(linesWithTotals.reduce((sum, line) => sum + line.numeric.iskontoTutari, 0));
+  const taxableTotal = roundAmount(linesWithTotals.reduce((sum, line) => sum + line.numeric.malHizmetTutari, 0));
+  const vatTotal = roundAmount(linesWithTotals.reduce((sum, line) => sum + line.numeric.kdvTutari, 0));
   const payableTotal = roundAmount(taxableTotal + vatTotal);
+  const lines = linesWithTotals.map(({ numeric: _numeric, ...line }) => line);
+  const zeroAmount = "0";
 
   return {
     faturaUuid: ettn,
@@ -193,9 +244,9 @@ export function buildGibPortalInvoiceDraftPayload(
     faturaTarihi: formatPortalDate(issuedAt),
     saat: formatPortalTime(issuedAt),
     paraBirimi: payload.totals.currency || "TRY",
-    dovzTLkur: 0,
-    faturaTipi: "SATIS",
-    hangiTip: "5000/30000",
+    dovzTLkur: "0",
+    faturaTipi: "5000/30000",
+    hangiTip: "Buyuk",
     vknTckn: buyerIdentifier,
     aliciUnvan: isCompany ? buyerName : "",
     aliciAdi: isCompany ? "" : personName.firstName,
@@ -214,21 +265,57 @@ export function buildGibPortalInvoiceDraftPayload(
     fax: "",
     eposta: "",
     websitesi: "",
+    komisyonOrani: 0,
+    navlunOrani: 0,
+    hammaliyeOrani: 0,
+    nakliyeOrani: 0,
+    komisyonTutari: zeroAmount,
+    navlunTutari: zeroAmount,
+    hammaliyeTutari: zeroAmount,
+    nakliyeTutari: zeroAmount,
+    komisyonKDVOrani: 0,
+    navlunKDVOrani: 0,
+    hammaliyeKDVOrani: 0,
+    nakliyeKDVOrani: 0,
+    komisyonKDVTutari: zeroAmount,
+    navlunKDVTutari: zeroAmount,
+    hammaliyeKDVTutari: zeroAmount,
+    nakliyeKDVTutari: zeroAmount,
+    gelirVergisiOrani: 0,
+    bagkurTevkifatiOrani: 0,
+    gelirVergisiTevkifatiTutari: zeroAmount,
+    bagkurTevkifatiTutari: zeroAmount,
+    halRusumuOrani: 0,
+    ticaretBorsasiOrani: 0,
+    milliSavunmaFonuOrani: 0,
+    digerOrani: 0,
+    halRusumuTutari: zeroAmount,
+    ticaretBorsasiTutari: zeroAmount,
+    milliSavunmaFonuTutari: zeroAmount,
+    digerTutari: zeroAmount,
+    halRusumuKDVOrani: 0,
+    ticaretBorsasiKDVOrani: 0,
+    milliSavunmaFonuKDVOrani: 0,
+    digerKDVOrani: 0,
+    halRusumuKDVTutari: zeroAmount,
+    ticaretBorsasiKDVTutari: zeroAmount,
+    milliSavunmaFonuKDVTutari: zeroAmount,
+    digerKDVTutari: zeroAmount,
     iadeTable: [],
-    ozelMatrahTutari: 0,
+    ozelMatrahTutari: zeroAmount,
     ozelMatrahOrani: 0,
-    ozelMatrahVergiTutari: 0,
-    vergiCesidi: "",
+    ozelMatrahVergiTutari: "0.00",
+    vergiCesidi: " ",
     malHizmetTable: lines,
     tip: "\u0130skonto",
-    matrah: taxableTotal,
-    malhizmetToplamTutari: serviceTotal,
-    toplamIskonto: discountTotal,
-    hesaplanankdv: vatTotal,
-    vergilerToplami: vatTotal,
-    vergilerDahilToplamTutar: payableTotal,
-    toplamMasraflar: 0,
-    odenecekTutar: payableTotal,
+    matrah: formatPortalAmount(taxableTotal),
+    malhizmetToplamTutari: formatPortalAmount(serviceTotal),
+    toplamIskonto: formatPortalAmount(discountTotal),
+    hesaplanankdv: formatPortalAmount(vatTotal),
+    vergilerToplami: formatPortalAmount(vatTotal),
+    vergilerDahilToplamTutar: formatPortalAmount(payableTotal),
+    toplamMasraflar: zeroAmount,
+    odenecekTutar: formatPortalAmount(payableTotal),
     not: `Trendyol siparis no: ${payload.orderNumber} / Paket: ${payload.shipmentPackageId}`,
     siparisNumarasi: payload.orderNumber,
     siparisTarihi: "",
@@ -236,8 +323,8 @@ export function buildGibPortalInvoiceDraftPayload(
     irsaliyeTarihi: "",
     fisNo: "",
     fisTarihi: "",
-    fisSaati: "",
-    fisTipi: "",
+    fisSaati: " ",
+    fisTipi: " ",
     zRaporNo: "",
     okcSeriNo: ""
   };
