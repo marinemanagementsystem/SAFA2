@@ -245,7 +245,7 @@ export class InvoiceService {
           data: {
             status: DraftStatus.PORTAL_DRAFTED,
             approvedAt: candidate.draft.approvedAt ?? new Date(),
-            portalDraftUuid: result.uuid,
+            ...(result.uuid ? { portalDraftUuid: result.uuid } : {}),
             portalDraftNumber: result.documentNumber,
             portalDraftUploadedAt: new Date(),
             portalDraftStatus: result.status ?? "Onaylanmadı",
@@ -288,8 +288,9 @@ export class InvoiceService {
             portalDraftResponse: json({
               command: result.command,
               pageName: result.pageName,
-              attemptedUuid: result.uuid,
-              attemptedUuidLength: result.uuid.length,
+              ...(result.attemptedUuid
+                ? { attemptedUuid: result.attemptedUuid, attemptedUuidLength: result.attemptedUuid.length }
+                : {}),
               error: result.error,
               message: result.message,
               response: result.response

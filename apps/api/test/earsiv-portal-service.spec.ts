@@ -29,8 +29,8 @@ const payload: GibPortalInvoiceDraftPayload = {
   saat: "14:30:00",
   paraBirimi: "TRY",
   dovzTLkur: "0",
-  faturaTipi: "5000/30000",
-  hangiTip: "Buyuk",
+  faturaTipi: "SATIS",
+  hangiTip: "5000/30000",
   vknTckn: "11111111111",
   aliciUnvan: "",
   aliciAdi: "Nihan",
@@ -135,18 +135,41 @@ describe("EarsivPortalService", () => {
     post.mockReset();
   });
 
-  it("gets the portal-issued ETTN before creating a draft invoice", async () => {
+  it("lets the 5000/30000 portal create request generate its own ETTN", async () => {
     post
       .mockResolvedValueOnce({ status: 200, data: { token: "portal-token" } })
-      .mockResolvedValueOnce({ status: 200, data: { data: "6f0fdc0f-d6a7-4d1a-b4dd-ea1fd9d2da53" } })
       .mockResolvedValueOnce({ status: 200, data: { data: "Faturanız başarıyla oluşturulmuştur." } });
 
     const service = new EarsivPortalService(settings() as unknown as SettingsService);
     const result = await service.createInvoiceDrafts([{ localDraftId: "draft-1", payload }]);
 
     expect(result[0]).toMatchObject({
+      ok: true
+    });
+    expect(result[0].uuid).toBeUndefined();
+    expect(post).toHaveBeenCalledTimes(2);
+
+    const createBody = new URLSearchParams(String(post.mock.calls[1][1]));
+    const createPayload = JSON.parse(createBody.get("jp") ?? "{}") as Partial<GibPortalInvoiceDraftPayload>;
+    expect(createBody.get("cmd")).toBe("EARSIV_PORTAL_FATURA_OLUSTUR");
+    expect(createPayload.faturaUuid).toBeUndefined();
+  });
+
+  it("gets the portal-issued ETTN before creating non-5000/30000 draft invoices", async () => {
+    post
+      .mockResolvedValueOnce({ status: 200, data: { token: "portal-token" } })
+      .mockResolvedValueOnce({ status: 200, data: { data: "6f0fdc0f-d6a7-4d1a-b4dd-ea1fd9d2da53" } })
+      .mockResolvedValueOnce({ status: 200, data: { data: "Faturanız başarıyla oluşturulmuştur." } });
+
+    const service = new EarsivPortalService(settings() as unknown as SettingsService);
+    const result = await service.createInvoiceDrafts([
+      { localDraftId: "draft-1", payload: { ...payload, faturaTipi: "5000/30000", hangiTip: "Buyuk" } }
+    ]);
+
+    expect(result[0]).toMatchObject({
       ok: true,
-      uuid: "6f0fdc0f-d6a7-4d1a-b4dd-ea1fd9d2da53"
+      uuid: "6f0fdc0f-d6a7-4d1a-b4dd-ea1fd9d2da53",
+      attemptedUuid: "6f0fdc0f-d6a7-4d1a-b4dd-ea1fd9d2da53"
     });
 
     const uuidBody = new URLSearchParams(String(post.mock.calls[1][1]));

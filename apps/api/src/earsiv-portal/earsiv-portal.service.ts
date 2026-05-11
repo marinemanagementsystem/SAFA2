@@ -29,7 +29,8 @@ interface PortalDraftUploadInput {
 export interface PortalDraftUploadResult {
   localDraftId: string;
   ok: boolean;
-  uuid: string;
+  uuid?: string;
+  attemptedUuid?: string;
   documentNumber?: string;
   status?: string;
   message?: string;
@@ -139,6 +140,19 @@ function extractPortalUuid(value: unknown): string | undefined {
   return undefined;
 }
 
+function shouldLetPortalGenerateUuid(payload: GibPortalInvoiceDraftPayload) {
+  return payload.hangiTip === "5000/30000";
+}
+
+function payloadForDraftCreate(payload: GibPortalInvoiceDraftPayload, uuid?: string) {
+  if (shouldLetPortalGenerateUuid(payload)) {
+    const { faturaUuid: _faturaUuid, ...payloadWithoutUuid } = payload;
+    return payloadWithoutUuid;
+  }
+
+  return { ...payload, faturaUuid: uuid ?? payload.faturaUuid };
+}
+
 @Injectable()
 export class EarsivPortalService {
   constructor(@Inject(SettingsService) private readonly settings: SettingsService) {}
@@ -212,8 +226,10 @@ export class EarsivPortalService {
 
     for (const input of inputs) {
       try {
-        const portalUuid = await this.getPortalInvoiceUuid(connection, response.token);
-        const payload = { ...input.payload, faturaUuid: portalUuid };
+        const portalUuid = shouldLetPortalGenerateUuid(input.payload)
+          ? undefined
+          : await this.getPortalInvoiceUuid(connection, response.token);
+        const payload = payloadForDraftCreate(input.payload, portalUuid);
         const dispatch = await this.dispatch(
           connection,
           response.token,
@@ -225,11 +241,13 @@ export class EarsivPortalService {
         const message = stringifyResponseData(dispatch);
         const errorMessage = dispatch.error ? JSON.stringify(dispatch.error) : undefined;
         const ok = !dispatch.error && successText(message);
+        const responseUuid = extractPortalUuid(dispatch.data ?? dispatch.result ?? dispatch.rows ?? dispatch) ?? portalUuid;
 
         results.push({
           localDraftId: input.localDraftId,
           ok,
-          uuid: payload.faturaUuid,
+          uuid: responseUuid,
+          attemptedUuid: portalUuid,
           documentNumber: payload.belgeNumarasi || undefined,
           status: ok ? "Onaylanmadı" : "YUKLEME_HATASI",
           message,
@@ -243,6 +261,7 @@ export class EarsivPortalService {
           localDraftId: input.localDraftId,
           ok: false,
           uuid: input.payload.faturaUuid,
+          attemptedUuid: input.payload.faturaUuid,
           status: "YUKLEME_HATASI",
           command,
           pageName,
