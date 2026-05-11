@@ -13,6 +13,10 @@ describe("normalizeTrendyolPackage", () => {
       grossAmount: 120,
       totalDiscount: 20,
       totalPrice: 100,
+      packageHistories: [
+        { status: "Created", createdDate: 1776426328470 },
+        { status: "Delivered", createdDate: 1776857583954 }
+      ],
       lines: [{ productName: "Urun", quantity: 2, amount: 120, discount: 20, vatBaseAmount: 20 }]
     });
 
@@ -20,5 +24,6 @@ describe("normalizeTrendyolPackage", () => {
     expect(normalized.customerName).toBe("Ali Kaya");
     expect(normalized.totalPayableCents).toBe(10000);
     expect(normalized.lines[0]?.quantity).toBe(2);
+    expect(normalized.deliveredAt?.toISOString()).toBe("2026-04-22T11:33:03.954Z");
   });
 });

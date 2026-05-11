@@ -690,6 +690,17 @@ a {
   text-underline-offset: 3px;
 }
 
+.route-link {
+  font-weight: 900;
+}
+
+.inline-link-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
 .provider-strip,
 .provider-grid,
 .action-lanes,
@@ -1080,7 +1091,7 @@ a {
 
 .data-table {
   width: 100%;
-  min-width: 980px;
+  min-width: 1120px;
   border-collapse: collapse;
 }
 

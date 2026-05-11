@@ -50,6 +50,7 @@ export interface OrderListItem {
   totalPayableCents: number;
   currency: string;
   lastModifiedAt?: string;
+  deliveredAt?: string;
   updatedAt: string;
   createdAt: string;
   draftId?: string;
@@ -79,6 +80,7 @@ export interface OrderDetail {
   totalPayableCents: number;
   currency: string;
   lastModifiedAt?: string;
+  deliveredAt?: string;
   createdAt: string;
   updatedAt: string;
   draft: {
@@ -126,6 +128,7 @@ export interface InvoiceDraftListItem {
   lineCount: number;
   totalPayableCents: number;
   currency: string;
+  deliveredAt?: string;
   approvedAt?: string;
   portalDraftUuid?: string;
   portalDraftNumber?: string;
@@ -144,6 +147,7 @@ export interface InvoiceListItem {
   shipmentPackageId: string;
   invoiceNumber: string;
   invoiceDate: string;
+  deliveredAt?: string;
   status: InvoiceStatus;
   pdfUrl?: string;
   trendyolStatus?: string;

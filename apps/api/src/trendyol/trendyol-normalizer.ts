@@ -37,6 +37,7 @@ export interface NormalizedOrder {
   totalPayableCents: number;
   currency: string;
   lastModifiedAt?: Date;
+  deliveredAt?: Date;
   raw: UnknownRecord;
 }
 
@@ -63,6 +64,38 @@ function firstText(...values: unknown[]): string {
 function timestampToDate(value: unknown): Date | undefined {
   if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) return undefined;
   return new Date(value < 10_000_000_000 ? value * 1000 : value);
+}
+
+function dateFromUnknown(value: unknown): Date | undefined {
+  if (typeof value === "number") return timestampToDate(value);
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+  const numeric = Number(trimmed);
+  if (Number.isFinite(numeric)) return timestampToDate(numeric);
+  const parsed = new Date(trimmed);
+  return Number.isFinite(parsed.getTime()) ? parsed : undefined;
+}
+
+export function extractTrendyolDeliveryDate(raw: unknown): Date | undefined {
+  const pkg = record(raw);
+
+  for (const key of ["deliveredAt", "deliveredDate", "deliveryDate", "teslimTarihi"]) {
+    const direct = dateFromUnknown(pkg[key]);
+    if (direct) return direct;
+  }
+
+  const histories = Array.isArray(pkg.packageHistories) ? (pkg.packageHistories as UnknownRecord[]) : [];
+  const deliveredHistory = histories
+    .map((history) => {
+      const status = firstText(history.status).toLocaleLowerCase("tr-TR");
+      if (status !== "delivered" && !status.includes("teslim")) return undefined;
+      return dateFromUnknown(history.createdDate ?? history.date ?? history.createdAt);
+    })
+    .filter((date): date is Date => Boolean(date))
+    .sort((left, right) => right.getTime() - left.getTime())[0];
+
+  return deliveredHistory;
 }
 
 export function normalizeTrendyolPackage(pkg: UnknownRecord): NormalizedOrder {
@@ -117,6 +150,7 @@ export function normalizeTrendyolPackage(pkg: UnknownRecord): NormalizedOrder {
     totalPayableCents: toCents(pkg.totalPrice) || linePayable,
     currency: firstText(pkg.currencyCode, pkg.currency, "TRY"),
     lastModifiedAt: timestampToDate(pkg.lastModifiedDate),
+    deliveredAt: extractTrendyolDeliveryDate(pkg),
     raw: pkg
   };
 }

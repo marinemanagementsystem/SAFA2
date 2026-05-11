@@ -2,7 +2,8 @@
 
 import type { OrderDetail, OrderListItem } from "@safa/shared";
 import { ArrowUpDown, CalendarDays, Eye, FileText, ListFilter, Search, X } from "lucide-react";
-import { useMemo, useState } from "react";
+import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
 import { api } from "../../lib/api";
 import {
   cx,
@@ -19,6 +20,7 @@ import {
 type InvoiceFilter = "all" | "issued" | "external" | "unissued" | "issued-today" | "issued-previous";
 type DateFilter = "all" | "today" | "last7" | "last30";
 type OrderSortField =
+  | "deliveredAt"
   | "updatedAt"
   | "orderNumber"
   | "shipmentPackageId"
@@ -41,14 +43,49 @@ interface OrdersViewProps {
   onSelectOrder: (id: string) => void;
 }
 
+function initialOrderQuery() {
+  if (typeof window === "undefined") return "";
+  const params = new URLSearchParams(window.location.search);
+  return params.get("order") ?? params.get("package") ?? "";
+}
+
+function dateTimeValue(value?: string) {
+  if (!value) return 0;
+  const time = new Date(value).getTime();
+  return Number.isFinite(time) ? time : 0;
+}
+
+function orderDeliveryTime(order: OrderListItem) {
+  return dateTimeValue(order.deliveredAt ?? order.lastModifiedAt ?? order.updatedAt);
+}
+
+function invoiceDeskHref(order: OrderListItem) {
+  const target = order.draftId ? `draft=${encodeURIComponent(order.draftId)}` : `order=${encodeURIComponent(order.orderNumber)}`;
+  return `/invoices?${target}`;
+}
+
 export function OrdersView({ orders, selectedOrderId, selectedOrder, detailState, onSelectOrder }: OrdersViewProps) {
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(initialOrderQuery);
   const [orderStatusFilter, setOrderStatusFilter] = useState("all");
   const [draftStatusFilter, setDraftStatusFilter] = useState("all");
   const [invoiceFilter, setInvoiceFilter] = useState<InvoiceFilter>("all");
   const [cityFilter, setCityFilter] = useState("all");
   const [dateFilter, setDateFilter] = useState<DateFilter>("all");
-  const [sort, setSort] = useState<SortState>({ field: "updatedAt", direction: "desc" });
+  const [sort, setSort] = useState<SortState>({ field: "deliveredAt", direction: "desc" });
+
+  useEffect(() => {
+    if (selectedOrderId || !query) return;
+    const search = stringValue(query);
+    const matched = orders.find(
+      (order) =>
+        stringValue(order.orderNumber) === search ||
+        stringValue(order.shipmentPackageId) === search ||
+        stringValue(order.draftId) === search ||
+        stringValue(order.invoiceNumber) === search ||
+        stringValue(order.externalInvoiceNumber) === search
+    );
+    if (matched) onSelectOrder(matched.id);
+  }, [onSelectOrder, orders, query, selectedOrderId]);
 
   const filterOptions = useMemo(() => {
     const statuses = Array.from(new Set(orders.map((order) => order.status).filter(Boolean))).sort();
@@ -86,7 +123,7 @@ export function OrdersView({ orders, selectedOrderId, selectedOrder, detailState
       if (orderStatusFilter !== "all" && order.status !== orderStatusFilter) return false;
       if (draftStatusFilter !== "all" && (order.draftStatus ?? "YOK") !== draftStatusFilter) return false;
       if (cityFilter !== "all" && order.city !== cityFilter) return false;
-      if (!dateMatches(order.lastModifiedAt ?? order.updatedAt, dateFilter)) return false;
+      if (!dateMatches(order.deliveredAt ?? order.lastModifiedAt ?? order.updatedAt, dateFilter)) return false;
       if (invoiceFilter === "issued" && !order.invoiceId) return false;
       if (invoiceFilter === "external" && order.externalInvoiceCount === 0) return false;
       if (invoiceFilter === "unissued" && (order.invoiceId || order.externalInvoiceCount > 0)) return false;
@@ -102,10 +139,10 @@ export function OrdersView({ orders, selectedOrderId, selectedOrder, detailState
 
       if (sort.field === "totalPayableCents") {
         result = numberValue(left.totalPayableCents) - numberValue(right.totalPayableCents);
+      } else if (sort.field === "deliveredAt") {
+        result = orderDeliveryTime(left) - orderDeliveryTime(right);
       } else if (sort.field === "updatedAt") {
-        result =
-          new Date(left.lastModifiedAt ?? left.updatedAt).getTime() -
-          new Date(right.lastModifiedAt ?? right.updatedAt).getTime();
+        result = dateTimeValue(left.lastModifiedAt ?? left.updatedAt) - dateTimeValue(right.lastModifiedAt ?? right.updatedAt);
       } else {
         result = stringValue(left[sort.field]).localeCompare(stringValue(right[sort.field]), "tr-TR");
       }
@@ -128,7 +165,7 @@ export function OrdersView({ orders, selectedOrderId, selectedOrder, detailState
     setInvoiceFilter("all");
     setCityFilter("all");
     setDateFilter("all");
-    setSort({ field: "updatedAt", direction: "desc" });
+    setSort({ field: "deliveredAt", direction: "desc" });
   }
 
   return (
@@ -203,9 +240,9 @@ export function OrdersView({ orders, selectedOrderId, selectedOrder, detailState
             </span>
             <select value={dateFilter} onChange={(event) => setDateFilter(event.target.value as DateFilter)}>
               <option value="all">Tum zamanlar</option>
-              <option value="today">Bugun guncellenen</option>
-              <option value="last7">Son 7 gun</option>
-              <option value="last30">Son 30 gun</option>
+              <option value="today">Bugun teslim edilen</option>
+              <option value="last7">Son 7 gun teslim</option>
+              <option value="last30">Son 30 gun teslim</option>
             </select>
           </label>
           <label className="field">
@@ -226,7 +263,8 @@ export function OrdersView({ orders, selectedOrderId, selectedOrder, detailState
 
         <div className="form-alert table-note">
           Fatura kolonu once SAFA'da kesilen faturayi, yoksa harici e-Arsiv/Trendyol eslesmesini gosterir. Hicbir kaynakta
-          kayit bulunmadiginda "Kesim bekliyor" veya "SAFA kaydi yok" olarak ayrilir.
+          kayit bulunmadiginda "Kesim bekliyor" veya "SAFA kaydi yok" olarak ayrilir. Varsayilan siralama teslim tarihine
+          gore yeniden eskiyedir.
         </div>
 
         <div className="split-workspace">
@@ -236,6 +274,7 @@ export function OrdersView({ orders, selectedOrderId, selectedOrder, detailState
                 <tr>
                   <SortableHead label="Paket" onClick={() => changeSort("shipmentPackageId")} />
                   <SortableHead label="Siparis" onClick={() => changeSort("orderNumber")} />
+                  <SortableHead label="Teslim" onClick={() => changeSort("deliveredAt")} />
                   <SortableHead label="Alici" onClick={() => changeSort("customerName")} />
                   <SortableHead label="Sehir" onClick={() => changeSort("city")} />
                   <SortableHead label="Tutar" onClick={() => changeSort("totalPayableCents")} />
@@ -266,7 +305,8 @@ export function OrdersView({ orders, selectedOrderId, selectedOrder, detailState
                   <span className="mono">{order.shipmentPackageId}</span>
                   <strong>{order.customerName || "Alici eksik"}</strong>
                   <small>
-                    {order.city || "Sehir yok"} · {money(order.totalPayableCents, order.currency)}
+                    {order.city || "Sehir yok"} · Teslim {order.deliveredAt ? formatDateTime(order.deliveredAt) : "-"} ·{" "}
+                    {money(order.totalPayableCents, order.currency)}
                   </small>
                   <span className={cx("status-pill", statusTone(order.draftStatus))}>{statusLabel(order.draftStatus ?? "YOK")}</span>
                 </button>
@@ -312,6 +352,7 @@ function OrderTableRow({ order, selected, onSelect }: { order: OrderListItem; se
     >
       <td className="mono">{order.shipmentPackageId}</td>
       <td>{order.orderNumber}</td>
+      <td>{order.deliveredAt ? formatDateTime(order.deliveredAt) : <span className="muted">-</span>}</td>
       <td>{order.customerName || <span className="muted">Eksik</span>}</td>
       <td>{order.city || <span className="muted">Eksik</span>}</td>
       <td>{money(order.totalPayableCents, order.currency)}</td>
@@ -333,6 +374,9 @@ function OrderTableRow({ order, selected, onSelect }: { order: OrderListItem; se
         ) : (
           <span className="muted">-</span>
         )}
+        <Link className="text-link route-link" href={invoiceDeskHref(order)}>
+          Fatura masasi
+        </Link>
       </td>
     </tr>
   );
@@ -435,6 +479,11 @@ function OrderDetailPanel({
           <small>Indirim: {money(selectedOrder.totalDiscountCents, selectedOrder.currency)}</small>
         </div>
         <div>
+          <span>Teslim</span>
+          <strong>{selectedOrder.deliveredAt ? formatDateTime(selectedOrder.deliveredAt) : "Tarih yok"}</strong>
+          <small>Fatura masasi bu tarih ile siralanir.</small>
+        </div>
+        <div>
           <span>Fatura</span>
           <strong>{selectedOrder.invoice?.invoiceNumber ?? selectedOrder.externalInvoices[0]?.invoiceNumber ?? "SAFA faturasi yok"}</strong>
           <small>
@@ -448,6 +497,10 @@ function OrderDetailPanel({
       </div>
 
       <div className="detail-actions">
+        <Link className="ui-button ghost" href={`/invoices?${selectedOrder.draft ? `draft=${encodeURIComponent(selectedOrder.draft.id)}` : `order=${encodeURIComponent(selectedOrder.orderNumber)}`}`}>
+          <FileText size={18} />
+          Fatura masasi
+        </Link>
         {selectedOrder.invoice ? (
           <a className="ui-button primary" href={api.invoicePdfUrl(selectedOrder.invoice.id)} target="_blank" rel="noreferrer">
             <FileText size={18} />

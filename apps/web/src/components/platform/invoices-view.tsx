@@ -26,6 +26,7 @@ import {
   UploadCloud,
   X
 } from "lucide-react";
+import Link from "next/link";
 import { useMemo, useState } from "react";
 import { api } from "../../lib/api";
 import { cx, dateMatches, formatDateTime, money, numberValue, startOfToday, statusLabel, statusTone, stringValue } from "../../lib/platform/format";
@@ -33,7 +34,7 @@ import { InvoiceProcessBar, latestInvoiceJob, visibleInvoiceJob } from "./invoic
 
 type DraftDeskFilter = "actionable" | "all" | "ready" | "approved" | "failed" | "issuing" | "portal" | "external" | "issued";
 type DraftExternalFilter = "all" | "no-external" | "external" | ExternalInvoiceSource;
-type DraftSortField = "process" | "order" | "customer" | "status" | "amount-desc" | "amount-asc";
+type DraftSortField = "delivered-desc" | "delivered-asc" | "process" | "order" | "customer" | "status" | "amount-desc" | "amount-asc";
 type DateFilter = "all" | "today" | "last7" | "last30";
 type ArchiveStatusFilter = "all" | InvoiceStatus;
 type ExternalMatchFilter = "all" | "matched" | "unmatched";
@@ -86,6 +87,30 @@ interface InvoicesViewProps {
   onSyncTrendyolExternalInvoices: () => void;
   onReconcileExternalInvoices: () => void;
   onMatchExternalInvoice: (id: string, target: string) => void;
+}
+
+function initialInvoiceDeskQuery() {
+  if (typeof window === "undefined") return "";
+  const params = new URLSearchParams(window.location.search);
+  return params.get("draft") ?? params.get("order") ?? params.get("package") ?? "";
+}
+
+function dateTimeValue(value?: string) {
+  if (!value) return 0;
+  const time = new Date(value).getTime();
+  return Number.isFinite(time) ? time : 0;
+}
+
+function draftDeliveryTime(draft: InvoiceDraftListItem) {
+  return dateTimeValue(draft.deliveredAt);
+}
+
+function invoiceDeliveryTime(invoice: InvoiceListItem) {
+  return dateTimeValue(invoice.deliveredAt ?? invoice.invoiceDate);
+}
+
+function orderDeskHref(orderNumber: string) {
+  return `/orders?order=${encodeURIComponent(orderNumber)}`;
 }
 
 function isSelectableDraft(draft: InvoiceDraftListItem) {
@@ -605,11 +630,12 @@ export function InvoicesView({
   onReconcileExternalInvoices,
   onMatchExternalInvoice
 }: InvoicesViewProps) {
+  const initialDeskQuery = initialInvoiceDeskQuery();
   const [selectedDrafts, setSelectedDrafts] = useState<string[]>([]);
-  const [draftQuery, setDraftQuery] = useState("");
-  const [draftDeskFilter, setDraftDeskFilter] = useState<DraftDeskFilter>("actionable");
+  const [draftQuery, setDraftQuery] = useState(initialDeskQuery);
+  const [draftDeskFilter, setDraftDeskFilter] = useState<DraftDeskFilter>(initialDeskQuery ? "all" : "actionable");
   const [draftExternalFilter, setDraftExternalFilter] = useState<DraftExternalFilter>("all");
-  const [draftSort, setDraftSort] = useState<DraftSortField>("process");
+  const [draftSort, setDraftSort] = useState<DraftSortField>("delivered-desc");
   const [showSelectedOnly, setShowSelectedOnly] = useState(false);
   const [archiveQuery, setArchiveQuery] = useState("");
   const [archiveStatusFilter, setArchiveStatusFilter] = useState<ArchiveStatusFilter>("all");
@@ -660,9 +686,11 @@ export function InvoicesView({
       const latestJob = latestInvoiceJob(jobs, draft.id);
       const invoice = invoiceByDraftId.get(draft.id);
       const haystack = [
+        draft.id,
         draft.shipmentPackageId,
         draft.orderNumber,
         draft.customerName,
+        draft.deliveredAt,
         draft.status,
         statusLabel(draft.status),
         draft.externalInvoiceNumber,
@@ -694,6 +722,8 @@ export function InvoicesView({
         return stringValue(left.orderNumber).localeCompare(stringValue(right.orderNumber), "tr-TR");
       }
 
+      if (draftSort === "delivered-desc") return draftDeliveryTime(right) - draftDeliveryTime(left);
+      if (draftSort === "delivered-asc") return draftDeliveryTime(left) - draftDeliveryTime(right);
       if (draftSort === "amount-desc") return numberValue(right.totalPayableCents) - numberValue(left.totalPayableCents);
       if (draftSort === "amount-asc") return numberValue(left.totalPayableCents) - numberValue(right.totalPayableCents);
       if (draftSort === "customer") return stringValue(left.customerName).localeCompare(stringValue(right.customerName), "tr-TR");
@@ -718,7 +748,7 @@ export function InvoicesView({
         if (!dateMatches(invoice.invoiceDate, archiveDateFilter)) return false;
         return true;
       })
-      .sort((left, right) => new Date(right.invoiceDate).getTime() - new Date(left.invoiceDate).getTime());
+      .sort((left, right) => invoiceDeliveryTime(right) - invoiceDeliveryTime(left));
   }, [archiveDateFilter, archiveQuery, archiveStatusFilter, invoices]);
 
   const filteredExternalInvoices = useMemo(() => {
@@ -772,7 +802,7 @@ export function InvoicesView({
     setDraftQuery("");
     setDraftDeskFilter("actionable");
     setDraftExternalFilter("all");
-    setDraftSort("process");
+    setDraftSort("delivered-desc");
     setShowSelectedOnly(false);
   }
 
@@ -968,6 +998,8 @@ export function InvoicesView({
                 Siralama
               </span>
               <select value={draftSort} onChange={(event) => setDraftSort(event.target.value as DraftSortField)}>
+                <option value="delivered-desc">Teslim yeni-eski</option>
+                <option value="delivered-asc">Teslim eski-yeni</option>
                 <option value="process">Surec onceligi</option>
                 <option value="order">Siparis no</option>
                 <option value="customer">Alici adi</option>
@@ -993,6 +1025,11 @@ export function InvoicesView({
               Bunlar siparis ekraninda "Harici bulundu" olarak gorunur.
             </div>
           ) : null}
+
+          <div className="form-alert table-note">
+            Fatura masasi varsayilan olarak Trendyol teslim tarihine gore yeniden eskiye siralanir. Siparis ekranindaki teslim tarihiyle
+            ayni kayit kullanilir.
+          </div>
 
           {selectedDrafts.length > 0 ? (
             <div className="form-alert table-note invoice-selection-note">
@@ -1076,6 +1113,7 @@ export function InvoicesView({
                       <strong>{draft.orderNumber}</strong>
                       <span>
                         {draft.customerName} · {money(draft.totalPayableCents, draft.currency)} · Paket {draft.shipmentPackageId}
+                        {draft.deliveredAt ? ` · Teslim ${formatDateTime(draft.deliveredAt)}` : ""}
                         {draft.portalDraftUploadedAt ? ` · ${formatDateTime(draft.portalDraftUploadedAt)}` : ""}
                       </span>
                     </div>
@@ -1093,6 +1131,7 @@ export function InvoicesView({
                       <strong>{draft.orderNumber}</strong>
                       <span>
                         {draft.customerName} · {money(draft.totalPayableCents, draft.currency)} · Paket {draft.shipmentPackageId}
+                        {draft.deliveredAt ? ` · Teslim ${formatDateTime(draft.deliveredAt)}` : ""}
                         {draft.externalInvoiceNumber ? ` · ${draft.externalInvoiceNumber}` : " · Trendyol faturasi bulundu"}
                       </span>
                     </div>
@@ -1124,7 +1163,8 @@ export function InvoicesView({
                   <span className={cx("status-pill", draftStatus.tone)}>{draftStatus.label}</span>
                   <strong>{draft.orderNumber}</strong>
                   <small>
-                    {draft.customerName} · {money(draft.totalPayableCents, draft.currency)} · {draft.lineCount} satir
+                    {draft.customerName} · Teslim {draft.deliveredAt ? formatDateTime(draft.deliveredAt) : "-"} ·{" "}
+                    {money(draft.totalPayableCents, draft.currency)} · {draft.lineCount} satir
                   </small>
                   {draft.externalInvoiceCount > 0 ? (
                     <em>
@@ -1172,6 +1212,9 @@ export function InvoicesView({
                   <a className="text-link" href={api.draftPdfUrl(draft.id)} target="_blank" rel="noreferrer">
                     Taslak PDF
                   </a>
+                  <Link className="text-link route-link" href={orderDeskHref(draft.orderNumber)}>
+                    Siparise git
+                  </Link>
                 </div>
               </div>
               );
@@ -1419,6 +1462,10 @@ function ExternalInvoiceRow({
               Eslestir
             </button>
           </div>
+        ) : invoice.matchedOrderNumber ? (
+          <Link className="text-link route-link" href={orderDeskHref(invoice.matchedOrderNumber)}>
+            Siparise git
+          </Link>
         ) : null}
       </div>
       <span>{invoice.totalPayableCents ? money(invoice.totalPayableCents, invoice.currency) : "-"}</span>
@@ -1435,13 +1482,22 @@ function InvoiceArchiveSection({ title, invoices }: { title: string; invoices: I
       </div>
       <div className="archive-list">
         {invoices.map((invoice) => (
-          <a className="archive-row" href={api.invoicePdfUrl(invoice.id)} target="_blank" rel="noreferrer" key={invoice.id}>
+          <div className="archive-row" key={invoice.id}>
             <span className={cx("status-pill", statusTone(invoice.status))}>{statusLabel(invoice.status)}</span>
             <strong>{invoice.invoiceNumber}</strong>
             <small>
-              {invoice.orderNumber} · {formatDateTime(invoice.invoiceDate)}
+              {invoice.orderNumber} · Fatura {formatDateTime(invoice.invoiceDate)}
+              {invoice.deliveredAt ? ` · Teslim ${formatDateTime(invoice.deliveredAt)}` : ""}
             </small>
-          </a>
+            <div className="inline-link-row">
+              <a className="text-link" href={api.invoicePdfUrl(invoice.id)} target="_blank" rel="noreferrer">
+                PDF
+              </a>
+              <Link className="text-link route-link" href={orderDeskHref(invoice.orderNumber)}>
+                Siparise git
+              </Link>
+            </div>
+          </div>
         ))}
         {invoices.length === 0 ? <div className="mini-empty">Bu bolumde fatura yok.</div> : null}
       </div>

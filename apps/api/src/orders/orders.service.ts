@@ -3,11 +3,21 @@ import { Prisma } from "@prisma/client";
 import { ExternalInvoicesService } from "../external-invoices/external-invoices.service";
 import { PrismaService } from "../prisma/prisma.service";
 import { TrendyolService } from "../trendyol/trendyol.service";
-import { normalizeTrendyolPackage } from "../trendyol/trendyol-normalizer";
+import { extractTrendyolDeliveryDate, normalizeTrendyolPackage } from "../trendyol/trendyol-normalizer";
 import { buildDraft } from "./invoice-draft-builder";
 
 function json(value: unknown): Prisma.InputJsonValue {
   return value as Prisma.InputJsonValue;
+}
+
+function deliveredAtForOrder(raw: unknown, status: string, fallback?: Date | null) {
+  return extractTrendyolDeliveryDate(raw) ?? (status.toLocaleLowerCase("tr-TR") === "delivered" ? fallback ?? undefined : undefined);
+}
+
+function deliveredSortTime(value?: string) {
+  if (!value) return 0;
+  const time = new Date(value).getTime();
+  return Number.isFinite(time) ? time : 0;
 }
 
 @Injectable()
@@ -34,33 +44,44 @@ export class OrdersService {
       take: 500
     });
 
-    return orders.map((order) => ({
-      id: order.id,
-      shipmentPackageId: order.shipmentPackageId,
-      orderNumber: order.orderNumber,
-      status: order.status,
-      customerName: order.customerName,
-      customerEmail: order.customerEmail,
-      city: String((order.invoiceAddress as Prisma.JsonObject).city ?? ""),
-      district: String((order.invoiceAddress as Prisma.JsonObject).district ?? ""),
-      totalGrossCents: order.totalGrossCents,
-      totalDiscountCents: order.totalDiscountCents,
-      totalPayableCents: order.totalPayableCents,
-      currency: order.currency,
-      lastModifiedAt: order.lastModifiedAt?.toISOString(),
-      updatedAt: order.updatedAt.toISOString(),
-      createdAt: order.createdAt.toISOString(),
-      draftId: order.invoiceDraft?.id,
-      draftStatus: order.invoiceDraft?.status,
-      invoiceId: order.invoiceDraft?.invoice?.id,
-      invoiceNumber: order.invoiceDraft?.invoice?.invoiceNumber,
-      invoiceDate: order.invoiceDraft?.invoice?.invoiceDate.toISOString(),
-      trendyolStatus: order.invoiceDraft?.invoice?.trendyolStatus,
-      externalInvoiceCount: order._count.externalInvoices,
-      externalInvoiceSources: Array.from(new Set(order.externalInvoices.map((invoice) => invoice.source))),
-      externalInvoiceNumber: order.externalInvoices[0]?.invoiceNumber ?? undefined,
-      externalInvoiceDate: order.externalInvoices[0]?.invoiceDate?.toISOString()
-    }));
+    return orders
+      .map((order) => {
+        const deliveredAt = deliveredAtForOrder(order.raw, order.status, order.lastModifiedAt);
+
+        return {
+          id: order.id,
+          shipmentPackageId: order.shipmentPackageId,
+          orderNumber: order.orderNumber,
+          status: order.status,
+          customerName: order.customerName,
+          customerEmail: order.customerEmail,
+          city: String((order.invoiceAddress as Prisma.JsonObject).city ?? ""),
+          district: String((order.invoiceAddress as Prisma.JsonObject).district ?? ""),
+          totalGrossCents: order.totalGrossCents,
+          totalDiscountCents: order.totalDiscountCents,
+          totalPayableCents: order.totalPayableCents,
+          currency: order.currency,
+          lastModifiedAt: order.lastModifiedAt?.toISOString(),
+          deliveredAt: deliveredAt?.toISOString(),
+          updatedAt: order.updatedAt.toISOString(),
+          createdAt: order.createdAt.toISOString(),
+          draftId: order.invoiceDraft?.id,
+          draftStatus: order.invoiceDraft?.status,
+          invoiceId: order.invoiceDraft?.invoice?.id,
+          invoiceNumber: order.invoiceDraft?.invoice?.invoiceNumber,
+          invoiceDate: order.invoiceDraft?.invoice?.invoiceDate.toISOString(),
+          trendyolStatus: order.invoiceDraft?.invoice?.trendyolStatus,
+          externalInvoiceCount: order._count.externalInvoices,
+          externalInvoiceSources: Array.from(new Set(order.externalInvoices.map((invoice) => invoice.source))),
+          externalInvoiceNumber: order.externalInvoices[0]?.invoiceNumber ?? undefined,
+          externalInvoiceDate: order.externalInvoices[0]?.invoiceDate?.toISOString()
+        };
+      })
+      .sort(
+        (left, right) =>
+          deliveredSortTime(right.deliveredAt ?? right.lastModifiedAt ?? right.updatedAt) -
+          deliveredSortTime(left.deliveredAt ?? left.lastModifiedAt ?? left.updatedAt)
+      );
   }
 
   async getOrderDetail(id: string) {
@@ -97,6 +118,7 @@ export class OrdersService {
       totalPayableCents: order.totalPayableCents,
       currency: order.currency,
       lastModifiedAt: order.lastModifiedAt?.toISOString(),
+      deliveredAt: deliveredAtForOrder(order.raw, order.status, order.lastModifiedAt)?.toISOString(),
       createdAt: order.createdAt.toISOString(),
       updatedAt: order.updatedAt.toISOString(),
       draft: order.invoiceDraft

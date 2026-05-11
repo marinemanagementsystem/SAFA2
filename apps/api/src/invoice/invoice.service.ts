@@ -6,6 +6,7 @@ import { EarsivPortalService } from "../earsiv-portal/earsiv-portal.service";
 import { buildGibPortalInvoiceDraftPayload } from "../earsiv-portal/portal-draft-payload";
 import { PrismaService } from "../prisma/prisma.service";
 import { TrendyolService } from "../trendyol/trendyol.service";
+import { extractTrendyolDeliveryDate } from "../trendyol/trendyol-normalizer";
 import { ArchiveInvoicePayload, InvoiceProvider } from "./invoice-provider";
 import { buildInvoicePdf } from "./pdf/simple-invoice-pdf";
 import { INVOICE_PROVIDER } from "./providers/invoice-provider.token";
@@ -56,6 +57,16 @@ function externalInvoiceBlockMessage(signal?: string) {
   return `Bu siparis Trendyol'da faturali gorunuyor; tekrar GIB portal taslagi veya SAFA faturasi olusturmayin.${linkText}`;
 }
 
+function deliveredAtForOrder(raw: unknown, status: string, fallback?: Date | null) {
+  return extractTrendyolDeliveryDate(raw) ?? (status.toLocaleLowerCase("tr-TR") === "delivered" ? fallback ?? undefined : undefined);
+}
+
+function deliveredSortTime(value?: string) {
+  if (!value) return 0;
+  const time = new Date(value).getTime();
+  return Number.isFinite(time) ? time : 0;
+}
+
 @Injectable()
 export class InvoiceService {
   constructor(
@@ -82,32 +93,40 @@ export class InvoiceService {
       take: 500
     });
 
-    return drafts.map((draft) => {
-      const validation = draft.validation as ValidationJson;
-      const lines = Array.isArray(draft.lines) ? draft.lines : [];
-      return {
-        id: draft.id,
-        orderId: draft.orderId,
-        shipmentPackageId: draft.order.shipmentPackageId,
-        orderNumber: draft.order.orderNumber,
-        customerName: draft.order.customerName,
-        status: draft.status,
-        warnings: validation.warnings ?? [],
-        errors: validation.errors ?? [],
-        lineCount: lines.length,
-        totalPayableCents: draft.order.totalPayableCents,
-        currency: draft.order.currency,
-        approvedAt: draft.approvedAt?.toISOString(),
-        portalDraftUuid: draft.portalDraftUuid ?? undefined,
-        portalDraftNumber: draft.portalDraftNumber ?? undefined,
-        portalDraftUploadedAt: draft.portalDraftUploadedAt?.toISOString(),
-        portalDraftStatus: draft.portalDraftStatus ?? undefined,
-        externalInvoiceCount: draft.order._count.externalInvoices,
-        externalInvoiceSources: Array.from(new Set(draft.order.externalInvoices.map((invoice) => invoice.source))),
-        externalInvoiceNumber: draft.order.externalInvoices[0]?.invoiceNumber ?? undefined,
-        externalInvoiceDate: draft.order.externalInvoices[0]?.invoiceDate?.toISOString()
-      };
-    });
+    return drafts
+      .map((draft) => {
+        const validation = draft.validation as ValidationJson;
+        const lines = Array.isArray(draft.lines) ? draft.lines : [];
+        const deliveredAt = deliveredAtForOrder(draft.order.raw, draft.order.status, draft.order.lastModifiedAt);
+
+        return {
+          id: draft.id,
+          orderId: draft.orderId,
+          shipmentPackageId: draft.order.shipmentPackageId,
+          orderNumber: draft.order.orderNumber,
+          customerName: draft.order.customerName,
+          status: draft.status,
+          warnings: validation.warnings ?? [],
+          errors: validation.errors ?? [],
+          lineCount: lines.length,
+          totalPayableCents: draft.order.totalPayableCents,
+          currency: draft.order.currency,
+          deliveredAt: deliveredAt?.toISOString(),
+          approvedAt: draft.approvedAt?.toISOString(),
+          portalDraftUuid: draft.portalDraftUuid ?? undefined,
+          portalDraftNumber: draft.portalDraftNumber ?? undefined,
+          portalDraftUploadedAt: draft.portalDraftUploadedAt?.toISOString(),
+          portalDraftStatus: draft.portalDraftStatus ?? undefined,
+          externalInvoiceCount: draft.order._count.externalInvoices,
+          externalInvoiceSources: Array.from(new Set(draft.order.externalInvoices.map((invoice) => invoice.source))),
+          externalInvoiceNumber: draft.order.externalInvoices[0]?.invoiceNumber ?? undefined,
+          externalInvoiceDate: draft.order.externalInvoices[0]?.invoiceDate?.toISOString()
+        };
+      })
+      .sort(
+        (left, right) =>
+          deliveredSortTime(right.deliveredAt ?? right.approvedAt) - deliveredSortTime(left.deliveredAt ?? left.approvedAt)
+      );
   }
 
   async listInvoices() {
@@ -117,17 +136,27 @@ export class InvoiceService {
       take: 500
     });
 
-    return invoices.map((invoice) => ({
-      id: invoice.id,
-      draftId: invoice.draftId,
-      orderNumber: invoice.draft.order.orderNumber,
-      shipmentPackageId: invoice.draft.order.shipmentPackageId,
-      invoiceNumber: invoice.invoiceNumber,
-      invoiceDate: invoice.invoiceDate.toISOString(),
-      status: invoice.status,
-      pdfUrl: invoice.pdfUrl,
-      trendyolStatus: invoice.trendyolStatus
-    }));
+    return invoices
+      .map((invoice) => {
+        const deliveredAt = deliveredAtForOrder(invoice.draft.order.raw, invoice.draft.order.status, invoice.draft.order.lastModifiedAt);
+
+        return {
+          id: invoice.id,
+          draftId: invoice.draftId,
+          orderNumber: invoice.draft.order.orderNumber,
+          shipmentPackageId: invoice.draft.order.shipmentPackageId,
+          invoiceNumber: invoice.invoiceNumber,
+          invoiceDate: invoice.invoiceDate.toISOString(),
+          deliveredAt: deliveredAt?.toISOString(),
+          status: invoice.status,
+          pdfUrl: invoice.pdfUrl,
+          trendyolStatus: invoice.trendyolStatus
+        };
+      })
+      .sort(
+        (left, right) =>
+          deliveredSortTime(right.deliveredAt ?? right.invoiceDate) - deliveredSortTime(left.deliveredAt ?? left.invoiceDate)
+      );
   }
 
   async approveDraft(id: string) {
