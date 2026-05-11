@@ -51,6 +51,7 @@ describe("buildGibPortalInvoiceDraftPayload", () => {
       aliciSoyadi: "Cam",
       sehir: "Izmir",
       mahalleSemtIlce: "Konak",
+      bulvarcaddesokak: "Test Mahallesi Test Sokak No 1",
       siparisNumarasi: "11190835272",
       matrah: "100.00",
       hesaplanankdv: "20.00",

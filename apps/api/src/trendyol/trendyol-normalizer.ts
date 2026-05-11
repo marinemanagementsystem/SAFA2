@@ -77,6 +77,32 @@ function dateFromUnknown(value: unknown): Date | undefined {
   return Number.isFinite(parsed.getTime()) ? parsed : undefined;
 }
 
+function countryName(value: unknown) {
+  const code = firstText(value);
+  if (!code) return "";
+  return code.toLocaleUpperCase("tr-TR") === "TR" ? "Türkiye" : code;
+}
+
+function invoiceAddressLine(invoiceAddress: UnknownRecord) {
+  const addressParts = [invoiceAddress.address1, invoiceAddress.address2].map(text).filter(Boolean);
+  const base = addressParts.length > 0 ? addressParts.join(" ") : firstText(invoiceAddress.fullAddress, invoiceAddress.address);
+  const district = firstText(invoiceAddress.district, invoiceAddress.town, invoiceAddress.countyName);
+  const city = firstText(invoiceAddress.city, invoiceAddress.province);
+  const districtCity = district && city ? `${district}/${city}` : firstText(district, city);
+
+  return [
+    base,
+    firstText(invoiceAddress.neighborhood, invoiceAddress.neighbourhood),
+    districtCity,
+    countryName(invoiceAddress.countryCode),
+    firstText(invoiceAddress.postalCode, invoiceAddress.zipCode, invoiceAddress.zip)
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 export function extractTrendyolDeliveryDate(raw: unknown): Date | undefined {
   const pkg = record(raw);
 
@@ -138,7 +164,7 @@ export function normalizeTrendyolPackage(pkg: UnknownRecord): NormalizedOrder {
     customerIdentifier: firstText(pkg.taxNumber, pkg.identityNumber, invoiceAddress.taxNumber, invoiceAddress.identityNumber) || undefined,
     invoiceAddress: {
       fullName,
-      addressLine: firstText(invoiceAddress.address1, invoiceAddress.fullAddress, invoiceAddress.address),
+      addressLine: invoiceAddressLine(invoiceAddress),
       district: firstText(invoiceAddress.district, invoiceAddress.town),
       city: firstText(invoiceAddress.city, invoiceAddress.province),
       countryCode: firstText(invoiceAddress.countryCode, "TR"),

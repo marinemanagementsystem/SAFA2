@@ -26,4 +26,30 @@ describe("normalizeTrendyolPackage", () => {
     expect(normalized.lines[0]?.quantity).toBe(2);
     expect(normalized.deliveredAt?.toISOString()).toBe("2026-04-22T11:33:03.954Z");
   });
+
+  it("rebuilds the Trendyol invoice popup address as the invoice address line", () => {
+    const popupAddress =
+      "Başkaya mahallesi inci Sokak no 10 Şenoba beldesi Uludere Şırnak Başkaya Mah (Şenoba Köyü) Uludere/Şırnak Türkiye 73000";
+    const normalized = normalizeTrendyolPackage({
+      shipmentPackageId: 43,
+      orderNumber: "TY-43",
+      shipmentPackageStatus: "Delivered",
+      customerFirstName: "Tuncay",
+      customerLastName: "Balyemez",
+      invoiceAddress: {
+        address1: "Başkaya mahallesi inci Sokak no 10 Şenoba beldesi Uludere Şırnak",
+        fullAddress: "Başkaya mahallesi inci Sokak no 10 Şenoba beldesi Uludere Şırnak     Uludere Şırnak",
+        neighborhood: "Başkaya Mah (Şenoba Köyü)",
+        district: "Uludere",
+        city: "Şırnak",
+        countryCode: "TR",
+        postalCode: "73000"
+      },
+      grossAmount: 100,
+      totalPrice: 100,
+      lines: [{ productName: "Urun", quantity: 1, amount: 100, vatBaseAmount: 20 }]
+    });
+
+    expect(normalized.invoiceAddress.addressLine).toBe(popupAddress);
+  });
 });

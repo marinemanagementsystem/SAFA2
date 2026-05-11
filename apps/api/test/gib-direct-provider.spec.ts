@@ -67,5 +67,6 @@ describe("buildGibDraftInvoiceXml", () => {
     expect(xml).toContain("<cbc:ID schemeID=\"VKN\">1191883</cbc:ID>");
     expect(xml).toContain("Trendyol siparis no: TY-1 / Paket: PKG-1");
     expect(xml).toContain("<cbc:Name>Test Alici</cbc:Name>");
+    expect(xml).toContain("<cbc:StreetName>Adres</cbc:StreetName>");
   });
 });

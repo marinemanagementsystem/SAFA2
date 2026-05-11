@@ -232,8 +232,7 @@ function buildHtml(payload: ArchiveInvoicePayload, options: InvoicePdfOptions) {
   const currency = payload.totals.currency;
   const rows = lineViews(payload);
   const emptyRowCount = Math.max(0, 18 - rows.length);
-  const buyerAddressLines = wrapText(payload.address.addressLine, 54, 3);
-  const buyerCityLine = [payload.address.district, payload.address.city].filter(Boolean).join("/");
+  const buyerAddressLines = wrapText(payload.address.addressLine, 54, 6);
   const ettn = deterministicUuid(`${options.documentNumber}:${payload.orderNumber}:${payload.shipmentPackageId}`);
   const qrValue = JSON.stringify({
     documentNumber: options.documentNumber,
@@ -322,9 +321,6 @@ function buildHtml(payload: ArchiveInvoicePayload, options: InvoicePdfOptions) {
       <strong>SAYIN</strong>
       <div>${escapeHtml(payload.buyerName)}</div>
       ${buyerAddressLines.map((line) => `<div>${escapeHtml(line)}</div>`).join("")}
-      <div>${escapeHtml(buyerCityLine)} ${escapeHtml(payload.address.countryCode === "TR" ? "Türkiye" : payload.address.countryCode)} No:</div>
-      <div>Kapı No:</div>
-      <div>&nbsp;/ Türkiye</div>
       <div>Web Sitesi:</div>
       <div>E-Posta:</div>
       <div>Tel: Fax:</div>
