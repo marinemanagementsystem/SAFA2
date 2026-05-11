@@ -81,14 +81,14 @@ export interface BuildGibPortalDraftPayloadOptions {
   unitCode?: string;
 }
 
-const portalEttnPattern = /^[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}$/;
+const portalEttnPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 function digits(value: string) {
   return value.replace(/\D/g, "");
 }
 
 export function normalizePortalEttn(value: string) {
-  const ettn = value.trim().replace(/[{}]/g, "").toUpperCase();
+  const ettn = value.trim().replace(/[{}]/g, "").toLowerCase();
   if (!portalEttnPattern.test(ettn)) {
     throw new Error("GIB portal ETTN 36 karakterlik UUID formatinda olmali.");
   }

@@ -112,7 +112,7 @@ describe("EarsivPortalService", () => {
 
     expect(result[0]).toMatchObject({
       ok: true,
-      uuid: "6F0FDC0F-D6A7-4D1A-B4DD-EA1FD9D2DA53"
+      uuid: "6f0fdc0f-d6a7-4d1a-b4dd-ea1fd9d2da53"
     });
 
     const uuidBody = new URLSearchParams(String(post.mock.calls[1][1]));
@@ -122,6 +122,6 @@ describe("EarsivPortalService", () => {
     const createBody = new URLSearchParams(String(post.mock.calls[2][1]));
     const createPayload = JSON.parse(createBody.get("jp") ?? "{}") as GibPortalInvoiceDraftPayload;
     expect(createBody.get("cmd")).toBe("EARSIV_PORTAL_FATURA_OLUSTUR");
-    expect(createPayload.faturaUuid).toBe("6F0FDC0F-D6A7-4D1A-B4DD-EA1FD9D2DA53");
+    expect(createPayload.faturaUuid).toBe("6f0fdc0f-d6a7-4d1a-b4dd-ea1fd9d2da53");
   });
 });

@@ -41,7 +41,7 @@ describe("buildGibPortalInvoiceDraftPayload", () => {
     });
 
     expect(draft).toMatchObject({
-      faturaUuid: "3B4C1C45-9C7D-4C3C-8CC1-CB9F5B4A09A1",
+      faturaUuid: "3b4c1c45-9c7d-4c3c-8cc1-cb9f5b4a09a1",
       faturaTarihi: "10/05/2026",
       saat: "12:34:56",
       faturaTipi: "SATIS",
@@ -88,7 +88,7 @@ describe("buildGibPortalInvoiceDraftPayload", () => {
       uuid: "{6f0fdc0f-d6a7-4d1a-b4dd-ea1fd9d2da53}"
     });
 
-    expect(draft.faturaUuid).toBe("6F0FDC0F-D6A7-4D1A-B4DD-EA1FD9D2DA53");
+    expect(draft.faturaUuid).toBe("6f0fdc0f-d6a7-4d1a-b4dd-ea1fd9d2da53");
     expect(draft.faturaUuid).toHaveLength(36);
   });
 
