@@ -1303,6 +1303,18 @@ a {
   gap: 4px;
 }
 
+.invoice-selection-advice {
+  display: block;
+  margin-top: 4px;
+  padding: 8px 10px;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.64);
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.45;
+}
+
 .draft-warning,
 .job-error-callout {
   display: flex;
@@ -1365,10 +1377,17 @@ a {
 }
 
 .draft-action-trace span,
+.draft-action-trace em,
 .draft-action-trace small {
   color: var(--muted);
   font-size: 12px;
   line-height: 1.4;
+}
+
+.draft-action-trace em {
+  color: var(--ink);
+  font-style: normal;
+  font-weight: 800;
 }
 
 .invoice-process {
@@ -1654,6 +1673,25 @@ a {
   margin: 0;
   color: var(--muted);
   font-size: 13px;
+  line-height: 1.45;
+}
+
+.desk-next-action {
+  display: grid;
+  gap: 3px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.68);
+}
+
+.desk-next-action strong {
+  font-size: 12px;
+}
+
+.desk-next-action span {
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 800;
   line-height: 1.45;
 }
 

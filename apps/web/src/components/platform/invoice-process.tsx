@@ -24,6 +24,16 @@ export function canRetryInvoiceProcess(draft?: InvoiceDraftListItem, job?: Integ
   return Boolean(draft && (draft.status === "ERROR" || job?.status === "FAILED") && draft.externalInvoiceCount === 0);
 }
 
+function isStaleApprovalFailure(draft?: InvoiceDraftListItem, job?: IntegrationJobListItem) {
+  if (!draft || !job || job.status !== "FAILED" || draft.status !== "APPROVED") return false;
+
+  const message = (job.lastError ?? "").toLocaleLowerCase("tr-TR");
+  if (!message.includes("onaylanmali") && !message.includes("onaylanmalı")) return false;
+  if (!draft.approvedAt) return true;
+
+  return new Date(job.updatedAt).getTime() <= new Date(draft.approvedAt).getTime();
+}
+
 export function resolveInvoiceProcess(
   draft?: InvoiceDraftListItem,
   invoice?: InvoiceListItem,
@@ -59,17 +69,19 @@ export function resolveInvoiceProcess(
     };
   }
 
-  if (job?.status === "FAILED" || draft.status === "ERROR") {
+  const effectiveJob = isStaleApprovalFailure(draft, job) ? undefined : job;
+
+  if (effectiveJob?.status === "FAILED" || draft.status === "ERROR") {
     return {
       percent: 62,
       tone: "danger",
       title: "Tekrar deneme gerekli",
-      helper: job?.lastError ?? draft.errors[0] ?? "Son fatura denemesi basarisiz oldu. Duzeltip tekrar deneyin.",
+      helper: effectiveJob?.lastError ?? draft.errors[0] ?? "Son fatura denemesi basarisiz oldu. Duzeltip tekrar deneyin.",
       currentStep: 2
     };
   }
 
-  if (job?.status === "PROCESSING" || draft.status === "ISSUING") {
+  if (effectiveJob?.status === "PROCESSING" || draft.status === "ISSUING") {
     return {
       percent: 78,
       tone: "warning",
@@ -79,7 +91,7 @@ export function resolveInvoiceProcess(
     };
   }
 
-  if (job?.status === "PENDING") {
+  if (effectiveJob?.status === "PENDING") {
     return {
       percent: 64,
       tone: "warning",
@@ -120,6 +132,7 @@ export function InvoiceProcessBar({
   compact?: boolean;
 }) {
   const process = resolveInvoiceProcess(draft, invoice, job);
+  const visibleJob = isStaleApprovalFailure(draft, job) ? undefined : job;
 
   return (
     <div className={cx("invoice-process", compact && "compact", process.tone)}>
@@ -143,9 +156,9 @@ export function InvoiceProcessBar({
         })}
       </div>
       <p>{process.helper}</p>
-      {job ? (
+      {visibleJob ? (
         <small>
-          {statusLabel(job.status)} · {job.attempts} deneme · {formatDateTime(job.updatedAt)}
+          {statusLabel(visibleJob.status)} · {visibleJob.attempts} deneme · {formatDateTime(visibleJob.updatedAt)}
         </small>
       ) : null}
     </div>

@@ -406,9 +406,10 @@ export function usePlatformData() {
           await api.approve(id);
         }
         const nextMessage = `${draftIds.length} taslak onaylandi.`;
-        setMessage(nextMessage);
+        const resultMessage = `${nextMessage} Sonraki adim: GIB taslagina yukle veya Onayla ve fatura kes.`;
+        setMessage(resultMessage);
         await load();
-        return nextMessage;
+        return resultMessage;
       } catch (error) {
         const nextMessage = errorMessage(error, "Taslak onaylama islemi basarisiz.");
         setMessage(nextMessage);
@@ -434,7 +435,11 @@ export function usePlatformData() {
       try {
         const result = await api.issue(draftIds);
         const autoApprovedText = result.autoApproved > 0 ? ` ${result.autoApproved} hazir taslak otomatik onaylandi.` : "";
-        const failedText = result.failed > 0 ? ` ${result.failed} taslak kuyruga alinamadi; kart uzerindeki uyariyi kontrol edin.` : "";
+        const firstFailure = result.failures[0]?.error ? ` Ilk hata: ${result.failures[0].error}` : "";
+        const failedText =
+          result.failed > 0
+            ? ` ${result.failed} taslak basarisiz; fatura kesimi baslamadi veya tamamlanmadi.${firstFailure} Karttaki kirmizi uyariyi kontrol edin.`
+            : "";
         const nextMessage = `${result.enqueued} fatura isi kuyruga alindi.${autoApprovedText}${failedText} Sureci kartlardaki cubuktan izleyebilirsiniz.`;
         setMessage(nextMessage);
         await load();
@@ -466,8 +471,13 @@ export function usePlatformData() {
 
       try {
         const result = await api.uploadPortalDrafts(draftIds);
-        const failureText = result.failed > 0 ? ` ${result.failed} taslak yuklenemedi; listede tekrar denenebilir.` : "";
-        const nextMessage = `${result.uploaded} taslak GIB e-Arsiv portalina yuklendi. Imza portaldan toplu atilacak.${failureText}`;
+        const firstFailure = result.failures[0]?.error ? ` Ilk hata: ${result.failures[0].error}` : "";
+        const nextMessage =
+          result.failed > 0
+            ? result.uploaded > 0
+              ? `${result.uploaded} taslak GIB e-Arsiv portalina yuklendi, ${result.failed} taslak yuklenemedi.${firstFailure} Yuklenenler portalda imza bekler; basarisiz kartlari tekrar deneyin.`
+              : `GIB taslagi yuklenemedi. ${result.failed} taslak basarisiz.${firstFailure} Bu fatura henuz portalda imza beklemiyor; karttaki sebebi kontrol edip tekrar deneyin.`
+            : `${result.uploaded} taslak GIB e-Arsiv portalina yuklendi. Simdi GIB portalinda Duzenlenen Belgeler ekranindan toplu imza atin.`;
         setMessage(nextMessage);
         await load();
         return nextMessage;

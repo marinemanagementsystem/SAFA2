@@ -48,6 +48,7 @@ interface DeskNotice {
   draftIds: string[];
   pending: boolean;
   tone: NoticeTone;
+  nextAction: string;
 }
 
 interface DraftActionTrace {
@@ -56,6 +57,7 @@ interface DraftActionTrace {
   detail: string;
   tone: NoticeTone;
   at: string;
+  nextAction: string;
 }
 
 interface InvoicesViewProps {
@@ -163,9 +165,19 @@ function actionCopy(action: DraftActionKind, count: number) {
 
 function toneFromMessage(message: string): NoticeTone {
   const normalized = stringValue(message);
-  if (normalized.includes("basarisiz") || normalized.includes("hata")) return "danger";
-  if (normalized.includes("yuklenemedi") || normalized.includes("alinamadi") || normalized.includes("kontrol edin")) return "warning";
-  if (normalized.includes("bekleniyor") || normalized.includes("baslatildi")) return "warning";
+  if (
+    normalized.includes("basarisiz") ||
+    normalized.includes("başarısız") ||
+    normalized.includes("hata") ||
+    normalized.includes("yuklenemedi") ||
+    normalized.includes("yüklenemedi") ||
+    normalized.includes("alinamadi") ||
+    normalized.includes("alınamadı") ||
+    normalized.includes("engellendi")
+  ) {
+    return "danger";
+  }
+  if (normalized.includes("kontrol") || normalized.includes("bekleniyor") || normalized.includes("baslatildi")) return "warning";
   return "success";
 }
 
@@ -176,14 +188,15 @@ function busyKeyForAction(action: DraftActionKind) {
 }
 
 function actionSteps(action: DraftActionKind, pending: boolean, tone: NoticeTone) {
-  const resultStep = tone === "danger" ? "Hata" : pending ? "Bekle" : "Sonuc";
+  const failedStep = action === "portal" ? "Yuklenemedi" : action === "approve" ? "Onaylanamadi" : "Hata";
+  const resultStep = tone === "danger" ? failedStep : pending ? "Bekle" : "Sonuc";
 
   if (action === "approve") {
-    return ["Secildi", "Onay istegi", pending ? "Onay bekliyor" : resultStep];
+    return ["Secildi", "Onay istegi", pending ? "Onay bekliyor" : resultStep, tone === "danger" ? "Kontrol et" : "Hazir"];
   }
 
   if (action === "portal") {
-    return ["Secildi", "Taslak yukle", pending ? "Portal isliyor" : resultStep, "Imza portalda"];
+    return ["Secildi", "Taslak yukle", pending ? "Portal isliyor" : resultStep, tone === "success" ? "Imza portalda" : "Tekrar dene"];
   }
 
   if (action === "retry") {
@@ -191,6 +204,33 @@ function actionSteps(action: DraftActionKind, pending: boolean, tone: NoticeTone
   }
 
   return ["Secildi", "Onay", pending ? "Kuyruk" : resultStep, "Sonuc"];
+}
+
+function actionStateLabel(tone: NoticeTone, pending: boolean) {
+  if (pending) return "ISLENIYOR";
+  if (tone === "danger") return "BASARISIZ";
+  if (tone === "warning") return "KONTROL GEREKLI";
+  if (tone === "success") return "BASARILI";
+  return "BILGI";
+}
+
+function nextActionFor(action: DraftActionKind, tone: NoticeTone, pending: boolean) {
+  if (pending) {
+    if (action === "portal") return "Bekleyin. SAFA taslagi GIB portalina yuklemeyi deniyor.";
+    if (action === "approve") return "Bekleyin. Taslak onay durumuna aliniyor.";
+    return "Bekleyin. Islem kuyruga aliniyor veya sonuc bekleniyor.";
+  }
+
+  if (tone === "danger") {
+    if (action === "portal") return "Bu fatura henuz GIB portalda imza beklemiyor. Karttaki hata sebebini okuyun, sorunu giderin ve tekrar GIB taslagina yukleyin.";
+    if (action === "approve") return "Taslak onaylanmadi. Karttaki hata sebebini kontrol edin, sonra yeniden onaylayin.";
+    return "Fatura kesimi baslamadi veya tamamlanmadi. Karttaki hata sebebini kontrol edip Tekrar dene butonunu kullanin.";
+  }
+
+  if (tone === "warning") return "Kismi veya kontrol gerektiren sonuc var. Basarisiz kartlari filtreleyip tek tek tekrar deneyin.";
+  if (action === "portal") return "Taslak GIB portalina gitti. Resmi fatura sayilmasi icin GIB portalinda Duzenlenen Belgeler ekranindan imzalayin.";
+  if (action === "approve") return "Taslak onaylandi. Simdi GIB taslagina yukleyebilir veya SAFA uzerinden fatura kesimini baslatabilirsiniz.";
+  return "Islem baslatildi. Son resmi sonucu karttaki surec cubugundan ve PDF arsivinden takip edin.";
 }
 
 function noticeIcon(tone: NoticeTone, pending: boolean) {
@@ -203,18 +243,22 @@ function noticeIcon(tone: NoticeTone, pending: boolean) {
 
 function DeskOperationPanel({ notice }: { notice: DeskNotice }) {
   const steps = actionSteps(notice.action, notice.pending, notice.tone);
-  const currentIndex = notice.pending ? Math.max(1, steps.length - 2) : notice.tone === "success" ? steps.length : steps.length - 1;
+  const currentIndex = notice.pending ? Math.max(1, steps.length - 2) : notice.tone === "success" ? steps.length : Math.max(1, steps.length - 2);
 
   return (
     <div className={cx("desk-operation-panel", notice.tone)} role="status" aria-live="polite">
       <div className="desk-operation-head">
         <div className="desk-operation-icon">{noticeIcon(notice.tone, notice.pending)}</div>
         <div className="desk-operation-copy">
-          <span>{notice.pending ? "Islem bildirimi" : "Islem sonucu"}</span>
+          <span>{actionStateLabel(notice.tone, notice.pending)}</span>
           <strong>{notice.title}</strong>
           <p>{notice.detail}</p>
         </div>
         <span className="mode-pill">{notice.draftIds.length} taslak</span>
+      </div>
+      <div className="desk-next-action">
+        <strong>Ne yapmam gerek?</strong>
+        <span>{notice.nextAction}</span>
       </div>
       <div className="desk-operation-steps" aria-label="Secili islem adimlari">
         {steps.map((step, index) => (
@@ -283,6 +327,16 @@ export function InvoicesView({
   const selectedRetryCount = selectedDraftItems.filter((draft) => draft.status === "ERROR").length;
   const selectedApprovedCount = selectedDraftItems.filter((draft) => draft.status === "APPROVED").length;
   const archiveStatuses = useMemo(() => Array.from(new Set(invoices.map((invoice) => invoice.status))).sort(), [invoices]);
+  const selectionAdvice =
+    selectedDrafts.length === 0
+      ? ""
+      : selectedRetryCount > 0
+        ? "Basarisiz taslak secili. Karttaki kirmizi hata sebebini okuyun; sonra Tekrar dene veya uygun ana islemi yeniden calistirin."
+        : selectedApprovedCount === selectedDrafts.length
+          ? "Bu taslak onayli. Portalda imzalayacaksaniz GIB taslagina yukle; SAFA'da resmi kesim kuyrugu istiyorsaniz Onayla ve fatura kes."
+          : selectedReadyCount > 0
+            ? "Hazir taslak secili. Fatura kes derseniz SAFA once onaylar, sonra kuyruga alir; portal secerseniz imza GIB portalinda kalir."
+            : "Secili taslaklar icin kartlardaki durum ve uyariyi kontrol edin.";
 
   const filteredDrafts = useMemo(() => {
     const search = stringValue(draftQuery);
@@ -430,7 +484,8 @@ export function InvoicesView({
       detail: copy.startedDetail,
       draftIds: ids,
       pending: true,
-      tone
+      tone,
+      nextAction: nextActionFor(action, tone, true)
     });
     setDraftActionTraces((current) => {
       const next = { ...current };
@@ -440,7 +495,8 @@ export function InvoicesView({
           title: copy.cardTitle,
           detail: copy.cardDetail,
           tone,
-          at: new Date().toISOString()
+          at: new Date().toISOString(),
+          nextAction: nextActionFor(action, tone, true)
         };
       }
       return next;
@@ -456,7 +512,8 @@ export function InvoicesView({
       detail: resultMessage,
       draftIds: ids,
       pending: false,
-      tone
+      tone,
+      nextAction: nextActionFor(action, tone, false)
     });
     setDraftActionTraces((current) => {
       const next = { ...current };
@@ -466,11 +523,15 @@ export function InvoicesView({
           title: copy.resultTitle,
           detail: resultMessage,
           tone,
-          at: new Date().toISOString()
+          at: new Date().toISOString(),
+          nextAction: nextActionFor(action, tone, false)
         };
       }
       return next;
     });
+    if (tone === "danger") {
+      setSelectedDrafts(ids);
+    }
   }
 
   async function runDraftOperation(action: DraftActionKind, ids: string[], runner: (draftIds: string[]) => Promise<string>) {
@@ -618,6 +679,7 @@ export function InvoicesView({
                 {selectedRetryCount > 0 ? `${selectedRetryCount} basarisiz taslak tekrar denenecek. ` : ""}
                 Sonucu her karttaki surec cubugundan takip edebilirsiniz.
               </span>
+              <span className="invoice-selection-advice">{selectionAdvice}</span>
             </div>
           ) : null}
 
@@ -735,6 +797,7 @@ export function InvoicesView({
                       <div>
                         <strong>{actionTrace.title}</strong>
                         <span>{actionTrace.detail}</span>
+                        <em>{actionTrace.nextAction}</em>
                         <small>{formatDateTime(actionTrace.at)}</small>
                       </div>
                     </div>
