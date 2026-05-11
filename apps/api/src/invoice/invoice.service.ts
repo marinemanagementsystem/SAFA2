@@ -288,6 +288,8 @@ export class InvoiceService {
             portalDraftResponse: json({
               command: result.command,
               pageName: result.pageName,
+              attemptedUuid: result.uuid,
+              attemptedUuidLength: result.uuid.length,
               error: result.error,
               message: result.message,
               response: result.response
