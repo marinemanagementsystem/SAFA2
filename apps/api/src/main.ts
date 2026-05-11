@@ -13,6 +13,21 @@ const defaultCorsOrigins = [
   "https://safa-8f76e.web.app",
   "https://safa-8f76e.firebaseapp.com"
 ];
+const localNetworkAccessNamePattern = /^[a-z0-9_.-]{1,248}$/;
+const localNetworkAccessIdPattern = /^[0-9a-f]{2}(:[0-9a-f]{2}){5}$/i;
+const defaultLocalNetworkAccessName = "safa-local-api";
+const defaultLocalNetworkAccessId = "02:53:41:46:41:32";
+const corsAllowedHeaders = [
+  "Accept",
+  "Authorization",
+  "Content-Type",
+  "Origin",
+  "X-Requested-With",
+  "Access-Control-Request-Private-Network",
+  "Access-Control-Request-Local-Network",
+  "Private-Network-Access-Name",
+  "Private-Network-Access-ID"
+];
 
 function redactSensitiveValues(value: unknown): unknown {
   if (Array.isArray(value)) {
@@ -74,9 +89,41 @@ function apiRequestLogger(request: Request, response: Response, next: NextFuncti
   next();
 }
 
+function privateNetworkHeaderValue(value: string) {
+  return JSON.stringify(value);
+}
+
+function privateNetworkAccessName() {
+  const configured = process.env.PRIVATE_NETWORK_ACCESS_NAME?.trim().toLowerCase();
+  return configured && localNetworkAccessNamePattern.test(configured) ? configured : defaultLocalNetworkAccessName;
+}
+
+function privateNetworkAccessId() {
+  const configured = process.env.PRIVATE_NETWORK_ACCESS_ID?.trim();
+  return configured && localNetworkAccessIdPattern.test(configured) ? configured : defaultLocalNetworkAccessId;
+}
+
 function privateNetworkCorsMiddleware(request: Request, response: Response, next: NextFunction) {
+  const requestHeaders = String(request.headers["access-control-request-headers"] ?? "");
+  const allowedHeaders = Array.from(
+    new Set(
+      [...corsAllowedHeaders, ...requestHeaders.split(",").map((header) => header.trim()).filter(Boolean)].map((header) =>
+        header.toLowerCase()
+      )
+    )
+  ).join(", ");
+
   response.setHeader("Access-Control-Allow-Private-Network", "true");
   response.setHeader("Access-Control-Allow-Local-Network", "true");
+  response.setHeader("Private-Network-Access-Name", privateNetworkHeaderValue(privateNetworkAccessName()));
+  response.setHeader("Private-Network-Access-ID", privateNetworkHeaderValue(privateNetworkAccessId()));
+  response.setHeader("Access-Control-Allow-Headers", allowedHeaders);
+  response.setHeader("Access-Control-Expose-Headers", "Private-Network-Access-Name, Private-Network-Access-ID");
+  response.vary("Origin");
+  response.vary("Access-Control-Request-Method");
+  response.vary("Access-Control-Request-Headers");
+  response.vary("Access-Control-Request-Private-Network");
+  response.vary("Access-Control-Request-Local-Network");
 
   if (request.method === "OPTIONS") {
     response.sendStatus(204);
@@ -94,15 +141,7 @@ async function bootstrap() {
   app.enableCors({
     origin: configuredCorsOrigins?.length ? [...configuredCorsOrigins, ...defaultCorsOrigins] : defaultCorsOrigins,
     credentials: true,
-    allowedHeaders: [
-      "Accept",
-      "Authorization",
-      "Content-Type",
-      "Origin",
-      "X-Requested-With",
-      "Access-Control-Request-Private-Network",
-      "Access-Control-Request-Local-Network"
-    ],
+    allowedHeaders: corsAllowedHeaders,
     methods: ["GET", "HEAD", "PUT", "PATCH", "POST", "DELETE", "OPTIONS"],
     optionsSuccessStatus: 204,
     preflightContinue: true

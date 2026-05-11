@@ -254,10 +254,8 @@ function apiConnectionFailureMessage(url: string, error: unknown) {
   if (isLocalApiTarget(url) && typeof window !== "undefined" && window.location.protocol === "https:") {
     const target = new URL(url, window.location.href);
     return new Error(
-      `Tarayici, yerel API (${target.host}) icin "Yerel Ag erisimi" iznini henuz vermedi. ` +
-        "Yapmaniz gerekenler: 1) Bu sayfayi yenileyin; Chrome bir izin penceresi gosterecek, \"Izin ver\"i secin. " +
-        "2) Izin penceresi gelmiyorsa chrome://settings/content/localNetworkAccess adresinden https://safa-8f76e.web.app icin izni acin. " +
-        "3) Calismazsa uygulamayi http://localhost:3000 uzerinden acin; ayni kaynaktan istek atildiginda Chrome'un bu kontrolune takilmaz."
+      `Yerel API (${target.host}) baglantisi henuz tamamlanmadi. SAFA backend yerel ag izin headerlarini otomatik gonderiyor; sayfayi bir kez yenileyin. ` +
+        "Devam ederse Chrome yerel ag iznini kontrol edin veya uygulamayi http://localhost:3000 uzerinden acin."
     );
   }
 
