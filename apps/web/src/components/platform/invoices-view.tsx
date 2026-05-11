@@ -29,7 +29,7 @@ import {
 import { useMemo, useState } from "react";
 import { api } from "../../lib/api";
 import { cx, dateMatches, formatDateTime, money, numberValue, startOfToday, statusLabel, statusTone, stringValue } from "../../lib/platform/format";
-import { InvoiceProcessBar, latestInvoiceJob } from "./invoice-process";
+import { InvoiceProcessBar, isStaleApprovalFailure, latestInvoiceJob } from "./invoice-process";
 
 type DraftDeskFilter = "actionable" | "all" | "ready" | "approved" | "failed" | "issuing" | "portal" | "external" | "issued";
 type DraftExternalFilter = "all" | "no-external" | "external" | ExternalInvoiceSource;
@@ -741,8 +741,9 @@ export function InvoicesView({
             ) : null}
             {filteredDrafts.map((draft) => {
               const latestJob = latestInvoiceJob(jobs, draft.id);
+              const visibleJob = isStaleApprovalFailure(draft, latestJob) ? undefined : latestJob;
               const invoice = invoiceByDraftId.get(draft.id);
-              const failed = latestJob?.status === "FAILED" || draft.status === "ERROR";
+              const failed = visibleJob?.status === "FAILED" || draft.status === "ERROR";
               const selectable = isSelectableDraft(draft);
               const selected = selectedDrafts.includes(draft.id);
               const actionTrace = draftActionTraces[draft.id];
@@ -779,7 +780,7 @@ export function InvoicesView({
                   {failed ? (
                     <div className="draft-warning">
                       <AlertTriangle size={16} />
-                      <span>{latestJob?.lastError ?? "Son fatura denemesi basarisiz oldu."}</span>
+                      <span>{visibleJob?.lastError ?? draft.errors[0] ?? "Son fatura denemesi basarisiz oldu."}</span>
                       <button
                         className="ui-button ghost compact"
                         type="button"

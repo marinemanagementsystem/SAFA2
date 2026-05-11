@@ -21,10 +21,10 @@ export function latestInvoiceJob(jobs: IntegrationJobListItem[], draftId: string
 }
 
 export function canRetryInvoiceProcess(draft?: InvoiceDraftListItem, job?: IntegrationJobListItem) {
-  return Boolean(draft && (draft.status === "ERROR" || job?.status === "FAILED") && draft.externalInvoiceCount === 0);
+  return Boolean(draft && (draft.status === "ERROR" || (job?.status === "FAILED" && !isStaleApprovalFailure(draft, job))) && draft.externalInvoiceCount === 0);
 }
 
-function isStaleApprovalFailure(draft?: InvoiceDraftListItem, job?: IntegrationJobListItem) {
+export function isStaleApprovalFailure(draft?: InvoiceDraftListItem, job?: IntegrationJobListItem) {
   if (!draft || !job || job.status !== "FAILED" || draft.status !== "APPROVED") return false;
 
   const message = (job.lastError ?? "").toLocaleLowerCase("tr-TR");
