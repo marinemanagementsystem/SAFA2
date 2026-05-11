@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { SettingsService } from "../settings/settings.service";
 import type { GibPortalConnection } from "../settings/connection-types";
 import type { GibPortalInvoiceDraftPayload } from "./portal-draft-payload";
+import { normalizePortalEttn } from "./portal-draft-payload";
 
 interface AssosLoginResponse {
   token?: string;
@@ -105,6 +106,39 @@ function successText(value: string) {
   return normalized.includes("basari");
 }
 
+function extractPortalUuid(value: unknown): string | undefined {
+  if (typeof value === "string") {
+    try {
+      return normalizePortalEttn(value);
+    } catch {
+      return undefined;
+    }
+  }
+
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const candidate = extractPortalUuid(item);
+      if (candidate) return candidate;
+    }
+    return undefined;
+  }
+
+  if (value && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    for (const key of ["faturaUuid", "uuid", "ettn", "ETTN", "data", "result"]) {
+      const candidate = extractPortalUuid(record[key]);
+      if (candidate) return candidate;
+    }
+
+    for (const item of Object.values(record)) {
+      const candidate = extractPortalUuid(item);
+      if (candidate) return candidate;
+    }
+  }
+
+  return undefined;
+}
+
 @Injectable()
 export class EarsivPortalService {
   constructor(@Inject(SettingsService) private readonly settings: SettingsService) {}
@@ -178,12 +212,14 @@ export class EarsivPortalService {
 
     for (const input of inputs) {
       try {
+        const portalUuid = await this.getPortalInvoiceUuid(connection, response.token);
+        const payload = { ...input.payload, faturaUuid: portalUuid };
         const dispatch = await this.dispatch(
           connection,
           response.token,
           command,
           pageName,
-          input.payload as unknown as Record<string, unknown>,
+          payload as unknown as Record<string, unknown>,
           "SAFA live e-arsiv portal draft upload"
         );
         const message = stringifyResponseData(dispatch);
@@ -193,8 +229,8 @@ export class EarsivPortalService {
         results.push({
           localDraftId: input.localDraftId,
           ok,
-          uuid: input.payload.faturaUuid,
-          documentNumber: input.payload.belgeNumarasi || undefined,
+          uuid: payload.faturaUuid,
+          documentNumber: payload.belgeNumarasi || undefined,
           status: ok ? "Onaylanmadı" : "YUKLEME_HATASI",
           message,
           command,
@@ -254,21 +290,39 @@ export class EarsivPortalService {
     return { connection, response: response.data };
   }
 
+  private async getPortalInvoiceUuid(connection: GibPortalConnection, token: string) {
+    const dispatch = await this.dispatch(
+      connection,
+      token,
+      "EARSIV_PORTAL_UUID_GETIR",
+      undefined,
+      {},
+      "SAFA live e-arsiv portal UUID"
+    );
+    const portalUuid = extractPortalUuid(dispatch.data ?? dispatch.result ?? dispatch.rows ?? dispatch);
+
+    if (!portalUuid) {
+      throw new ServiceUnavailableException(`GIB portali taslak ETTN uretmedi. Yanit: ${stringifyResponseData(dispatch).slice(0, 240)}`);
+    }
+
+    return portalUuid;
+  }
+
   private async dispatch(
     connection: GibPortalConnection,
     token: string,
     cmd: string,
-    pageName: string,
+    pageName: string | undefined,
     jp: Record<string, unknown>,
     userAgent = "SAFA live e-arsiv invoice query"
   ) {
     const form = new URLSearchParams({
       cmd,
       callid: randomUUID(),
-      pageName,
       token,
       jp: JSON.stringify(jp)
     });
+    if (pageName) form.set("pageName", pageName);
 
     const response = await axios.post<DispatchResponse>(dispatchEndpoint(connection.portalUrl), form.toString(), {
       headers: {
