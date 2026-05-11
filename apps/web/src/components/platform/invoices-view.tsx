@@ -326,6 +326,7 @@ export function InvoicesView({
   const selectedReadyCount = selectedDraftItems.filter((draft) => draft.status === "READY").length;
   const selectedRetryCount = selectedDraftItems.filter((draft) => draft.status === "ERROR").length;
   const selectedApprovedCount = selectedDraftItems.filter((draft) => draft.status === "APPROVED").length;
+  const selectedNeedsApprovalCount = selectedReadyCount + selectedRetryCount;
   const archiveStatuses = useMemo(() => Array.from(new Set(invoices.map((invoice) => invoice.status))).sort(), [invoices]);
   const selectionAdvice =
     selectedDrafts.length === 0
@@ -549,7 +550,8 @@ export function InvoicesView({
   }
 
   function approveSelected() {
-    void runDraftOperation("approve", [...selectedDrafts], onApprove);
+    const ids = selectedDraftItems.filter((draft) => draft.status !== "APPROVED").map((draft) => draft.id);
+    void runDraftOperation("approve", ids, onApprove);
   }
 
   function issueSelected() {
@@ -700,10 +702,19 @@ export function InvoicesView({
               <button
                 className="ui-button action-button approve-action"
                 onClick={approveSelected}
-                disabled={selectedDrafts.length === 0 || busyAction === busyKeyForAction("approve")}
+                disabled={selectedDrafts.length === 0 || selectedNeedsApprovalCount === 0 || busyAction === busyKeyForAction("approve")}
               >
                 {busyAction === busyKeyForAction("approve") ? <Loader2 size={20} className="spin" /> : <Check size={20} />}
-                <ActionButtonCopy title={busyAction === busyKeyForAction("approve") ? "Onaylaniyor" : "Seciliyi onayla"} helper="Kesim icin hazirlar" />
+                <ActionButtonCopy
+                  title={
+                    busyAction === busyKeyForAction("approve")
+                      ? "Onaylaniyor"
+                      : selectedDrafts.length > 0 && selectedNeedsApprovalCount === 0
+                        ? "Zaten onayli"
+                        : "Seciliyi onayla"
+                  }
+                  helper={selectedDrafts.length > 0 && selectedNeedsApprovalCount === 0 ? "Sonraki adimi sec" : "Kesim icin hazirlar"}
+                />
               </button>
               <button
                 className="ui-button action-button primary portal-action"
