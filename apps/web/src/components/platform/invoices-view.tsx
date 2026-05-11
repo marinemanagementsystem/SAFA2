@@ -242,7 +242,7 @@ function nextActionFor(action: DraftActionKind, tone: NoticeTone, pending: boole
 
   if (tone === "warning") return "Kismi veya kontrol gerektiren sonuc var. Basarisiz kartlari filtreleyip tek tek tekrar deneyin.";
   if (action === "portal") return "Taslak GIB portalina gitti. Resmi fatura sayilmasi icin GIB portalinda Duzenlenen Belgeler ekranindan imzalayin.";
-  if (action === "approve") return "Taslak onaylandi. Simdi GIB taslagina yukleyebilir veya SAFA uzerinden fatura kesimini baslatabilirsiniz.";
+  if (action === "approve") return "Taslak onaylandi ve Onayli filtresine tasindi. Simdi GIB taslagina yukleyebilir veya SAFA uzerinden fatura kesimini baslatabilirsiniz.";
   return "Islem baslatildi. Son resmi sonucu karttaki surec cubugundan ve PDF arsivinden takip edin.";
 }
 
@@ -713,6 +713,14 @@ export function InvoicesView({
       return next;
     });
     if (tone === "danger") {
+      setSelectedDrafts(ids);
+      return;
+    }
+
+    if (action === "approve" && tone === "success") {
+      setDraftDeskFilter("approved");
+      setDraftExternalFilter("all");
+      setShowSelectedOnly(false);
       setSelectedDrafts(ids);
     }
   }
