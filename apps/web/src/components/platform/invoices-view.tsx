@@ -136,6 +136,21 @@ function draftProcessPriority(draft: InvoiceDraftListItem, job?: IntegrationJobL
   return 8;
 }
 
+function draftStatusView(draft: InvoiceDraftListItem) {
+  if (draft.externalInvoiceCount > 0) {
+    const source = draft.externalInvoiceSources[0] ? sourceLabel(draft.externalInvoiceSources[0]) : "Harici";
+    return {
+      label: draft.externalInvoiceNumber ? `${source}: ${draft.externalInvoiceNumber}` : `${source} faturasi var`,
+      tone: statusTone("ISSUED")
+    };
+  }
+
+  return {
+    label: statusLabel(draft.status),
+    tone: statusTone(draft.status)
+  };
+}
+
 function actionCopy(action: DraftActionKind, count: number) {
   const suffix = `${count} taslak`;
 
@@ -390,12 +405,17 @@ function resolveRealStatusCheck(
   }
 
   if (draft.externalInvoiceCount > 0) {
+    const hasPortalDraft = draft.status === "PORTAL_DRAFTED";
     return {
       tone: "warning",
       actual: "Harici fatura bulundu",
-      safa: "SAFA bu siparisi tekrar fatura kesimine kapatti; cift fatura riski engellendi.",
+      safa: hasPortalDraft
+        ? "Trendyol faturasi bulundu. SAFA bu siparisi tekrar fatura kesimine kapatti; portaldaki taslak imzalanmamali."
+        : "SAFA bu siparisi tekrar fatura kesimine kapatti; cift fatura riski engellendi.",
       gib: externalInvoiceSummary(draft),
-      nextAction: "Bu sipariste yeniden fatura kesmeyin. Gerekirse harici fatura listesinden eslesmeyi kontrol edin.",
+      nextAction: hasPortalDraft
+        ? "GIB portalinda bu taslagi imzalamayin. Duzenlenen Belgeler/Taslaklar ekranindan taslagi silin veya isleme almayin; Trendyol faturasini harici eslesme olarak takip edin."
+        : "Bu sipariste yeniden fatura kesmeyin. Gerekirse harici fatura listesinden eslesmeyi kontrol edin.",
       source: "Kontrol: SAFA harici fatura eslesmesi."
     };
   }
@@ -607,7 +627,8 @@ export function InvoicesView({
     (draft) => (draft.status === "READY" || draft.status === "APPROVED") && draft.externalInvoiceCount > 0
   );
   const actionableDrafts = drafts.filter(isSelectableDraft);
-  const portalDraftedDrafts = drafts.filter((draft) => draft.status === "PORTAL_DRAFTED");
+  const portalDraftedDrafts = drafts.filter((draft) => draft.status === "PORTAL_DRAFTED" && draft.externalInvoiceCount === 0);
+  const portalDraftsWithExternalInvoices = drafts.filter((draft) => draft.status === "PORTAL_DRAFTED" && draft.externalInvoiceCount > 0);
   const matchedExternalInvoices = externalInvoices.filter((invoice) => invoice.matchedOrderId).length;
   const draftById = useMemo(() => new Map(drafts.map((draft) => [draft.id, draft])), [drafts]);
   const invoiceByDraftId = useMemo(() => new Map(invoices.map((invoice) => [invoice.draftId, invoice])), [invoices]);
@@ -1062,6 +1083,23 @@ export function InvoicesView({
                 </div>
               </div>
             ) : null}
+            {portalDraftsWithExternalInvoices.length > 0 ? (
+              <div className="form-alert danger table-note portal-draft-finder">
+                <strong>{portalDraftsWithExternalInvoices.length} portal taslaginda Trendyol faturasi zaten var.</strong>
+                <span>Bu kayitlari GIB portalinda imzalamayin; Trendyol faturasi harici fatura olarak takip edilmeli.</span>
+                <div className="portal-draft-finder-list">
+                  {portalDraftsWithExternalInvoices.slice(0, 5).map((draft) => (
+                    <div key={draft.id}>
+                      <strong>{draft.orderNumber}</strong>
+                      <span>
+                        {draft.customerName} · {money(draft.totalPayableCents, draft.currency)} · Paket {draft.shipmentPackageId}
+                        {draft.externalInvoiceNumber ? ` · ${draft.externalInvoiceNumber}` : " · Trendyol faturasi bulundu"}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
             {filteredDrafts.map((draft) => {
               const latestJob = latestInvoiceJob(jobs, draft.id);
               const visibleJob = visibleInvoiceJob(draft, latestJob);
@@ -1071,6 +1109,7 @@ export function InvoicesView({
               const selected = selectedDrafts.includes(draft.id);
               const realStatusCheck = resolveRealStatusCheck(draft, invoice, visibleJob);
               const actionTrace = resolveVisibleDraftActionTrace(draft, draftActionTraces[draft.id], realStatusCheck, invoice);
+              const draftStatus = draftStatusView(draft);
 
               return (
               <div className={cx("draft-card", selected && "selected", failed && "needs-action", !selectable && "locked")} key={draft.id}>
@@ -1082,7 +1121,7 @@ export function InvoicesView({
                   onChange={(event) => toggleDraft(draft.id, event.target.checked)}
                 />
                 <div className="draft-body">
-                  <span className={cx("status-pill", statusTone(draft.status))}>{statusLabel(draft.status)}</span>
+                  <span className={cx("status-pill", draftStatus.tone)}>{draftStatus.label}</span>
                   <strong>{draft.orderNumber}</strong>
                   <small>
                     {draft.customerName} · {money(draft.totalPayableCents, draft.currency)} · {draft.lineCount} satir

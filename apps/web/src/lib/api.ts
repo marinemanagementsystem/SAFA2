@@ -403,7 +403,14 @@ export const api = {
   draftPdfUrl: (draftId: string) => `${API_BASE}/invoice-drafts/${draftId}/pdf`,
   draftXmlUrl: (draftId: string) => `${API_BASE}/invoice-drafts/${draftId}/earsiv-xml`,
   invoicePdfUrl: (invoiceId: string) => `${API_BASE}/invoices/${invoiceId}/pdf`,
-  sync: () => request<{ packageCount: number; upserted: number; draftsCreated: number }>("/sync/trendyol", { method: "POST" }),
+  sync: () =>
+    request<{
+      packageCount: number;
+      upserted: number;
+      draftsCreated: number;
+      externalInvoicesImported?: number;
+      externalInvoicesMatched?: number;
+    }>("/sync/trendyol", { method: "POST" }),
   approve: (id: string) => request(`/invoice-drafts/${id}/approve`, { method: "POST" }),
   issue: (draftIds: string[]) =>
     request<{ requested: number; enqueued: number; autoApproved: number; failed: number; failures: Array<{ draftId: string; error: string }> }>(

@@ -67,6 +67,16 @@ export function resolveInvoiceProcess(
     };
   }
 
+  if (draft.externalInvoiceCount > 0) {
+    return {
+      percent: 100,
+      tone: "success",
+      title: "Trendyol faturasi var",
+      helper: "Bu siparis Trendyol'da faturali gorunuyor. SAFA tekrar fatura kesmez; varsa GIB portal taslagini imzalamayin.",
+      currentStep: 3
+    };
+  }
+
   if (draft.status === "PORTAL_DRAFTED") {
     return {
       percent: 82,

@@ -396,7 +396,11 @@ export function usePlatformData() {
 
     try {
       const result = await api.sync();
-      setMessage(`${result.upserted} siparis guncellendi, ${result.draftsCreated} yeni taslak olustu.`);
+      const externalText =
+        result.externalInvoicesImported && result.externalInvoicesImported > 0
+          ? ` ${result.externalInvoicesImported} Trendyol faturasi yakalandi, ${result.externalInvoicesMatched ?? 0} tanesi siparisle eslesti.`
+          : "";
+      setMessage(`${result.upserted} siparis guncellendi, ${result.draftsCreated} yeni taslak olustu.${externalText}`);
       await load();
     } catch (error) {
       setMessage(errorMessage(error, "Trendyol senkronizasyonu basarisiz."));

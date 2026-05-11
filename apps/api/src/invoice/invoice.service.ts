@@ -33,6 +33,29 @@ function json(value: unknown): Prisma.InputJsonValue {
   return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
 }
 
+function stringValue(value: unknown) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function trendyolInvoiceSignal(raw: unknown) {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined;
+  const record = raw as Record<string, unknown>;
+  return (
+    stringValue(record.invoiceLink) ||
+    stringValue(record.invoiceUrl) ||
+    stringValue(record.invoiceNumber) ||
+    stringValue(record.faturaNo) ||
+    stringValue(record.ettn) ||
+    stringValue(record.uuid) ||
+    undefined
+  );
+}
+
+function externalInvoiceBlockMessage(signal?: string) {
+  const linkText = signal ? ` Trendyol fatura kaydi: ${signal}` : "";
+  return `Bu siparis Trendyol'da faturali gorunuyor; tekrar GIB portal taslagi veya SAFA faturasi olusturmayin.${linkText}`;
+}
+
 @Injectable()
 export class InvoiceService {
   constructor(
@@ -161,6 +184,12 @@ export class InvoiceService {
 
       if (draft.order.externalInvoices.length > 0) {
         failures.push({ draftId, error: "Bu siparis icin harici e-Arsiv faturasi bulundu; tekrar taslak yukleme engellendi." });
+        continue;
+      }
+
+      const invoiceSignal = trendyolInvoiceSignal(draft.order.raw);
+      if (invoiceSignal) {
+        failures.push({ draftId, error: externalInvoiceBlockMessage(invoiceSignal) });
         continue;
       }
 
@@ -358,6 +387,13 @@ export class InvoiceService {
       if (draft.invoice) return draft.invoice;
       if (draft.order.externalInvoices.length > 0) {
         throw new BadRequestException("Bu siparis icin harici e-Arsiv faturasi bulundu; tekrar fatura kesimi engellendi.");
+      }
+      const invoiceSignal = trendyolInvoiceSignal(draft.order.raw);
+      if (invoiceSignal) {
+        throw new BadRequestException(externalInvoiceBlockMessage(invoiceSignal));
+      }
+      if (draft.status === DraftStatus.PORTAL_DRAFTED) {
+        throw new BadRequestException("Bu taslak GIB portalina yuklenmis; SAFA tekrar resmi fatura kesmez. Portaldaki taslagi imzalayin veya harici fatura varsa eslestirin.");
       }
       if (draft.status !== DraftStatus.APPROVED) {
         throw new BadRequestException("Fatura kesmek icin taslak once onaylanmali.");

@@ -39,7 +39,7 @@ interface MatchContext {
 }
 
 const fieldAliases = {
-  externalId: ["externalId", "id", "uuid", "ettn", "belgeOid", "faturaOid", "documentId"],
+  externalId: ["externalId", "id", "uuid", "ettn", "belgeOid", "faturaOid", "documentId", "invoiceLink", "invoiceUrl", "faturaLinki"],
   invoiceNumber: ["invoiceNumber", "invoiceNo", "faturaNo", "faturaNumarasi", "belgeNo", "belgeNumarasi", "documentNumber", "seriSiraNo"],
   invoiceDate: ["invoiceDate", "faturaTarihi", "duzenlenmeTarihi", "belgeTarihi", "tarih", "issueDate", "date"],
   buyerName: ["buyerName", "alici", "aliciUnvan", "aliciUnvanAdSoyad", "unvan", "adSoyad", "musteri", "customerName"],
@@ -49,7 +49,7 @@ const fieldAliases = {
   total: ["totalPayableCents", "totalPayable", "payableAmount", "odenecekTutar", "genelToplam", "toplamTutar", "tutar"],
   currency: ["currency", "paraBirimi", "doviz", "currencyCode"],
   status: ["status", "durum", "belgeDurumu", "onayDurumu", "invoiceStatus"],
-  pdfUrl: ["pdfUrl", "invoicePdfUrl", "faturaPdfUrl", "pdf", "downloadUrl"],
+  pdfUrl: ["pdfUrl", "invoicePdfUrl", "faturaPdfUrl", "invoiceLink", "invoiceUrl", "faturaLinki", "pdf", "downloadUrl"],
   xmlUrl: ["xmlUrl", "invoiceXmlUrl", "faturaXmlUrl", "xml"]
 } satisfies Record<string, string[]>;
 
@@ -194,7 +194,7 @@ function normalizeRecord(source: ExternalInvoiceSource, record: RawRecord): Norm
 }
 
 function hasInvoiceSignal(record: NormalizedExternalInvoice) {
-  return Boolean(record.invoiceNumber || record.pdfUrl || record.xmlUrl || record.raw.ettn || record.raw.uuid);
+  return Boolean(record.invoiceNumber || record.pdfUrl || record.xmlUrl || record.raw.ettn || record.raw.uuid || record.raw.invoiceLink);
 }
 
 function mapExternalInvoice(

@@ -1,5 +1,6 @@
 import { Inject, Injectable, NotFoundException } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
+import { ExternalInvoicesService } from "../external-invoices/external-invoices.service";
 import { PrismaService } from "../prisma/prisma.service";
 import { TrendyolService } from "../trendyol/trendyol.service";
 import { normalizeTrendyolPackage } from "../trendyol/trendyol-normalizer";
@@ -13,7 +14,8 @@ function json(value: unknown): Prisma.InputJsonValue {
 export class OrdersService {
   constructor(
     @Inject(PrismaService) private readonly prisma: PrismaService,
-    @Inject(TrendyolService) private readonly trendyol: TrendyolService
+    @Inject(TrendyolService) private readonly trendyol: TrendyolService,
+    @Inject(ExternalInvoicesService) private readonly externalInvoices: ExternalInvoicesService
   ) {}
 
   async listOrders() {
@@ -216,16 +218,24 @@ export class OrdersService {
       }
     }
 
+    const trendyolInvoices = await this.externalInvoices.syncTrendyolMetadata();
+
     await this.prisma.auditLog.create({
       data: {
         action: "trendyol.sync",
         subjectType: "orders",
         subjectId: "trendyol",
-        message: `${upserted} Trendyol paketi senkronize edildi, ${draftsCreated} taslak olusturuldu.`,
-        metadata: { packageCount: packages.length, upserted, draftsCreated }
+        message: `${upserted} Trendyol paketi senkronize edildi, ${draftsCreated} taslak olusturuldu, ${trendyolInvoices.imported} Trendyol fatura kaydi yakalandi.`,
+        metadata: { packageCount: packages.length, upserted, draftsCreated, trendyolInvoices }
       }
     });
 
-    return { packageCount: packages.length, upserted, draftsCreated };
+    return {
+      packageCount: packages.length,
+      upserted,
+      draftsCreated,
+      externalInvoicesImported: trendyolInvoices.imported,
+      externalInvoicesMatched: trendyolInvoices.matched
+    };
   }
 }
