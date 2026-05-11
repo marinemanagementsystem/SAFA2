@@ -392,11 +392,11 @@ export function usePlatformData() {
 
   const approveDrafts = useCallback(
     async (draftIds: string[]) => {
-      if (draftIds.length === 0) return;
+      if (draftIds.length === 0) return "Secili taslak yok.";
 
       if (!API_AVAILABLE) {
         setMessage(apiOfflineMessage);
-        return;
+        return apiOfflineMessage;
       }
 
       setBusyAction("approve");
@@ -405,10 +405,14 @@ export function usePlatformData() {
         for (const id of draftIds) {
           await api.approve(id);
         }
-        setMessage(`${draftIds.length} taslak onaylandi.`);
+        const nextMessage = `${draftIds.length} taslak onaylandi.`;
+        setMessage(nextMessage);
         await load();
+        return nextMessage;
       } catch (error) {
-        setMessage(errorMessage(error, "Taslak onaylama islemi basarisiz."));
+        const nextMessage = errorMessage(error, "Taslak onaylama islemi basarisiz.");
+        setMessage(nextMessage);
+        return nextMessage;
       } finally {
         setBusyAction(null);
       }
@@ -418,11 +422,11 @@ export function usePlatformData() {
 
   const issueDrafts = useCallback(
     async (draftIds: string[]) => {
-      if (draftIds.length === 0) return;
+      if (draftIds.length === 0) return "Secili taslak yok.";
 
       if (!API_AVAILABLE) {
         setMessage(apiOfflineMessage);
-        return;
+        return apiOfflineMessage;
       }
 
       setBusyAction("issue");
@@ -431,13 +435,17 @@ export function usePlatformData() {
         const result = await api.issue(draftIds);
         const autoApprovedText = result.autoApproved > 0 ? ` ${result.autoApproved} hazir taslak otomatik onaylandi.` : "";
         const failedText = result.failed > 0 ? ` ${result.failed} taslak kuyruga alinamadi; kart uzerindeki uyariyi kontrol edin.` : "";
-        setMessage(`${result.enqueued} fatura isi kuyruga alindi.${autoApprovedText}${failedText} Sureci kartlardaki cubuktan izleyebilirsiniz.`);
+        const nextMessage = `${result.enqueued} fatura isi kuyruga alindi.${autoApprovedText}${failedText} Sureci kartlardaki cubuktan izleyebilirsiniz.`;
+        setMessage(nextMessage);
         await load();
         window.setTimeout(() => void load(), 1500);
         window.setTimeout(() => void load(), 4500);
         window.setTimeout(() => void load(), 9000);
+        return nextMessage;
       } catch (error) {
-        setMessage(errorMessage(error, "Fatura kesme isi kuyruga alinamadi."));
+        const nextMessage = errorMessage(error, "Fatura kesme isi kuyruga alinamadi.");
+        setMessage(nextMessage);
+        return nextMessage;
       } finally {
         setBusyAction(null);
       }
@@ -447,11 +455,11 @@ export function usePlatformData() {
 
   const uploadPortalDrafts = useCallback(
     async (draftIds: string[]) => {
-      if (draftIds.length === 0) return;
+      if (draftIds.length === 0) return "Secili taslak yok.";
 
       if (!API_AVAILABLE) {
         setMessage(apiOfflineMessage);
-        return;
+        return apiOfflineMessage;
       }
 
       setBusyAction("portal-draft-upload");
@@ -459,10 +467,14 @@ export function usePlatformData() {
       try {
         const result = await api.uploadPortalDrafts(draftIds);
         const failureText = result.failed > 0 ? ` ${result.failed} taslak yuklenemedi; listede tekrar denenebilir.` : "";
-        setMessage(`${result.uploaded} taslak GIB e-Arsiv portalina yuklendi. Imza portaldan toplu atilacak.${failureText}`);
+        const nextMessage = `${result.uploaded} taslak GIB e-Arsiv portalina yuklendi. Imza portaldan toplu atilacak.${failureText}`;
+        setMessage(nextMessage);
         await load();
+        return nextMessage;
       } catch (error) {
-        setMessage(errorMessage(error, "GIB portal taslak yukleme basarisiz."));
+        const nextMessage = errorMessage(error, "GIB portal taslak yukleme basarisiz.");
+        setMessage(nextMessage);
+        return nextMessage;
       } finally {
         setBusyAction(null);
       }

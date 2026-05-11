@@ -61,9 +61,9 @@ export function PlatformApp({ view }: PlatformAppProps) {
               jobs={snapshot.jobs}
               settings={snapshot.settings}
               busyAction={platform.busyAction}
-              onApprove={(ids) => void platform.approveDrafts(ids)}
-              onIssue={(ids) => void platform.issueDrafts(ids)}
-              onUploadPortalDrafts={(ids) => void platform.uploadPortalDrafts(ids)}
+              onApprove={platform.approveDrafts}
+              onIssue={platform.issueDrafts}
+              onUploadPortalDrafts={platform.uploadPortalDrafts}
               onImportExternalInvoices={(source, records) => void platform.importExternalInvoices(source, records)}
               onSyncGibExternalInvoices={(days) => void platform.syncGibExternalInvoices(days)}
               onSyncTrendyolExternalInvoices={() => void platform.syncTrendyolExternalInvoices()}

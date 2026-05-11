@@ -10,7 +10,10 @@ import type {
 } from "@safa/shared";
 import {
   AlertTriangle,
+  Bell,
   Check,
+  CheckCircle2,
+  Clock3,
   CircleDollarSign,
   FileSearch,
   FileText,
@@ -35,6 +38,25 @@ type DateFilter = "all" | "today" | "last7" | "last30";
 type ArchiveStatusFilter = "all" | InvoiceStatus;
 type ExternalMatchFilter = "all" | "matched" | "unmatched";
 type ExternalListSourceFilter = "all" | ExternalInvoiceSource;
+type DraftActionKind = "approve" | "portal" | "issue" | "retry";
+type NoticeTone = "success" | "warning" | "danger" | "neutral";
+
+interface DeskNotice {
+  action: DraftActionKind;
+  title: string;
+  detail: string;
+  draftIds: string[];
+  pending: boolean;
+  tone: NoticeTone;
+}
+
+interface DraftActionTrace {
+  action: DraftActionKind;
+  title: string;
+  detail: string;
+  tone: NoticeTone;
+  at: string;
+}
 
 interface InvoicesViewProps {
   drafts: InvoiceDraftListItem[];
@@ -43,9 +65,9 @@ interface InvoicesViewProps {
   jobs: IntegrationJobListItem[];
   settings: Record<string, unknown>;
   busyAction: string | null;
-  onApprove: (ids: string[]) => void;
-  onIssue: (ids: string[]) => void;
-  onUploadPortalDrafts: (ids: string[]) => void;
+  onApprove: (ids: string[]) => Promise<string>;
+  onIssue: (ids: string[]) => Promise<string>;
+  onUploadPortalDrafts: (ids: string[]) => Promise<string>;
   onImportExternalInvoices: (source: ExternalInvoiceSource, records: Array<Record<string, unknown>>) => void;
   onSyncGibExternalInvoices: (days: number) => void;
   onSyncTrendyolExternalInvoices: () => void;
@@ -97,6 +119,124 @@ function draftProcessPriority(draft: InvoiceDraftListItem, job?: IntegrationJobL
   return 8;
 }
 
+function actionCopy(action: DraftActionKind, count: number) {
+  const suffix = `${count} taslak`;
+
+  if (action === "approve") {
+    return {
+      startedTitle: "Onay islemi basladi",
+      startedDetail: `${suffix} onay icin gonderildi. Kart durumlari guncellenince burada sonuc gorunecek.`,
+      cardTitle: "Onay bekleniyor",
+      cardDetail: "SAFA bu taslagi onay durumuna aliyor.",
+      resultTitle: "Onay sonucu"
+    };
+  }
+
+  if (action === "portal") {
+    return {
+      startedTitle: "GIB taslak yukleme basladi",
+      startedDetail: `${suffix} GIB portal taslagi olarak yukleniyor. Imza resmi portalda toplu atilacak.`,
+      cardTitle: "Portal yukleme suruyor",
+      cardDetail: "Taslak GIB portalina imza bekleyen belge olarak tasiniyor.",
+      resultTitle: "Portal yukleme sonucu"
+    };
+  }
+
+  if (action === "retry") {
+    return {
+      startedTitle: "Tekrar deneme basladi",
+      startedDetail: `${suffix} icin fatura isi tekrar kuyruga aliniyor.`,
+      cardTitle: "Tekrar deneniyor",
+      cardDetail: "Onceki hata sonrasi fatura islemi tekrar baslatildi.",
+      resultTitle: "Tekrar deneme sonucu"
+    };
+  }
+
+  return {
+    startedTitle: "Fatura kesimi basladi",
+    startedDetail: `${suffix} once onaylanacak, sonra fatura kuyruguna alinacak. Sonucu kart surec cubugunda izleyin.`,
+    cardTitle: "Fatura islemi basladi",
+    cardDetail: "Taslak onay ve fatura kesim asamalarindan geciyor.",
+    resultTitle: "Fatura kesim sonucu"
+  };
+}
+
+function toneFromMessage(message: string): NoticeTone {
+  const normalized = stringValue(message);
+  if (normalized.includes("basarisiz") || normalized.includes("hata")) return "danger";
+  if (normalized.includes("yuklenemedi") || normalized.includes("alinamadi") || normalized.includes("kontrol edin")) return "warning";
+  if (normalized.includes("bekleniyor") || normalized.includes("baslatildi")) return "warning";
+  return "success";
+}
+
+function busyKeyForAction(action: DraftActionKind) {
+  if (action === "approve") return "approve";
+  if (action === "portal") return "portal-draft-upload";
+  return "issue";
+}
+
+function actionSteps(action: DraftActionKind, pending: boolean, tone: NoticeTone) {
+  const resultStep = tone === "danger" ? "Hata" : pending ? "Bekle" : "Sonuc";
+
+  if (action === "approve") {
+    return ["Secildi", "Onay istegi", pending ? "Onay bekliyor" : resultStep];
+  }
+
+  if (action === "portal") {
+    return ["Secildi", "Taslak yukle", pending ? "Portal isliyor" : resultStep, "Imza portalda"];
+  }
+
+  if (action === "retry") {
+    return ["Secildi", "Tekrar dene", pending ? "Kuyruk" : resultStep, "Sonuc"];
+  }
+
+  return ["Secildi", "Onay", pending ? "Kuyruk" : resultStep, "Sonuc"];
+}
+
+function noticeIcon(tone: NoticeTone, pending: boolean) {
+  if (pending) return <Loader2 size={20} className="spin" />;
+  if (tone === "danger") return <AlertTriangle size={20} />;
+  if (tone === "warning") return <Clock3 size={20} />;
+  if (tone === "success") return <CheckCircle2 size={20} />;
+  return <Bell size={20} />;
+}
+
+function DeskOperationPanel({ notice }: { notice: DeskNotice }) {
+  const steps = actionSteps(notice.action, notice.pending, notice.tone);
+  const currentIndex = notice.pending ? Math.max(1, steps.length - 2) : notice.tone === "success" ? steps.length : steps.length - 1;
+
+  return (
+    <div className={cx("desk-operation-panel", notice.tone)} role="status" aria-live="polite">
+      <div className="desk-operation-head">
+        <div className="desk-operation-icon">{noticeIcon(notice.tone, notice.pending)}</div>
+        <div className="desk-operation-copy">
+          <span>{notice.pending ? "Islem bildirimi" : "Islem sonucu"}</span>
+          <strong>{notice.title}</strong>
+          <p>{notice.detail}</p>
+        </div>
+        <span className="mode-pill">{notice.draftIds.length} taslak</span>
+      </div>
+      <div className="desk-operation-steps" aria-label="Secili islem adimlari">
+        {steps.map((step, index) => (
+          <span key={step} className={cx(index < currentIndex && "done", index === currentIndex && "current")}>
+            {index < currentIndex ? <CheckCircle2 size={13} /> : index === currentIndex && notice.tone === "danger" ? <AlertTriangle size={13} /> : <Clock3 size={13} />}
+            {step}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ActionButtonCopy({ title, helper }: { title: string; helper: string }) {
+  return (
+    <span className="button-copy">
+      <strong>{title}</strong>
+      <small>{helper}</small>
+    </span>
+  );
+}
+
 export function InvoicesView({
   drafts,
   invoices,
@@ -124,6 +264,8 @@ export function InvoicesView({
   const [externalQuery, setExternalQuery] = useState("");
   const [externalListSource, setExternalListSource] = useState<ExternalListSourceFilter>("all");
   const [externalMatchFilter, setExternalMatchFilter] = useState<ExternalMatchFilter>("all");
+  const [deskNotice, setDeskNotice] = useState<DeskNotice | null>(null);
+  const [draftActionTraces, setDraftActionTraces] = useState<Record<string, DraftActionTrace>>({});
   const [externalSource, setExternalSource] = useState<ExternalInvoiceSource>("GIB_PORTAL");
   const [externalText, setExternalText] = useState("");
   const [externalDays, setExternalDays] = useState(30);
@@ -277,19 +419,88 @@ export function InvoicesView({
     setExternalMatchFilter("all");
   }
 
-  function approveSelected() {
-    onApprove(selectedDrafts);
+  function startDraftOperation(action: DraftActionKind, ids: string[]) {
+    if (ids.length === 0) return;
+
+    const copy = actionCopy(action, ids.length);
+    const tone: NoticeTone = "warning";
+    setDeskNotice({
+      action,
+      title: copy.startedTitle,
+      detail: copy.startedDetail,
+      draftIds: ids,
+      pending: true,
+      tone
+    });
+    setDraftActionTraces((current) => {
+      const next = { ...current };
+      for (const id of ids) {
+        next[id] = {
+          action,
+          title: copy.cardTitle,
+          detail: copy.cardDetail,
+          tone,
+          at: new Date().toISOString()
+        };
+      }
+      return next;
+    });
+  }
+
+  function finishDraftOperation(action: DraftActionKind, ids: string[], resultMessage: string) {
+    const tone = toneFromMessage(resultMessage);
+    const copy = actionCopy(action, ids.length);
+    setDeskNotice({
+      action,
+      title: copy.resultTitle,
+      detail: resultMessage,
+      draftIds: ids,
+      pending: false,
+      tone
+    });
+    setDraftActionTraces((current) => {
+      const next = { ...current };
+      for (const id of ids) {
+        next[id] = {
+          action,
+          title: copy.resultTitle,
+          detail: resultMessage,
+          tone,
+          at: new Date().toISOString()
+        };
+      }
+      return next;
+    });
+  }
+
+  async function runDraftOperation(action: DraftActionKind, ids: string[], runner: (draftIds: string[]) => Promise<string>) {
+    if (ids.length === 0) return;
+
+    startDraftOperation(action, ids);
     setSelectedDrafts([]);
+    let resultMessage: string;
+    try {
+      resultMessage = await runner(ids);
+    } catch (error) {
+      resultMessage = error instanceof Error ? error.message : "Islem sonucu alinamadi.";
+    }
+    finishDraftOperation(action, ids, resultMessage);
+  }
+
+  function approveSelected() {
+    void runDraftOperation("approve", [...selectedDrafts], onApprove);
   }
 
   function issueSelected() {
-    onIssue(selectedDrafts);
-    setSelectedDrafts([]);
+    void runDraftOperation("issue", [...selectedDrafts], onIssue);
   }
 
   function uploadPortalSelected() {
-    onUploadPortalDrafts(selectedDrafts);
-    setSelectedDrafts([]);
+    void runDraftOperation("portal", [...selectedDrafts], onUploadPortalDrafts);
+  }
+
+  function retryDraft(id: string) {
+    void runDraftOperation("retry", [id], onIssue);
   }
 
   function importExternal() {
@@ -410,34 +621,54 @@ export function InvoicesView({
             </div>
           ) : null}
 
-          <div className="sticky-actionbar">
-            <button className="ui-button ghost compact" onClick={selectVisibleDrafts} disabled={filteredSelectableDrafts.length === 0}>
-              <Check size={18} />
-              Gorunenleri sec
-            </button>
-            {selectedDrafts.length > 0 ? (
-              <button className="ui-button ghost compact" onClick={() => setSelectedDrafts([])}>
-                <X size={18} />
-                Secimi temizle
+          <div className="sticky-actionbar invoice-actionbar">
+            <div className="actionbar-tools">
+              <button className="ui-button ghost compact" onClick={selectVisibleDrafts} disabled={filteredSelectableDrafts.length === 0}>
+                <Check size={18} />
+                Gorunenleri sec
               </button>
-            ) : null}
-            <button className="ui-button ghost" onClick={approveSelected} disabled={selectedDrafts.length === 0 || busyAction === "approve"}>
-              {busyAction === "approve" ? <Loader2 size={18} className="spin" /> : <Check size={18} />}
-              Seciliyi onayla
-            </button>
-            <button
-              className="ui-button primary"
-              onClick={uploadPortalSelected}
-              disabled={selectedDrafts.length === 0 || busyAction === "portal-draft-upload"}
-            >
-              {busyAction === "portal-draft-upload" ? <Loader2 size={18} className="spin" /> : <UploadCloud size={18} />}
-              GIB taslagina yukle
-            </button>
-            <button className="ui-button ghost" onClick={issueSelected} disabled={selectedDrafts.length === 0 || busyAction === "issue"}>
-              {busyAction === "issue" ? <Loader2 size={18} className="spin" /> : <CircleDollarSign size={18} />}
-              Onayla ve fatura kes
-            </button>
+              {selectedDrafts.length > 0 ? (
+                <button className="ui-button ghost compact" onClick={() => setSelectedDrafts([])}>
+                  <X size={18} />
+                  Secimi temizle
+                </button>
+              ) : null}
+            </div>
+            <div className="actionbar-primary-actions">
+              <button
+                className="ui-button action-button approve-action"
+                onClick={approveSelected}
+                disabled={selectedDrafts.length === 0 || busyAction === busyKeyForAction("approve")}
+              >
+                {busyAction === busyKeyForAction("approve") ? <Loader2 size={20} className="spin" /> : <Check size={20} />}
+                <ActionButtonCopy title={busyAction === busyKeyForAction("approve") ? "Onaylaniyor" : "Seciliyi onayla"} helper="Kesim icin hazirlar" />
+              </button>
+              <button
+                className="ui-button action-button primary portal-action"
+                onClick={uploadPortalSelected}
+                disabled={selectedDrafts.length === 0 || busyAction === busyKeyForAction("portal")}
+              >
+                {busyAction === busyKeyForAction("portal") ? <Loader2 size={20} className="spin" /> : <UploadCloud size={20} />}
+                <ActionButtonCopy
+                  title={busyAction === busyKeyForAction("portal") ? "Yukleniyor" : "GIB taslagina yukle"}
+                  helper="Portal imzaya tasir"
+                />
+              </button>
+              <button
+                className="ui-button action-button issue-action"
+                onClick={issueSelected}
+                disabled={selectedDrafts.length === 0 || busyAction === busyKeyForAction("issue")}
+              >
+                {busyAction === busyKeyForAction("issue") ? <Loader2 size={20} className="spin" /> : <CircleDollarSign size={20} />}
+                <ActionButtonCopy
+                  title={busyAction === busyKeyForAction("issue") ? "Kuyruga aliniyor" : "Onayla ve fatura kes"}
+                  helper="Onay + resmi kesim"
+                />
+              </button>
+            </div>
           </div>
+
+          {deskNotice ? <DeskOperationPanel notice={deskNotice} /> : null}
 
           <div className="draft-stack">
             {portalDraftedDrafts.length > 0 ? (
@@ -451,13 +682,15 @@ export function InvoicesView({
               const invoice = invoiceByDraftId.get(draft.id);
               const failed = latestJob?.status === "FAILED" || draft.status === "ERROR";
               const selectable = isSelectableDraft(draft);
+              const selected = selectedDrafts.includes(draft.id);
+              const actionTrace = draftActionTraces[draft.id];
 
               return (
-              <div className={cx("draft-card", failed && "needs-action", !selectable && "locked")} key={draft.id}>
+              <div className={cx("draft-card", selected && "selected", failed && "needs-action", !selectable && "locked")} key={draft.id}>
                 <input
                   type="checkbox"
                   aria-label={`${draft.orderNumber} taslagini sec`}
-                  checked={selectedDrafts.includes(draft.id)}
+                  checked={selected}
                   disabled={!selectable}
                   onChange={(event) => toggleDraft(draft.id, event.target.checked)}
                 />
@@ -485,10 +718,25 @@ export function InvoicesView({
                     <div className="draft-warning">
                       <AlertTriangle size={16} />
                       <span>{latestJob?.lastError ?? "Son fatura denemesi basarisiz oldu."}</span>
-                      <button className="ui-button ghost compact" type="button" onClick={() => onIssue([draft.id])}>
-                        <RotateCcw size={16} />
-                        Tekrar dene
+                      <button
+                        className="ui-button ghost compact"
+                        type="button"
+                        onClick={() => retryDraft(draft.id)}
+                        disabled={busyAction === busyKeyForAction("retry")}
+                      >
+                        {busyAction === busyKeyForAction("retry") ? <Loader2 size={16} className="spin" /> : <RotateCcw size={16} />}
+                        {busyAction === busyKeyForAction("retry") ? "Deneniyor" : "Tekrar dene"}
                       </button>
+                    </div>
+                  ) : null}
+                  {actionTrace ? (
+                    <div className={cx("draft-action-trace", actionTrace.tone)} role="status">
+                      {noticeIcon(actionTrace.tone, false)}
+                      <div>
+                        <strong>{actionTrace.title}</strong>
+                        <span>{actionTrace.detail}</span>
+                        <small>{formatDateTime(actionTrace.at)}</small>
+                      </div>
                     </div>
                   ) : null}
                   <InvoiceProcessBar draft={draft} invoice={invoice} job={latestJob} compact />

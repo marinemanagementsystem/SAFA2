@@ -1255,6 +1255,11 @@ a {
   background: var(--surface);
 }
 
+.draft-card.selected {
+  border-color: rgba(6, 122, 111, 0.44);
+  box-shadow: inset 4px 0 0 var(--brand), 0 12px 24px rgba(9, 35, 31, 0.08);
+}
+
 .draft-card.needs-action {
   border-color: rgba(180, 35, 24, 0.32);
   background: rgba(255, 247, 246, 0.82);
@@ -1317,6 +1322,53 @@ a {
 .job-error-callout span {
   min-width: 0;
   flex: 1 1 auto;
+}
+
+.draft-action-trace {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(247, 250, 249, 0.92);
+  color: var(--brand);
+}
+
+.draft-action-trace.success {
+  border-color: rgba(26, 129, 74, 0.26);
+  background: rgba(237, 250, 242, 0.92);
+  color: var(--success);
+}
+
+.draft-action-trace.warning {
+  border-color: rgba(173, 107, 0, 0.26);
+  background: rgba(255, 248, 234, 0.92);
+  color: #7a4a00;
+}
+
+.draft-action-trace.danger {
+  border-color: rgba(180, 35, 24, 0.28);
+  background: rgba(255, 247, 246, 0.94);
+  color: var(--danger);
+}
+
+.draft-action-trace > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.draft-action-trace strong {
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.draft-action-trace span,
+.draft-action-trace small {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
 }
 
 .invoice-process {
@@ -1440,6 +1492,207 @@ a {
   border-top: 1px solid var(--line);
   background: rgba(255, 255, 255, 0.92);
   backdrop-filter: blur(16px);
+}
+
+.invoice-actionbar {
+  align-items: stretch;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.actionbar-tools,
+.actionbar-primary-actions {
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.actionbar-primary-actions {
+  justify-content: flex-end;
+  flex: 1 1 420px;
+}
+
+.action-button {
+  min-height: 58px;
+  padding: 8px 16px;
+  border-color: rgba(6, 122, 111, 0.24);
+  box-shadow: 0 12px 26px rgba(9, 35, 31, 0.08);
+}
+
+.action-button:not(:disabled):hover {
+  transform: translateY(-1px);
+  box-shadow: 0 16px 34px rgba(9, 35, 31, 0.12);
+}
+
+.portal-action {
+  min-width: 188px;
+  border-color: rgba(6, 122, 111, 0.42);
+  background: linear-gradient(135deg, var(--brand), #0b8b7c);
+}
+
+.approve-action,
+.issue-action {
+  min-width: 170px;
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.issue-action {
+  border-color: rgba(12, 32, 29, 0.24);
+}
+
+.button-copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  text-align: left;
+  line-height: 1.1;
+}
+
+.button-copy strong,
+.button-copy small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.button-copy strong {
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.button-copy small {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.portal-action .button-copy small {
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.desk-operation-panel {
+  display: grid;
+  gap: 12px;
+  margin: 0 14px 14px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(247, 250, 249, 0.94);
+  box-shadow: 0 16px 34px rgba(9, 35, 31, 0.08);
+}
+
+.desk-operation-panel.success {
+  border-color: rgba(26, 129, 74, 0.28);
+  background: rgba(237, 250, 242, 0.96);
+}
+
+.desk-operation-panel.warning {
+  border-color: rgba(173, 107, 0, 0.32);
+  background: rgba(255, 248, 234, 0.96);
+}
+
+.desk-operation-panel.danger {
+  border-color: rgba(180, 35, 24, 0.34);
+  background: rgba(255, 247, 246, 0.96);
+}
+
+.desk-operation-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-width: 0;
+}
+
+.desk-operation-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: rgba(6, 122, 111, 0.1);
+  color: var(--brand);
+}
+
+.desk-operation-panel.warning .desk-operation-icon {
+  background: rgba(173, 107, 0, 0.12);
+  color: var(--amber);
+}
+
+.desk-operation-panel.danger .desk-operation-icon {
+  background: rgba(180, 35, 24, 0.12);
+  color: var(--danger);
+}
+
+.desk-operation-panel.success .desk-operation-icon {
+  background: rgba(26, 129, 74, 0.12);
+  color: var(--success);
+}
+
+.desk-operation-copy {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.desk-operation-copy span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.desk-operation-copy strong {
+  font-size: 16px;
+}
+
+.desk-operation-copy p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.desk-operation-steps {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.desk-operation-steps span {
+  min-width: 0;
+  min-height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: rgba(12, 32, 29, 0.06);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.desk-operation-steps span.done,
+.desk-operation-steps span.current {
+  color: var(--ink);
+  background: rgba(6, 122, 111, 0.12);
+}
+
+.desk-operation-panel.warning .desk-operation-steps span.current {
+  background: rgba(173, 107, 0, 0.14);
+  color: #7a4a00;
+}
+
+.desk-operation-panel.danger .desk-operation-steps span.current {
+  background: rgba(180, 35, 24, 0.12);
+  color: var(--danger);
 }
 
 .archive-section {
@@ -1893,6 +2146,27 @@ a {
   .form-actions,
   .sticky-actionbar {
     width: 100%;
+  }
+
+  .invoice-actionbar,
+  .actionbar-tools,
+  .actionbar-primary-actions,
+  .desk-operation-head {
+    flex-direction: column;
+  }
+
+  .actionbar-primary-actions,
+  .action-button {
+    width: 100%;
+  }
+
+  .desk-operation-panel {
+    margin-right: 10px;
+    margin-left: 10px;
+  }
+
+  .desk-operation-steps {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .ui-button {
