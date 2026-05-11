@@ -18,6 +18,7 @@ import {
   GibPortalConnectionInput,
   TrendyolConnectionInput
 } from "../../lib/api";
+import { money } from "../../lib/platform/format";
 import type { LoadState } from "../../lib/platform/types";
 
 export interface PlatformSnapshot {
@@ -87,6 +88,20 @@ const gibDirectDraftStorageKey = "safa.gibDirectConnectionDraft.v1";
 
 function errorMessage(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
+}
+
+function portalUploadedSummary(items: Array<{ orderNumber: string; shipmentPackageId: string; customerName: string; totalPayableCents: number; currency: string }>) {
+  if (items.length === 0) return "";
+
+  const visible = items
+    .slice(0, 3)
+    .map(
+      (item) =>
+        `${item.orderNumber} / ${item.customerName} / ${money(item.totalPayableCents, item.currency)} / Paket ${item.shipmentPackageId}`
+    )
+    .join("; ");
+  const extra = items.length > 3 ? ` +${items.length - 3} kayit daha` : "";
+  return ` Yuklenen fatura: ${visible}${extra}.`;
 }
 
 function readStoredJson<T>(key: string, fallback: T): T {
@@ -472,12 +487,13 @@ export function usePlatformData() {
       try {
         const result = await api.uploadPortalDrafts(draftIds);
         const firstFailure = result.failures[0]?.error ? ` Ilk hata: ${result.failures[0].error}` : "";
+        const uploadedSummary = portalUploadedSummary(result.uploadedDrafts);
         const nextMessage =
           result.failed > 0
             ? result.uploaded > 0
-              ? `${result.uploaded} taslak GIB e-Arsiv portalina yuklendi, ${result.failed} taslak yuklenemedi.${firstFailure} Yuklenenler portalda imza bekler; basarisiz kartlari tekrar deneyin.`
+              ? `${result.uploaded} taslak GIB e-Arsiv portalina yuklendi, ${result.failed} taslak yuklenemedi.${uploadedSummary}${firstFailure} Yuklenenler portalda imza bekler; basarisiz kartlari tekrar deneyin.`
               : `GIB taslagi yuklenemedi. ${result.failed} taslak basarisiz.${firstFailure} Bu fatura henuz portalda imza beklemiyor; karttaki sebebi kontrol edip tekrar deneyin.`
-            : `${result.uploaded} taslak GIB e-Arsiv portalina yuklendi. Simdi GIB portalinda Duzenlenen Belgeler ekranindan toplu imza atin.`;
+            : `${result.uploaded} taslak GIB e-Arsiv portalina yuklendi.${uploadedSummary} Simdi GIB portalinda Duzenlenen Belgeler ekranindan toplu imza atin.`;
         setMessage(nextMessage);
         await load();
         return nextMessage;

@@ -228,12 +228,23 @@ export class InvoiceService {
         requested: uniqueDraftIds.length,
         uploaded: 0,
         failed: failures.length,
+        uploadedDrafts: [],
         failures
       };
     }
 
     const candidateById = new Map(claimedCandidates.map((candidate) => [candidate.draft.id, candidate]));
     let uploaded = 0;
+    const uploadedDrafts: Array<{
+      draftId: string;
+      orderNumber: string;
+      shipmentPackageId: string;
+      customerName: string;
+      totalPayableCents: number;
+      currency: string;
+      portalDraftStatus?: string;
+      portalDraftUploadedAt?: string;
+    }> = [];
 
     for (const result of portalResults) {
       const candidate = candidateById.get(result.localDraftId);
@@ -259,6 +270,16 @@ export class InvoiceService {
         });
 
         uploaded += 1;
+        uploadedDrafts.push({
+          draftId: updated.id,
+          orderNumber: candidate.draft.order.orderNumber,
+          shipmentPackageId: candidate.draft.order.shipmentPackageId,
+          customerName: candidate.draft.order.customerName,
+          totalPayableCents: candidate.draft.order.totalPayableCents,
+          currency: candidate.draft.order.currency,
+          portalDraftStatus: updated.portalDraftStatus ?? undefined,
+          portalDraftUploadedAt: updated.portalDraftUploadedAt?.toISOString()
+        });
         await this.prisma.auditLog.create({
           data: {
             action: "invoice-draft.gib-portal.upload",
@@ -304,6 +325,7 @@ export class InvoiceService {
       requested: uniqueDraftIds.length,
       uploaded,
       failed: failures.length,
+      uploadedDrafts,
       failures
     };
   }

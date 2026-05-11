@@ -154,10 +154,22 @@ export interface PortalDraftUploadFailure {
   error: string;
 }
 
+export interface PortalDraftUploadedItem {
+  draftId: string;
+  orderNumber: string;
+  shipmentPackageId: string;
+  customerName: string;
+  totalPayableCents: number;
+  currency: string;
+  portalDraftStatus?: string;
+  portalDraftUploadedAt?: string;
+}
+
 export interface PortalDraftUploadResult {
   requested: number;
   uploaded: number;
   failed: number;
+  uploadedDrafts: PortalDraftUploadedItem[];
   failures: PortalDraftUploadFailure[];
 }
 

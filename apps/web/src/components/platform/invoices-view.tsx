@@ -1046,9 +1046,20 @@ export function InvoicesView({
 
           <div className="draft-stack">
             {portalDraftedDrafts.length > 0 ? (
-              <div className="form-alert table-note">
-                {portalDraftedDrafts.length} taslak GIB portalina yuklendi ve manuel imza bekliyor. Portalda Duzenlenen Belgeler
-                ekranindan toplu imzalanacak.
+              <div className="form-alert table-note portal-draft-finder">
+                <strong>{portalDraftedDrafts.length} taslak GIB portalina yuklendi ve manuel imza bekliyor.</strong>
+                <span>Portalda Duzenlenen Belgeler ekraninda bugunun tarihi, alici adi ve tutarla bulun.</span>
+                <div className="portal-draft-finder-list">
+                  {portalDraftedDrafts.slice(0, 5).map((draft) => (
+                    <div key={draft.id}>
+                      <strong>{draft.orderNumber}</strong>
+                      <span>
+                        {draft.customerName} · {money(draft.totalPayableCents, draft.currency)} · Paket {draft.shipmentPackageId}
+                        {draft.portalDraftUploadedAt ? ` · ${formatDateTime(draft.portalDraftUploadedAt)}` : ""}
+                      </span>
+                    </div>
+                  ))}
+                </div>
               </div>
             ) : null}
             {filteredDrafts.map((draft) => {

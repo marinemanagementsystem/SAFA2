@@ -141,6 +141,44 @@ a {
   margin: 14px;
 }
 
+.portal-draft-finder {
+  display: grid;
+  gap: 8px;
+}
+
+.portal-draft-finder > strong {
+  color: var(--ink);
+}
+
+.portal-draft-finder > span {
+  color: #684000;
+}
+
+.portal-draft-finder-list {
+  display: grid;
+  gap: 6px;
+}
+
+.portal-draft-finder-list div {
+  display: grid;
+  gap: 2px;
+  padding: 8px 10px;
+  border: 1px solid rgba(173, 107, 0, 0.22);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.68);
+}
+
+.portal-draft-finder-list strong {
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.portal-draft-finder-list span {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
 .platform-shell {
   position: relative;
   display: grid;
