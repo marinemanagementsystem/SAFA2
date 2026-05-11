@@ -60,6 +60,15 @@ interface DraftActionTrace {
   nextAction: string;
 }
 
+interface RealStatusCheck {
+  tone: NoticeTone;
+  actual: string;
+  safa: string;
+  gib: string;
+  nextAction: string;
+  source: string;
+}
+
 interface InvoicesViewProps {
   drafts: InvoiceDraftListItem[];
   invoices: InvoiceListItem[];
@@ -90,12 +99,14 @@ function matchesDraftDeskFilter(
   job?: IntegrationJobListItem,
   invoice?: InvoiceListItem
 ) {
+  const effectiveJob = isStaleApprovalFailure(draft, job) ? undefined : job;
+
   if (filter === "all") return true;
   if (filter === "actionable") return isSelectableDraft(draft);
   if (filter === "ready") return draft.status === "READY";
   if (filter === "approved") return draft.status === "APPROVED";
-  if (filter === "failed") return draft.status === "ERROR" || job?.status === "FAILED";
-  if (filter === "issuing") return draft.status === "ISSUING" || job?.status === "PENDING" || job?.status === "PROCESSING";
+  if (filter === "failed") return draft.status === "ERROR" || effectiveJob?.status === "FAILED";
+  if (filter === "issuing") return draft.status === "ISSUING" || effectiveJob?.status === "PENDING" || effectiveJob?.status === "PROCESSING";
   if (filter === "portal") return draft.status === "PORTAL_DRAFTED";
   if (filter === "external") return draft.externalInvoiceCount > 0;
   if (filter === "issued") return draft.status === "ISSUED" || Boolean(invoice);
@@ -110,9 +121,11 @@ function matchesDraftExternalFilter(draft: InvoiceDraftListItem, filter: DraftEx
 }
 
 function draftProcessPriority(draft: InvoiceDraftListItem, job?: IntegrationJobListItem, invoice?: InvoiceListItem) {
-  if (job?.status === "FAILED" || draft.status === "ERROR") return 0;
-  if (job?.status === "PROCESSING" || draft.status === "ISSUING") return 1;
-  if (job?.status === "PENDING") return 2;
+  const effectiveJob = isStaleApprovalFailure(draft, job) ? undefined : job;
+
+  if (effectiveJob?.status === "FAILED" || draft.status === "ERROR") return 0;
+  if (effectiveJob?.status === "PROCESSING" || draft.status === "ISSUING") return 1;
+  if (effectiveJob?.status === "PENDING") return 2;
   if (draft.status === "READY") return 3;
   if (draft.status === "APPROVED") return 4;
   if (draft.status === "PORTAL_DRAFTED") return 5;
@@ -239,6 +252,175 @@ function noticeIcon(tone: NoticeTone, pending: boolean) {
   if (tone === "warning") return <Clock3 size={20} />;
   if (tone === "success") return <CheckCircle2 size={20} />;
   return <Bell size={20} />;
+}
+
+function portalDraftSummary(draft: InvoiceDraftListItem) {
+  const parts = [
+    draft.portalDraftNumber ? `No: ${draft.portalDraftNumber}` : undefined,
+    draft.portalDraftUuid ? `UUID: ${draft.portalDraftUuid}` : undefined,
+    draft.portalDraftStatus ? `Durum: ${draft.portalDraftStatus}` : undefined,
+    draft.portalDraftUploadedAt ? `Yukleme: ${formatDateTime(draft.portalDraftUploadedAt)}` : undefined
+  ].filter(Boolean);
+
+  return parts.length > 0 ? parts.join(" · ") : "Portal taslak kaydi var.";
+}
+
+function externalInvoiceSummary(draft: InvoiceDraftListItem) {
+  const sources = draft.externalInvoiceSources.length > 0 ? draft.externalInvoiceSources.map(sourceLabel).join(", ") : "Harici kaynak";
+  const parts = [
+    `${sources} kaydi bulundu`,
+    draft.externalInvoiceNumber ? `No: ${draft.externalInvoiceNumber}` : undefined,
+    draft.externalInvoiceDate ? `Tarih: ${formatDateTime(draft.externalInvoiceDate)}` : undefined
+  ].filter(Boolean);
+
+  return `${parts.join(" · ")}.`;
+}
+
+function resolveRealStatusCheck(
+  draft: InvoiceDraftListItem,
+  invoice?: InvoiceListItem,
+  job?: IntegrationJobListItem
+): RealStatusCheck {
+  if (invoice || draft.status === "ISSUED") {
+    return {
+      tone: "success",
+      actual: "SAFA'da kesildi",
+      safa: invoice?.invoiceNumber
+        ? `SAFA fatura kaydi var: ${invoice.invoiceNumber} (${statusLabel(invoice.status)}).`
+        : "SAFA resmi fatura kaydi olustu.",
+      gib: "PDF arsivinde resmi fatura kaydi var. Harici e-Arsiv eslesmesi gerekiyorsa e-Arsiv sorgula ile kontrol edilir.",
+      nextAction: "PDF arsivinden belgeyi acin; Trendyol bildirimi gerekiyorsa arsiv durumunu takip edin.",
+      source: "Kontrol: SAFA fatura arsivi + taslak durumu."
+    };
+  }
+
+  if (draft.externalInvoiceCount > 0) {
+    return {
+      tone: "warning",
+      actual: "Harici fatura bulundu",
+      safa: "SAFA bu siparisi tekrar fatura kesimine kapatti; cift fatura riski engellendi.",
+      gib: externalInvoiceSummary(draft),
+      nextAction: "Bu sipariste yeniden fatura kesmeyin. Gerekirse harici fatura listesinden eslesmeyi kontrol edin.",
+      source: "Kontrol: SAFA harici fatura eslesmesi."
+    };
+  }
+
+  if (draft.status === "PORTAL_DRAFTED") {
+    return {
+      tone: "warning",
+      actual: "Portal imza bekliyor",
+      safa: "SAFA resmi fatura kesildi saymiyor; taslak GIB portalina imza bekleyen belge olarak tasindi.",
+      gib: portalDraftSummary(draft),
+      nextAction: "GIB portalinda Duzenlenen Belgeler ekranindan toplu imza atin, sonra e-Arsiv sorgula ile belgeyi eslestirin.",
+      source: "Kontrol: SAFA portal taslak kaydi."
+    };
+  }
+
+  if (job?.status === "FAILED" || draft.status === "ERROR") {
+    return {
+      tone: "danger",
+      actual: "Basarisiz / tekrar dene",
+      safa: job?.lastError ?? draft.errors[0] ?? "SAFA son denemede hata kaydetti.",
+      gib: "Bu kart icin SAFA'da tamamlanmis portal taslagi veya resmi fatura kaydi yok.",
+      nextAction: "Hata sebebini duzeltin; sonra bu karttaki Tekrar dene veya ana islem butonunu kullanin.",
+      source: "Kontrol: SAFA son kuyruk sonucu + taslak hata durumu."
+    };
+  }
+
+  if (job?.status === "PROCESSING" || draft.status === "ISSUING") {
+    return {
+      tone: "warning",
+      actual: "Islem suruyor",
+      safa: "Fatura isi su anda SAFA kuyrugunda isleniyor.",
+      gib: "Son GIB/e-Arsiv sonucu henuz SAFA'ya donmedi.",
+      nextAction: "Bekleyin veya Yenile'ye basin; tamamlaninca karttaki durum otomatik netlesir.",
+      source: "Kontrol: SAFA is kuyrugu."
+    };
+  }
+
+  if (job?.status === "PENDING") {
+    return {
+      tone: "warning",
+      actual: "Kuyrukta bekliyor",
+      safa: "Fatura isi SAFA kuyruguna alindi, isleyici baslamadi.",
+      gib: "GIB/e-Arsiv tarafina tamamlanmis sonuc yazilmadi.",
+      nextAction: "Kuyrugun islenmesini bekleyin; uzun surerse Tekrar dene yerine once Yenile ile durumu kontrol edin.",
+      source: "Kontrol: SAFA is kuyrugu."
+    };
+  }
+
+  if (job?.status === "SUCCESS") {
+    return {
+      tone: "warning",
+      actual: "Kuyruk basarili, arsiv bekleniyor",
+      safa: "Son kuyruk isi basarili gorunuyor; ancak bu kart icin PDF arsivinde fatura kaydi henuz gorunmuyor.",
+      gib: "GIB/e-Arsiv kaydi SAFA listesinden dogrulanmadi.",
+      nextAction: "Yenile'ye basin; kayit gelmezse e-Arsiv sorgula ile harici kaydi eslestirin.",
+      source: "Kontrol: SAFA son kuyruk sonucu."
+    };
+  }
+
+  if (draft.status === "APPROVED") {
+    return {
+      tone: "success",
+      actual: "Onayli / kesime hazir",
+      safa: draft.approvedAt
+        ? `Taslak onayli. Onay zamani: ${formatDateTime(draft.approvedAt)}.`
+        : "Taslak onayli; tekrar onay gerekmez.",
+      gib: "Bu kart icin henuz portal taslagi, harici e-Arsiv eslesmesi veya SAFA resmi fatura kaydi yok.",
+      nextAction: "Portal imzasi istiyorsaniz GIB taslagina yukle; SAFA'da resmi kesim istiyorsaniz Onayla ve fatura kes.",
+      source: "Kontrol: SAFA taslak durumu."
+    };
+  }
+
+  if (draft.status === "READY") {
+    return {
+      tone: "success",
+      actual: "Hazir",
+      safa: "Taslak olusturuldu ve isleme hazir. Kesimden once onay adimi gerekir.",
+      gib: "Bu kart icin GIB/e-Arsiv kaydi yok; bu normal, henuz gonderim baslatilmadi.",
+      nextAction: "Fatura kesmek icin Seciliyi onayla ya da Onayla ve fatura kes ile onay + kesim akisini baslatin.",
+      source: "Kontrol: SAFA taslak durumu."
+    };
+  }
+
+  return {
+    tone: "warning",
+    actual: "Kontrol gerekli",
+    safa: draft.warnings[0] ?? "Taslak otomatik kesime hazir degil.",
+    gib: "Bu kart icin GIB/e-Arsiv kaydi yok.",
+    nextAction: "Taslak uyarilarini kontrol edin; eksik bilgi giderilince tekrar deneyin.",
+    source: "Kontrol: SAFA taslak uyarilari."
+  };
+}
+
+function RealStatusCheckPanel({ check }: { check: RealStatusCheck }) {
+  return (
+    <div className={cx("real-status-check", check.tone)} aria-label="Gercek durum kontrolu">
+      <div className="real-status-head">
+        {noticeIcon(check.tone, false)}
+        <div>
+          <span>Gercek durum kontrolu</span>
+          <strong>{check.actual}</strong>
+        </div>
+      </div>
+      <div className="real-status-grid">
+        <div>
+          <span>SAFA kaydi</span>
+          <p>{check.safa}</p>
+        </div>
+        <div>
+          <span>GIB/e-Arsiv</span>
+          <p>{check.gib}</p>
+        </div>
+        <div>
+          <span>Yapilacak islem</span>
+          <p>{check.nextAction}</p>
+        </div>
+      </div>
+      <small>{check.source}</small>
+    </div>
+  );
 }
 
 function DeskOperationPanel({ notice }: { notice: DeskNotice }) {
@@ -758,6 +940,7 @@ export function InvoicesView({
               const selectable = isSelectableDraft(draft);
               const selected = selectedDrafts.includes(draft.id);
               const actionTrace = draftActionTraces[draft.id];
+              const realStatusCheck = resolveRealStatusCheck(draft, invoice, visibleJob);
 
               return (
               <div className={cx("draft-card", selected && "selected", failed && "needs-action", !selectable && "locked")} key={draft.id}>
@@ -814,6 +997,7 @@ export function InvoicesView({
                       </div>
                     </div>
                   ) : null}
+                  <RealStatusCheckPanel check={realStatusCheck} />
                   <InvoiceProcessBar draft={draft} invoice={invoice} job={latestJob} compact />
                   <a className="text-link" href={api.draftPdfUrl(draft.id)} target="_blank" rel="noreferrer">
                     Taslak PDF

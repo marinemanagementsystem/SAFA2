@@ -111,11 +111,21 @@ export function resolveInvoiceProcess(
     };
   }
 
+  if (draft.status === "READY") {
+    return {
+      percent: 35,
+      tone: "success",
+      title: "Hazir",
+      helper: "Taslak hazir. Siradaki adim onay; Fatura kes derseniz SAFA onay ve kuyruk akisini baslatir.",
+      currentStep: 1
+    };
+  }
+
   return {
-    percent: 25,
-    tone: "neutral",
-    title: "Onay bekliyor",
-    helper: "Fatura kes dediginizde SAFA once bu taslagi onaylar, sonra kuyruga alir.",
+    percent: 15,
+    tone: "warning",
+    title: "Kontrol gerekli",
+    helper: "Taslak otomatik kesime hazir degil. Eksik bilgi veya uyari giderilince yeniden deneyin.",
     currentStep: 0
   };
 }
