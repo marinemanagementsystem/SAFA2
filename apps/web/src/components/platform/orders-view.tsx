@@ -469,7 +469,7 @@ function OrderDetailPanel({
           <small>{selectedOrder.customerEmail ?? "E-posta yok"}</small>
         </div>
         <div>
-          <span>Adres</span>
+          <span>Fatura adresi</span>
           <strong>{String(selectedOrder.invoiceAddress.city ?? "-")}</strong>
           <small>{String(selectedOrder.invoiceAddress.addressLine ?? selectedOrder.invoiceAddress.address1 ?? "-")}</small>
         </div>

@@ -52,4 +52,40 @@ describe("normalizeTrendyolPackage", () => {
 
     expect(normalized.invoiceAddress.addressLine).toBe(popupAddress);
   });
+
+  it("uses invoice address even when delivery address is different", () => {
+    const normalized = normalizeTrendyolPackage({
+      shipmentPackageId: 44,
+      orderNumber: "TY-44",
+      shipmentPackageStatus: "Delivered",
+      customerFirstName: "Ayse",
+      customerLastName: "Yilmaz",
+      shipmentAddress: {
+        fullName: "Ayse Yilmaz",
+        address1: "Teslimat Mahallesi Teslimat Sokak No 5",
+        district: "Kadikoy",
+        city: "Istanbul"
+      },
+      deliveryAddress: {
+        fullName: "Ayse Yilmaz",
+        address1: "Teslimat Mahallesi Teslimat Sokak No 5",
+        district: "Kadikoy",
+        city: "Istanbul"
+      },
+      invoiceAddress: {
+        fullName: "Ayse Yilmaz",
+        address1: "Fatura Mahallesi Fatura Caddesi No 10",
+        district: "Cankaya",
+        city: "Ankara",
+        countryCode: "TR",
+        postalCode: "06000"
+      },
+      grossAmount: 199.9,
+      totalPrice: 199.9,
+      lines: [{ productName: "Urun", quantity: 1, amount: 199.9, vatBaseAmount: 20 }]
+    });
+
+    expect(normalized.invoiceAddress.addressLine).toBe("Fatura Mahallesi Fatura Caddesi No 10 Cankaya/Ankara Türkiye 06000");
+    expect(normalized.invoiceAddress.addressLine).not.toContain("Teslimat Mahallesi");
+  });
 });
