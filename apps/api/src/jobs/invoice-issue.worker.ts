@@ -12,6 +12,11 @@ export class InvoiceIssueWorker implements OnModuleInit, OnModuleDestroy {
   constructor(@Inject(InvoiceService) private readonly invoiceService: InvoiceService) {}
 
   onModuleInit() {
+    if (process.env.QUEUE_MODE === "sync") {
+      this.logger.log("Invoice queue worker disabled because QUEUE_MODE=sync.");
+      return;
+    }
+
     const redisUrl = process.env.REDIS_URL ?? "redis://localhost:6379";
     this.connection = new IORedis(redisUrl, { maxRetriesPerRequest: null });
     this.worker = new Worker(

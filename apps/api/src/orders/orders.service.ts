@@ -72,7 +72,7 @@ export class OrdersService {
           invoiceDate: order.invoiceDraft?.invoice?.invoiceDate.toISOString(),
           trendyolStatus: order.invoiceDraft?.invoice?.trendyolStatus,
           externalInvoiceCount: order._count.externalInvoices,
-          externalInvoiceSources: Array.from(new Set(order.externalInvoices.map((invoice) => invoice.source))),
+          externalInvoiceSources: Array.from(new Set(order.externalInvoices.map((invoice: any) => invoice.source))),
           externalInvoiceNumber: order.externalInvoices[0]?.invoiceNumber ?? undefined,
           externalInvoiceDate: order.externalInvoices[0]?.invoiceDate?.toISOString()
         };
@@ -155,7 +155,7 @@ export class OrdersService {
             updatedAt: order.invoiceDraft.invoice.updatedAt.toISOString()
           }
         : null,
-      externalInvoices: order.externalInvoices.map((invoice) => ({
+      externalInvoices: order.externalInvoices.map((invoice: any) => ({
         id: invoice.id,
         source: invoice.source,
         invoiceNumber: invoice.invoiceNumber ?? undefined,

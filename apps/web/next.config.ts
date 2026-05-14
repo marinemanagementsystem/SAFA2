@@ -3,7 +3,7 @@ import type { NextConfig } from "next";
 const apiProxyOrigin = process.env.API_PROXY_ORIGIN
   ?? (process.env.API_PROXY_HOSTPORT ? `http://${process.env.API_PROXY_HOSTPORT}` : "http://localhost:4000");
 const isFirebaseStaticExport = process.env.FIREBASE_STATIC_EXPORT === "true";
-const publicApiBase = process.env.NEXT_PUBLIC_API_BASE_URL ?? (isFirebaseStaticExport ? `${apiProxyOrigin}/api` : undefined);
+const publicApiBase = process.env.NEXT_PUBLIC_API_BASE_URL ?? (isFirebaseStaticExport ? "/api" : undefined);
 
 const nextConfig: NextConfig = {
   env: {

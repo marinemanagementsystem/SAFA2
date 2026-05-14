@@ -1,0 +1,14 @@
+.env
+.env.*
+!.env.example
+.git
+.firebase
+node_modules
+apps/**/node_modules
+apps/web/.next
+apps/web/out
+apps/api/dist
+coverage
+storage
+*.pdf
+*.log

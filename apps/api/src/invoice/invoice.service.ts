@@ -118,7 +118,7 @@ export class InvoiceService {
           portalDraftUploadedAt: draft.portalDraftUploadedAt?.toISOString(),
           portalDraftStatus: draft.portalDraftStatus ?? undefined,
           externalInvoiceCount: draft.order._count.externalInvoices,
-          externalInvoiceSources: Array.from(new Set(draft.order.externalInvoices.map((invoice) => invoice.source))),
+          externalInvoiceSources: Array.from(new Set(draft.order.externalInvoices.map((invoice: any) => invoice.source))),
           externalInvoiceNumber: draft.order.externalInvoices[0]?.invoiceNumber ?? undefined,
           externalInvoiceDate: draft.order.externalInvoices[0]?.invoiceDate?.toISOString()
         };

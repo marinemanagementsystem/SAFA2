@@ -1,0 +1,27 @@
+FROM node:20-bookworm-slim
+
+ENV PNPM_HOME="/pnpm"
+ENV PATH="$PNPM_HOME:$PATH"
+ENV NODE_ENV="production"
+ENV PORT="8080"
+ENV CHROME_PATH="/usr/bin/chromium"
+ENV STORAGE_DIR="/mnt/safa-storage"
+
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends ca-certificates openssl chromium fonts-liberation \
+  && rm -rf /var/lib/apt/lists/* \
+  && corepack enable
+
+WORKDIR /app
+
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json ./
+COPY packages ./packages
+COPY apps/api ./apps/api
+
+RUN pnpm install --frozen-lockfile \
+  && DATABASE_URL="postgresql://safa:safa@localhost:5432/safa" pnpm --filter @safa/api db:generate \
+  && pnpm --filter @safa/api build
+
+EXPOSE 8080
+
+CMD ["sh", "-lc", "pnpm --filter @safa/api start"]

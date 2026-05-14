@@ -459,7 +459,14 @@ export function usePlatformData() {
           result.failed > 0
             ? ` ${result.failed} taslak basarisiz; fatura kesimi baslamadi veya tamamlanmadi.${firstFailure} Karttaki kirmizi uyariyi kontrol edin.`
             : "";
-        const nextMessage = `${result.enqueued} fatura isi kuyruga alindi.${autoApprovedText}${failedText} Sureci kartlardaki cubuktan izleyebilirsiniz.`;
+        const processed = result.processed ?? 0;
+        const issueText =
+          processed > 0
+            ? `${processed} fatura isi islendi.`
+            : result.enqueued > 0
+              ? `${result.enqueued} fatura isi kuyruga alindi.`
+              : "Fatura isi tamamlanamadi.";
+        const nextMessage = `${issueText}${autoApprovedText}${failedText} Sureci kartlardaki cubuktan izleyebilirsiniz.`;
         setMessage(nextMessage);
         await load();
         window.setTimeout(() => void load(), 1500);

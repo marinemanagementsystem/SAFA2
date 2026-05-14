@@ -86,9 +86,9 @@ Render ile yayinlama:
 
 `render.yaml` icinde gizli Trendyol veya GIB sifresi yoktur. Bu bilgiler canli ortamda paneldeki `Baglantilar` bolumunden girilebilir; PostgreSQL icinde `APP_SECRET_KEY` ile sifreli saklanir. Render'in ucretsiz servisleri test/hobi kullanim icindir; servisler uyuyabilir, aylik limitlere takilabilir ve canli ticari kullanim icin garanti vermez.
 
-## Firebase Hosting
+## Firebase Hosting + Cloud Run
 
-Firebase Hosting icin statik panel deploy'u hazirdir:
+Kalici canli yayin hedefi Firebase Hosting arkasinda Cloud Run API'dir. Panel ayni Firebase linkinden acilir, `/api/**` istekleri Cloud Run'daki gercek Nest API servisi `safa-api` uzerinden calisir:
 
 ```bash
 pnpm --filter @safa/web build:firebase
@@ -100,9 +100,19 @@ Canli panel:
 - https://safa-8f76e.web.app
 - https://safa-8f76e.firebaseapp.com
 
-Firebase Hosting yalnizca statik paneli yayinlar. Trendyol senkronizasyonu, PDF uretimi, sifreli baglanti kaydi ve veritabani islemleri icin `apps/api` servisinin PostgreSQL ve Redis ile ayrica yayinlanmasi gerekir.
+Firebase Hosting yalnizca statik paneli yayinlar. Trendyol senkronizasyonu, PDF uretimi, sifreli baglanti kaydi ve veritabani islemleri Cloud Run'daki `apps/api` servisiyle, Firestore Native mode ve Cloud Storage mount'u ile calisir.
 
-Firebase Hosting URL'sinden yerel API'ye (`http://localhost:4000`) baglanirken Chrome'un Local Network Access izni gerekir. Izin penceresi gelmezse `chrome://settings/content/localNetworkAccess` adresinden `https://safa-8f76e.web.app` icin izni acin. Alternatif olarak paneli `pnpm --filter @safa/web dev` ile `http://localhost:3000` uzerinden acabilir veya `NEXT_PUBLIC_API_BASE_URL` degerini Render'daki public API URL'sine isaret ettirebilirsiniz.
+Cloud Run deploy hazirligi:
+
+```bash
+CONFIRM_DEPLOY=1 ./scripts/deploy-cloud-run-api.sh
+```
+
+Bu komut calistirilmadan once Cloud SQL verileri Firestore'a tasinmis ve Secret Manager degerleri hazir olmalidir. Ayrintili adimlar `docs/firebase-cloud-run.md` dosyasindadir.
+
+Firebase build artik varsayilan olarak `NEXT_PUBLIC_API_BASE_URL=/api` kullanir; canli bundle icinde `http://localhost:4000/api` kalmamali. Bu nedenle arkadasiniz linkten girdiginde Chrome Local Network Access izni istememelidir.
+
+Canli API public oldugu icin backend oturumu zorunludur. `/api/auth/login`, `/api/auth/logout` ve `/api/auth/session` disindaki API istekleri `HttpOnly`, `Secure`, `SameSite=Lax` session cookie olmadan `401` doner. Cloud Run'da `SAFA_ADMIN_PASSWORD` veya `SAFA_ADMIN_PASSWORD_HASH`, `SAFA_SESSION_SECRET` ve mevcut sifreli ayarlari korumak icin `APP_SECRET_KEY` Secret Manager'dan verilmelidir.
 
 ## Canli GIB entegrasyonu
 

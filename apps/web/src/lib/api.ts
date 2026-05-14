@@ -121,6 +121,14 @@ export interface ConnectionResult {
   health: ConnectionHealth;
 }
 
+export interface AuthSessionResponse {
+  authenticated: boolean;
+  username?: string;
+  source?: "api";
+  issuedAt?: string;
+  expiresAt?: string;
+}
+
 export interface ExternalInvoiceSyncResult {
   imported: number;
   matched: number;
@@ -255,7 +263,7 @@ function apiConnectionFailureMessage(url: string, error: unknown) {
     const target = new URL(url, window.location.href);
     return new Error(
       `Yerel API (${target.host}) baglantisi henuz tamamlanmadi. SAFA backend yerel ag izin headerlarini otomatik gonderiyor; sayfayi bir kez yenileyin. ` +
-        "Devam ederse Chrome yerel ag iznini kontrol edin veya uygulamayi http://localhost:3000 uzerinden acin."
+        "Devam ederse Chrome yerel ag iznini kontrol edin veya uygulamayi yerel gelistirme adresinden acin."
     );
   }
 
@@ -282,6 +290,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
         "Content-Type": "application/json",
         ...(init?.headers ?? {})
       },
+      credentials: "include",
       cache: "no-store"
     });
   } catch (error) {
@@ -328,6 +337,16 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
+  authSession: () => request<AuthSessionResponse>("/auth/session"),
+  login: (input: { username: string; password: string }) =>
+    request<AuthSessionResponse>("/auth/login", {
+      method: "POST",
+      body: JSON.stringify(input)
+    }),
+  logout: () =>
+    request<AuthSessionResponse>("/auth/logout", {
+      method: "POST"
+    }),
   orders: () => request<OrderListItem[]>("/orders"),
   order: (id: string) => request<OrderDetail>(`/orders/${id}`),
   drafts: () => request<InvoiceDraftListItem[]>("/invoice-drafts"),
@@ -411,7 +430,14 @@ export const api = {
     }>("/sync/trendyol", { method: "POST" }),
   approve: (id: string) => request(`/invoice-drafts/${id}/approve`, { method: "POST" }),
   issue: (draftIds: string[]) =>
-    request<{ requested: number; enqueued: number; autoApproved: number; failed: number; failures: Array<{ draftId: string; error: string }> }>(
+    request<{
+      requested: number;
+      enqueued: number;
+      processed?: number;
+      autoApproved: number;
+      failed: number;
+      failures: Array<{ draftId: string; error: string }>;
+    }>(
       "/invoices/issue",
       {
       method: "POST",

@@ -335,7 +335,12 @@ export function OpsConsole() {
 
   async function issueSelected() {
     const result = await api.issue(selectedDrafts);
-    setMessage(`${result.enqueued} fatura isi kuyruga alindi. Kisa sure sonra liste yenilenecek.`);
+    const processed = result.processed ?? 0;
+    const message =
+      processed > 0
+        ? `${processed} fatura isi islendi. Liste yenileniyor.`
+        : `${result.enqueued} fatura isi kuyruga alindi. Kisa sure sonra liste yenilenecek.`;
+    setMessage(message);
     setSelectedDrafts([]);
     window.setTimeout(() => void load(), 1400);
   }

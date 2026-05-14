@@ -4,6 +4,7 @@ import { NestFactory } from "@nestjs/core";
 import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
 import type { NextFunction, Request, Response } from "express";
 import { AppModule } from "./app.module";
+import { apiAuthMiddleware } from "./auth/auth.middleware";
 
 const httpLogger = new Logger("SAFA HTTP");
 const SENSITIVE_FIELD_PATTERN = /(password|secret|token|apikey|api_key|authorization|signercommand|clientcert|clientkey|clientpfx)/i;
@@ -133,9 +134,16 @@ function privateNetworkCorsMiddleware(request: Request, response: Response, next
   next();
 }
 
+function shouldEnablePrivateNetworkCors() {
+  if (process.env.ENABLE_PRIVATE_NETWORK_CORS === "true") return true;
+  if (process.env.ENABLE_PRIVATE_NETWORK_CORS === "false") return false;
+  return process.env.NODE_ENV !== "production" && !process.env.K_SERVICE;
+}
+
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const configuredCorsOrigins = process.env.CORS_ORIGIN?.split(",").map((origin) => origin.trim()).filter(Boolean);
+  const enablePrivateNetworkCors = shouldEnablePrivateNetworkCors();
 
   app.setGlobalPrefix("api");
   app.enableCors({
@@ -144,10 +152,13 @@ async function bootstrap() {
     allowedHeaders: corsAllowedHeaders,
     methods: ["GET", "HEAD", "PUT", "PATCH", "POST", "DELETE", "OPTIONS"],
     optionsSuccessStatus: 204,
-    preflightContinue: true
+    preflightContinue: enablePrivateNetworkCors
   });
-  app.use(privateNetworkCorsMiddleware);
+  if (enablePrivateNetworkCors) {
+    app.use(privateNetworkCorsMiddleware);
+  }
   app.use(apiRequestLogger);
+  app.use(apiAuthMiddleware);
 
   const swaggerConfig = new DocumentBuilder()
     .setTitle("SAFA API")

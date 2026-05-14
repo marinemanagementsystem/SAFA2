@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+PROJECT_ID="${PROJECT_ID:-safa-8f76e}"
+FIREBASE_SITE="${FIREBASE_SITE:-${PROJECT_ID}}"
+FIREBASE_PUBLIC_DIR="${FIREBASE_PUBLIC_DIR:-apps/web/out}"
+CLOUD_RUN_SERVICE="${CLOUD_RUN_SERVICE:-safa-api}"
+CLOUD_RUN_REGION="${CLOUD_RUN_REGION:-europe-west1}"
+
+export PROJECT_ID FIREBASE_SITE FIREBASE_PUBLIC_DIR CLOUD_RUN_SERVICE CLOUD_RUN_REGION
+node scripts/deploy-firebase-hosting-rest.mjs

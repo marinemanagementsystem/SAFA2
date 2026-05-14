@@ -3,52 +3,19 @@
 import { KeyRound, LogIn, ShieldCheck } from "lucide-react";
 import type { FormEvent, ReactNode } from "react";
 import { useEffect, useState } from "react";
-import { initialUsername, verifyUserCredential, type LoginVerificationResult } from "../../lib/firebase/user-store";
-
-const authSessionKey = "safa.authSession.v1";
+import { api } from "../../lib/api";
 
 interface StoredAuthSession {
   username: string;
-  source: "firestore" | "local";
+  source: "api";
 }
 
 interface AuthGateSession extends StoredAuthSession {
   logout: () => void;
 }
 
-async function sha256(value: string) {
-  const bytes = new TextEncoder().encode(value);
-  const digest = await crypto.subtle.digest("SHA-256", bytes);
-  return Array.from(new Uint8Array(digest))
-    .map((byte) => byte.toString(16).padStart(2, "0"))
-    .join("");
-}
-
-function readStoredSession(): StoredAuthSession | null {
-  const raw = window.sessionStorage.getItem(authSessionKey);
-  if (!raw) return null;
-  if (raw === "ok") return { username: initialUsername, source: "local" };
-
-  try {
-    const session = JSON.parse(raw) as Partial<StoredAuthSession>;
-    if (!session.username) return null;
-    return {
-      username: session.username,
-      source: session.source === "firestore" ? "firestore" : "local"
-    };
-  } catch {
-    return null;
-  }
-}
-
-function loginErrorMessage(result: LoginVerificationResult) {
-  if (result.reason === "not_found") return "Bu kullanici Firestore'da bulunamadi. Ilk kullanici adi: sarper.";
-  if (result.reason === "disabled") return "Bu kullanici pasif durumda. Yetkili kisi kullaniciyi tekrar aktif etmeli.";
-  if (result.reason === "mismatch") return "Sifre bu kullanici ile eslesmedi. Kullanici adi veya sifreyi kontrol edin.";
-  if (result.reason === "firestore_unavailable") {
-    return "Firestore okunamadi. Ilk kullanici icin yerel giris denendi ama bilgiler eslesmedi.";
-  }
-  return "Kullanici adi veya sifre hatali.";
+function loginErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : "Kullanici adi veya sifre hatali.";
 }
 
 export function AuthGate({ children }: { children: (session: AuthGateSession) => ReactNode }) {
@@ -60,8 +27,27 @@ export function AuthGate({ children }: { children: (session: AuthGateSession) =>
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    setSession(readStoredSession());
-    setReady(true);
+    let cancelled = false;
+
+    api
+      .authSession()
+      .then((result) => {
+        if (!cancelled && result.authenticated && result.username) {
+          setSession({ username: result.username, source: "api" });
+        }
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setError(loginErrorMessage(error));
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setReady(true);
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -69,28 +55,28 @@ export function AuthGate({ children }: { children: (session: AuthGateSession) =>
     setBusy(true);
     setError("");
 
-    const normalizedUser = username.trim().toLocaleLowerCase("tr-TR");
-    const hash = await sha256(`${normalizedUser}:${password}`);
-    const result = await verifyUserCredential(normalizedUser, hash);
+    try {
+      const result = await api.login({ username: username.trim(), password });
+      if (!result.authenticated || !result.username) {
+        setError("Kullanici adi veya sifre hatali.");
+        return;
+      }
 
-    if (!result.ok) {
+      setSession({ username: result.username, source: "api" });
+      setPassword("");
+    } catch (error) {
+      setError(loginErrorMessage(error));
+    } finally {
       setBusy(false);
-      setError(loginErrorMessage(result));
-      return;
     }
-
-    const nextSession: StoredAuthSession = { username: normalizedUser, source: result.source };
-    window.sessionStorage.setItem(authSessionKey, JSON.stringify(nextSession));
-    setSession(nextSession);
-    setBusy(false);
-    setPassword("");
   }
 
   function logout() {
-    window.sessionStorage.removeItem(authSessionKey);
-    setSession(null);
-    setUsername("");
-    setPassword("");
+    void api.logout().finally(() => {
+      setSession(null);
+      setUsername("");
+      setPassword("");
+    });
   }
 
   if (!ready) return null;

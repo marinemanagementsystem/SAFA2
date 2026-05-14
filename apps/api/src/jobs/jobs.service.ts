@@ -2,14 +2,23 @@ import { BadRequestException, Inject, Injectable, OnModuleDestroy } from "@nestj
 import { DraftStatus, JobStatus, Prisma } from "@prisma/client";
 import { Queue } from "bullmq";
 import IORedis from "ioredis";
+import { InvoiceService } from "../invoice/invoice.service";
 import { PrismaService } from "../prisma/prisma.service";
 
 @Injectable()
 export class JobsService implements OnModuleDestroy {
-  private readonly connection: IORedis;
-  private readonly queue: Queue;
+  private readonly connection?: IORedis;
+  private readonly queue?: Queue;
+  private readonly syncMode = process.env.QUEUE_MODE === "sync";
 
-  constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {
+  constructor(
+    @Inject(PrismaService) private readonly prisma: PrismaService,
+    @Inject(InvoiceService) private readonly invoiceService: InvoiceService
+  ) {
+    if (this.syncMode) {
+      return;
+    }
+
     const redisUrl = process.env.REDIS_URL ?? "redis://localhost:6379";
     this.connection = new IORedis(redisUrl, { maxRetriesPerRequest: null });
     this.queue = new Queue("invoice-issue", { connection: this.connection });
@@ -34,6 +43,7 @@ export class JobsService implements OnModuleDestroy {
     const created = [];
     const failures: Array<{ draftId: string; error: string }> = [];
     let autoApproved = 0;
+    let processed = 0;
 
     for (const draftId of uniqueDraftIds) {
       const draft = draftsById.get(draftId);
@@ -83,25 +93,43 @@ export class JobsService implements OnModuleDestroy {
         }
       });
 
-      await this.queue.add(
-        "issue-draft",
-        { draftId, integrationJobId: jobRecord.id },
-        {
-          attempts: 3,
-          backoff: { type: "exponential", delay: 5_000 },
-          removeOnComplete: 100,
-          removeOnFail: 500
-        }
-      );
-
       created.push(jobRecord);
+
+      if (this.syncMode) {
+        try {
+          await this.invoiceService.issueDraft(draftId, jobRecord.id);
+          processed += 1;
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "Fatura kesimi tamamlanamadi.";
+          failures.push({ draftId, error: message });
+        }
+      } else {
+        await this.queue?.add(
+          "issue-draft",
+          { draftId, integrationJobId: jobRecord.id },
+          {
+            attempts: 3,
+            backoff: { type: "exponential", delay: 5_000 },
+            removeOnComplete: 100,
+            removeOnFail: 500
+          }
+        );
+      }
     }
 
     if (created.length === 0 && failures.length > 0) {
       throw new BadRequestException(failures.map((failure) => failure.error).join(" "));
     }
 
-    return { requested: uniqueDraftIds.length, enqueued: created.length, autoApproved, failed: failures.length, failures, jobs: created };
+    return {
+      requested: uniqueDraftIds.length,
+      enqueued: this.syncMode ? 0 : created.length,
+      processed: this.syncMode ? processed : 0,
+      autoApproved,
+      failed: failures.length,
+      failures,
+      jobs: created
+    };
   }
 
   async listJobs() {
@@ -123,7 +151,7 @@ export class JobsService implements OnModuleDestroy {
   }
 
   async onModuleDestroy() {
-    await this.queue.close();
-    this.connection.disconnect();
+    await this.queue?.close();
+    this.connection?.disconnect();
   }
 }

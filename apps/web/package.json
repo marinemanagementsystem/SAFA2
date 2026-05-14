@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev -p 3000",
     "build": "next build",
-    "build:firebase": "FIREBASE_STATIC_EXPORT=true next build",
+    "build:firebase": "FIREBASE_STATIC_EXPORT=true NEXT_PUBLIC_API_BASE_URL=/api next build",
     "start": "next start -p ${PORT:-3000}",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "echo \"web: no tests\""

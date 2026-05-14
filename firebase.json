@@ -30,6 +30,16 @@
           }
         ]
       }
+    ],
+    "rewrites": [
+      {
+        "source": "/api/**",
+        "run": {
+          "serviceId": "safa-api",
+          "region": "europe-west1",
+          "pinTag": true
+        }
+      }
     ]
   }
 }
