@@ -156,6 +156,8 @@ a {
 
 .portal-draft-finder-actions {
   display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
   justify-content: flex-start;
 }
 

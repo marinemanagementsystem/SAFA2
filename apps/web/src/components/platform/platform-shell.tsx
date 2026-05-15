@@ -14,7 +14,8 @@ import {
   ReceiptText,
   RefreshCw,
   Send,
-  Settings2
+  Settings2,
+  ShieldOff
 } from "lucide-react";
 import Link from "next/link";
 import type { ComponentType, ReactNode } from "react";
@@ -75,6 +76,7 @@ interface PlatformShellProps {
   onRefresh: () => void;
   onSync: () => void;
   onOpenPortal: () => void;
+  onClosePortalSession: () => void;
   onLogout: () => void;
 }
 
@@ -95,6 +97,7 @@ export function PlatformShell({
   onRefresh,
   onSync,
   onOpenPortal,
+  onClosePortalSession,
   onLogout
 }: PlatformShellProps) {
   const title = viewTitles[view];
@@ -160,6 +163,10 @@ export function PlatformShell({
             <button className="ui-button ghost" onClick={onOpenPortal} disabled={busyAction === "open-gib"}>
               {busyAction === "open-gib" ? <Loader2 size={18} className="spin" /> : <LogIn size={18} />}
               e-Arsiv ac
+            </button>
+            <button className="ui-button ghost" onClick={onClosePortalSession} disabled={!apiAvailable || busyAction === "logout-gib"}>
+              {busyAction === "logout-gib" ? <Loader2 size={18} className="spin" /> : <ShieldOff size={18} />}
+              e-Arsiv cikis
             </button>
             <button className="ui-button ghost" onClick={onLogout}>
               <LogOut size={18} />

@@ -24,7 +24,32 @@ describe("normalizeTrendyolPackage", () => {
     expect(normalized.customerName).toBe("Ali Kaya");
     expect(normalized.totalPayableCents).toBe(10000);
     expect(normalized.lines[0]?.quantity).toBe(2);
+    expect(normalized.lines[0]?.grossCents).toBe(12000);
+    expect(normalized.lines[0]?.payableCents).toBe(10000);
+    expect(normalized.lines[0]?.unitPriceCents).toBe(6000);
     expect(normalized.deliveredAt?.toISOString()).toBe("2026-04-22T11:33:03.954Z");
+  });
+
+  it("treats ambiguous line amounts as unit prices when quantity and package totals require it", () => {
+    const normalized = normalizeTrendyolPackage({
+      shipmentPackageId: 45,
+      orderNumber: "TY-45",
+      shipmentPackageStatus: "Delivered",
+      customerFirstName: "Ali",
+      customerLastName: "Kaya",
+      invoiceAddress: { address1: "Adres", district: "Besiktas", city: "Istanbul" },
+      grossAmount: 240,
+      totalPrice: 240,
+      lines: [{ productName: "Urun", quantity: 2, amount: 120, vatBaseAmount: 20 }]
+    });
+
+    expect(normalized.totalPayableCents).toBe(24000);
+    expect(normalized.lines[0]).toMatchObject({
+      quantity: 2,
+      grossCents: 24000,
+      payableCents: 24000,
+      unitPriceCents: 12000
+    });
   });
 
   it("rebuilds the Trendyol invoice popup address as the invoice address line", () => {

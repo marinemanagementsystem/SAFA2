@@ -33,6 +33,7 @@ export function PlatformApp({ view }: PlatformAppProps) {
           onRefresh={() => void platform.refresh()}
           onSync={() => void platform.syncOrders()}
           onOpenPortal={() => void platform.openGibPortal()}
+          onClosePortalSession={() => void platform.logoutGibPortalSession()}
           onLogout={session.logout}
         >
           {view === "overview" ? (
@@ -73,6 +74,7 @@ export function PlatformApp({ view }: PlatformAppProps) {
               onUploadExternalInvoicePdf={(id, file) => void platform.uploadExternalInvoicePdf(id, file)}
               onSendInvoiceToTrendyol={(id) => void platform.sendInvoiceToTrendyol(id)}
               onOpenGibPortal={() => void platform.openGibPortal()}
+              onCloseGibPortalSession={() => void platform.logoutGibPortalSession()}
             />
           ) : null}
           {view === "integrations" ? (
@@ -93,6 +95,7 @@ export function PlatformApp({ view }: PlatformAppProps) {
               onSaveGibPortal={() => void platform.saveGibPortal()}
               onSaveGibDirect={() => void platform.saveGibDirect()}
               onOpenGibPortal={() => void platform.openGibPortal()}
+              onCloseGibPortalSession={() => void platform.logoutGibPortalSession()}
               onOpenTrendyolPartner={platform.openTrendyolPartner}
               setMessage={platform.setMessage}
             />

@@ -651,6 +651,30 @@ export function usePlatformData() {
     }
   }, [gibPortalForm.portalUrl, snapshot.connections?.gibPortal.configured]);
 
+  const logoutGibPortalSession = useCallback(async () => {
+    if (!API_AVAILABLE) {
+      setMessage("Canli API bagli degil; e-Arsiv oturumu SAFA uzerinden kapatilamaz.");
+      return;
+    }
+
+    if (!snapshot.connections?.gibPortal.configured) {
+      setMessage("e-Arsiv portal bilgisi kayitli degil; SAFA'nin kapatabilecegi aktif oturum yok.");
+      return;
+    }
+
+    setBusyAction("logout-gib");
+
+    try {
+      const result = await api.logoutEarsivPortalSession();
+      const detail = result.portalMessage ? ` Portal mesaji: ${result.portalMessage}` : "";
+      setMessage(`${result.message}${detail}`);
+    } catch (error) {
+      setMessage(errorMessage(error, "e-Arsiv guvenli cikis islemi basarisiz."));
+    } finally {
+      setBusyAction(null);
+    }
+  }, [snapshot.connections?.gibPortal.configured]);
+
   const openTrendyolPartner = useCallback(() => {
     window.open("https://partner.trendyol.com/", "trendyol-partner", "popup=yes,width=1280,height=860");
   }, []);
@@ -860,6 +884,7 @@ export function usePlatformData() {
     saveGibPortal,
     saveGibDirect,
     openGibPortal,
+    logoutGibPortalSession,
     openTrendyolPartner,
     importExternalInvoices,
     syncGibExternalInvoices,

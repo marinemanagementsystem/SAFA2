@@ -1,5 +1,5 @@
 import { Inject, Injectable, NotFoundException } from "@nestjs/common";
-import { Prisma } from "@prisma/client";
+import { DraftStatus, Prisma } from "@prisma/client";
 import { ExternalInvoicesService } from "../external-invoices/external-invoices.service";
 import { PrismaService } from "../prisma/prisma.service";
 import { TrendyolService } from "../trendyol/trendyol.service";
@@ -24,6 +24,21 @@ function invoiceSourceLabel(provider?: string | null) {
   if (provider === "gib-portal-manual") return "e-Arsiv manuel";
   if (provider === "gib-direct") return "GIB direct";
   return "SAFA";
+}
+
+const refreshableDraftStatuses = new Set<DraftStatus>([
+  DraftStatus.NEEDS_REVIEW,
+  DraftStatus.READY,
+  DraftStatus.APPROVED,
+  DraftStatus.ERROR
+]);
+
+function sameJson(left: unknown, right: unknown) {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function toDraftStatus(status: "READY" | "NEEDS_REVIEW") {
+  return status === "READY" ? DraftStatus.READY : DraftStatus.NEEDS_REVIEW;
 }
 
 @Injectable()
@@ -195,6 +210,7 @@ export class OrdersService {
     const packages = await this.trendyol.fetchDeliveredPackages();
     let upserted = 0;
     let draftsCreated = 0;
+    let draftsUpdated = 0;
 
     for (const pkg of packages) {
       const normalized = normalizeTrendyolPackage(pkg);
@@ -235,19 +251,45 @@ export class OrdersService {
 
       upserted += 1;
 
-      const existingDraft = await this.prisma.invoiceDraft.findUnique({ where: { orderId: order.id } });
+      const draft = buildDraft(normalized);
+      const draftStatus = toDraftStatus(draft.status);
+      const existingDraft = await this.prisma.invoiceDraft.findUnique({ where: { orderId: order.id }, include: { invoice: true } });
       if (!existingDraft) {
-        const draft = buildDraft(normalized);
         await this.prisma.invoiceDraft.create({
           data: {
             orderId: order.id,
-            status: draft.status,
+            status: draftStatus,
             validation: json(draft.validation),
             lines: json(draft.lines),
             totals: json(draft.totals)
           }
         });
         draftsCreated += 1;
+        continue;
+      }
+
+      if (!refreshableDraftStatuses.has(existingDraft.status) || existingDraft.invoice || existingDraft.portalDraftUuid) {
+        continue;
+      }
+
+      const contentChanged =
+        !sameJson(existingDraft.validation, draft.validation) ||
+        !sameJson(existingDraft.lines, draft.lines) ||
+        !sameJson(existingDraft.totals, draft.totals);
+      const nextStatus = existingDraft.status === DraftStatus.APPROVED && !contentChanged ? DraftStatus.APPROVED : draftStatus;
+
+      if (contentChanged || existingDraft.status !== nextStatus) {
+        await this.prisma.invoiceDraft.update({
+          where: { id: existingDraft.id },
+          data: {
+            status: nextStatus,
+            validation: json(draft.validation),
+            lines: json(draft.lines),
+            totals: json(draft.totals),
+            ...(contentChanged ? { approvedAt: null } : {})
+          }
+        });
+        draftsUpdated += 1;
       }
     }
 
@@ -258,8 +300,8 @@ export class OrdersService {
         action: "trendyol.sync",
         subjectType: "orders",
         subjectId: "trendyol",
-        message: `${upserted} Trendyol paketi senkronize edildi, ${draftsCreated} taslak olusturuldu, ${trendyolInvoices.imported} Trendyol fatura kaydi yakalandi.`,
-        metadata: { packageCount: packages.length, upserted, draftsCreated, trendyolInvoices }
+        message: `${upserted} Trendyol paketi senkronize edildi, ${draftsCreated} taslak olusturuldu, ${draftsUpdated} acik taslak guncellendi, ${trendyolInvoices.imported} Trendyol fatura kaydi yakalandi.`,
+        metadata: { packageCount: packages.length, upserted, draftsCreated, draftsUpdated, trendyolInvoices }
       }
     });
 
@@ -267,6 +309,7 @@ export class OrdersService {
       packageCount: packages.length,
       upserted,
       draftsCreated,
+      draftsUpdated,
       externalInvoicesImported: trendyolInvoices.imported,
       externalInvoicesMatched: trendyolInvoices.matched
     };

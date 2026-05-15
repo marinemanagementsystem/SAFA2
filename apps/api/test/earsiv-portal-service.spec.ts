@@ -167,7 +167,89 @@ describe("EarsivPortalService", () => {
       launchSessionKey,
       expect.objectContaining({
         launchUrl: expect.stringContaining("token=portal-token"),
+        token: "portal-token",
         source: "fresh"
+      })
+    );
+  });
+
+  it("logs out a cached portal token and expires the local launch session", async () => {
+    const settingsMock = settings();
+    vi.mocked(settingsMock.readEncryptedSetting).mockResolvedValueOnce({
+      portalUrl: "https://earsivportal.efatura.gov.tr/intragiris.html",
+      launchUrl: "https://earsivportal.efatura.gov.tr/intragiris.html?token=cached-token",
+      token: "cached-token",
+      tokenReceived: true,
+      openedAt: new Date().toISOString(),
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+      source: "fresh",
+      message: "cached"
+    });
+    post.mockResolvedValueOnce({ status: 200, data: { data: "logout ok" } });
+
+    const service = new EarsivPortalService(settingsMock as unknown as SettingsService);
+    const result = await service.logoutSession();
+
+    expect(result).toMatchObject({
+      attempted: true,
+      ok: true,
+      source: "cached-token"
+    });
+
+    const body = new URLSearchParams(String(post.mock.calls[0][1]));
+    expect(body.get("assoscmd")).toBe("logout");
+    expect(body.get("token")).toBe("cached-token");
+    expect(settingsMock.writeEncryptedSetting).toHaveBeenCalledWith(
+      launchSessionKey,
+      expect.objectContaining({
+        launchUrl: "",
+        tokenReceived: false
+      })
+    );
+  });
+
+  it("falls back to anologin logout when GIB rejects logout command", async () => {
+    const settingsMock = settings();
+    vi.mocked(settingsMock.readEncryptedSetting).mockResolvedValueOnce({
+      portalUrl: "https://earsivportal.efatura.gov.tr/intragiris.html",
+      launchUrl: "https://earsivportal.efatura.gov.tr/intragiris.html?token=fallback-token",
+      tokenReceived: true,
+      openedAt: new Date().toISOString(),
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+      source: "fresh",
+      message: "cached"
+    });
+    post
+      .mockResolvedValueOnce({ status: 200, data: { error: true, messages: [{ text: "unsupported" }] } })
+      .mockResolvedValueOnce({ status: 200, data: { data: "logout ok" } });
+
+    const service = new EarsivPortalService(settingsMock as unknown as SettingsService);
+    const result = await service.logoutSession();
+
+    expect(result.ok).toBe(true);
+    expect(new URLSearchParams(String(post.mock.calls[0][1])).get("assoscmd")).toBe("logout");
+    expect(new URLSearchParams(String(post.mock.calls[1][1])).get("assoscmd")).toBe("anologin");
+    expect(new URLSearchParams(String(post.mock.calls[1][1])).get("token")).toBe("fallback-token");
+  });
+
+  it("reports when there is no SAFA-owned portal token to close", async () => {
+    const settingsMock = settings();
+    vi.mocked(settingsMock.readEncryptedSetting).mockResolvedValueOnce(undefined);
+
+    const service = new EarsivPortalService(settingsMock as unknown as SettingsService);
+    const result = await service.logoutSession();
+
+    expect(result).toMatchObject({
+      attempted: false,
+      ok: false,
+      source: "none"
+    });
+    expect(post).not.toHaveBeenCalled();
+    expect(settingsMock.writeEncryptedSetting).toHaveBeenCalledWith(
+      launchSessionKey,
+      expect.objectContaining({
+        launchUrl: "",
+        tokenReceived: false
       })
     );
   });

@@ -89,6 +89,42 @@ describe("buildGibPortalInvoiceDraftPayload", () => {
     expect(draft.aliciSoyadi).toBe("");
   });
 
+  it("keeps payable portal totals equal to the invoice payload total for quantity-based orders", () => {
+    const draft = buildGibPortalInvoiceDraftPayload(
+      {
+        ...payload,
+        lines: [
+          {
+            description: "Trendyol urunu",
+            quantity: 2,
+            unitPriceCents: 6000,
+            grossCents: 12000,
+            discountCents: 0,
+            payableCents: 12000,
+            vatRate: 20
+          }
+        ],
+        totals: {
+          grossCents: 24000,
+          discountCents: 0,
+          payableCents: 24000,
+          currency: "TRY"
+        }
+      },
+      { uuid: "0ed1d89b-3d5f-4d5d-97e6-0e5a5f9ec051" }
+    );
+
+    expect(draft.vergilerDahilToplamTutar).toBe("240.00");
+    expect(draft.odenecekTutar).toBe("240.00");
+    expect(draft.not).toBe("ikiyüzkırktürklirasısıfırkuruş. Trendyol siparis no: 11190835272 / Paket: 3809481475");
+    expect(draft.malHizmetTable[0]).toMatchObject({
+      miktar: 2,
+      birimFiyat: "50.00",
+      fiyat: "100.00",
+      malHizmetTutari: "100.00"
+    });
+  });
+
   it("normalizes ETTN before sending it to the GIB portal", () => {
     const draft = buildGibPortalInvoiceDraftPayload(payload, {
       uuid: "{6f0fdc0f-d6a7-4d1a-b4dd-ea1fd9d2da53}"

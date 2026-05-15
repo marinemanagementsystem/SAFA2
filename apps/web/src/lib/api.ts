@@ -153,6 +153,15 @@ export interface EarsivPortalSessionResponse {
   lastPortalMessage?: string;
 }
 
+export interface EarsivPortalLogoutResponse {
+  portalUrl: string;
+  attempted: boolean;
+  ok: boolean;
+  source: "cached-token" | "none";
+  message: string;
+  portalMessage?: string;
+}
+
 function getRequestMethod(init?: RequestInit) {
   return (init?.method ?? "GET").toUpperCase();
 }
@@ -404,6 +413,10 @@ export const api = {
     }),
   openEarsivPortalSession: () =>
     request<EarsivPortalSessionResponse>("/earsiv-portal/open-session", {
+      method: "POST"
+    }),
+  logoutEarsivPortalSession: () =>
+    request<EarsivPortalLogoutResponse>("/earsiv-portal/logout-session", {
       method: "POST"
     }),
   importExternalInvoices: (source: ExternalInvoiceSource, invoices: Array<Record<string, unknown>>) =>

@@ -235,7 +235,7 @@ export function buildGibPortalInvoiceDraftPayload(
   const discountTotal = roundAmount(linesWithTotals.reduce((sum, line) => sum + line.numeric.iskontoTutari, 0));
   const taxableTotal = roundAmount(linesWithTotals.reduce((sum, line) => sum + line.numeric.malHizmetTutari, 0));
   const vatTotal = roundAmount(linesWithTotals.reduce((sum, line) => sum + line.numeric.kdvTutari, 0));
-  const payableTotal = roundAmount(taxableTotal + vatTotal);
+  const payableTotal = centsToAmount(payload.totals.payableCents);
   const lines = linesWithTotals.map(({ numeric: _numeric, ...line }) => line);
   const zeroAmount = "0";
 

@@ -13,6 +13,12 @@ interface AssosLoginResponse {
   messages?: Array<{ text?: string }>;
 }
 
+interface AssosLogoutResponse {
+  data?: unknown;
+  error?: unknown;
+  messages?: Array<{ text?: string }>;
+}
+
 interface DispatchResponse {
   data?: unknown;
   result?: unknown;
@@ -31,6 +37,7 @@ type PortalSessionSource = "fresh" | "cached";
 interface CachedPortalLaunchSession {
   portalUrl: string;
   launchUrl: string;
+  token?: string;
   tokenReceived: boolean;
   openedAt: string;
   expiresAt: string;
@@ -64,6 +71,15 @@ export interface PortalDraftUploadResult {
   error?: string;
 }
 
+export interface PortalLogoutResult {
+  portalUrl: string;
+  attempted: boolean;
+  ok: boolean;
+  source: "cached-token" | "none";
+  message: string;
+  portalMessage?: string;
+}
+
 const GIB_PORTAL_LAUNCH_SESSION_KEY = "session.gibPortal.launch";
 const DEFAULT_PORTAL_SESSION_TTL_SECONDS = 10 * 60;
 
@@ -88,6 +104,18 @@ function loginEndpoint(portalUrl: string) {
 function dispatchEndpoint(portalUrl: string) {
   const url = new URL(portalUrl);
   return `${url.origin}/earsiv-services/dispatch`;
+}
+
+function tokenFromLaunchSession(session: CachedPortalLaunchSession | undefined) {
+  if (session?.token?.trim()) return session.token.trim();
+  if (!session?.launchUrl) return undefined;
+
+  try {
+    const token = new URL(session.launchUrl).searchParams.get("token")?.trim();
+    return token || undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 function launchUrl(portalUrl: string, response: AssosLoginResponse) {
@@ -138,6 +166,10 @@ function stringifyResponseData(response: DispatchResponse) {
 }
 
 function portalMessage(response: AssosLoginResponse) {
+  return response.messages?.map((message) => message.text).find(Boolean);
+}
+
+function logoutPortalMessage(response: AssosLogoutResponse) {
   return response.messages?.map((message) => message.text).find(Boolean);
 }
 
@@ -255,6 +287,48 @@ export class EarsivPortalService {
       }
 
       throw error;
+    }
+  }
+
+  async logoutSession(): Promise<PortalLogoutResult> {
+    const connection = await this.getConnection();
+    const cached = await this.readLaunchSession();
+    const token = tokenFromLaunchSession(cached);
+
+    if (!token || cached?.portalUrl !== connection.portalUrl) {
+      await this.expireLaunchSession(connection.portalUrl, "SAFA'nin kapatabilecegi aktif e-Arsiv oturum tokeni yok.");
+      return {
+        portalUrl: connection.portalUrl,
+        attempted: false,
+        ok: false,
+        source: "none",
+        message:
+          "SAFA'nin kapatabilecegi aktif e-Arsiv oturumu yok. Portal baska sekmede veya cihazda aciksa oradan Guvenli Cikis yapin."
+      };
+    }
+
+    try {
+      const response = await this.logout(connection, token);
+      await this.expireLaunchSession(connection.portalUrl, "e-Arsiv oturum cache'i guvenli cikis sonrasi temizlendi.");
+      return {
+        portalUrl: connection.portalUrl,
+        attempted: true,
+        ok: true,
+        source: "cached-token",
+        message: "SAFA e-Arsiv oturumunu kapatmayi denedi ve yerel token kaydini temizledi.",
+        portalMessage: logoutPortalMessage(response)
+      };
+    } catch (error) {
+      await this.expireLaunchSession(connection.portalUrl, "e-Arsiv oturum cache'i guvenli cikis hatasi sonrasi temizlendi.");
+      return {
+        portalUrl: connection.portalUrl,
+        attempted: true,
+        ok: false,
+        source: "cached-token",
+        message:
+          "SAFA yerel e-Arsiv token kaydini temizledi ancak GIB cikisi dogrulanamadi. Portal hala aktif oturum bildirirse portalda manuel Guvenli Cikis yapin.",
+        portalMessage: error instanceof Error ? error.message : undefined
+      };
     }
   }
 
@@ -431,13 +505,44 @@ export class EarsivPortalService {
     return { connection, response: response.data, launchSession };
   }
 
-  private async readValidLaunchSession(portalUrl: string): Promise<PortalLaunchSession | undefined> {
-    let cached: CachedPortalLaunchSession | undefined;
-    try {
-      cached = await this.settings.readEncryptedSetting<CachedPortalLaunchSession>(GIB_PORTAL_LAUNCH_SESSION_KEY);
-    } catch {
-      return undefined;
+  private async logout(connection: GibPortalConnection, token: string) {
+    const attempts = ["logout", "anologin"];
+    let lastError: Error | undefined;
+
+    for (const assoscmd of attempts) {
+      const form = new URLSearchParams({
+        assoscmd,
+        rtype: "json",
+        token
+      });
+
+      const response = await axios.post<AssosLogoutResponse>(loginEndpoint(connection.portalUrl), form.toString(), {
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded;charset=utf-8",
+          "User-Agent": "SAFA live e-arsiv portal logout"
+        },
+        timeout: 30_000,
+        validateStatus: () => true
+      });
+
+      if (response.status < 200 || response.status >= 300) {
+        lastError = new ServiceUnavailableException(`e-Arsiv portal guvenli cikisi HTTP ${response.status} dondu.`);
+        continue;
+      }
+
+      if (response.data?.error) {
+        lastError = new BadRequestException(logoutPortalMessage(response.data) ?? "e-Arsiv portal guvenli cikisi basarisiz.");
+        continue;
+      }
+
+      return response.data;
     }
+
+    throw lastError ?? new ServiceUnavailableException("e-Arsiv portal guvenli cikisi basarisiz.");
+  }
+
+  private async readValidLaunchSession(portalUrl: string): Promise<PortalLaunchSession | undefined> {
+    const cached = await this.readLaunchSession();
 
     if (!cached?.launchUrl || cached.portalUrl !== portalUrl) return undefined;
     const expiresAt = new Date(cached.expiresAt).getTime();
@@ -448,6 +553,27 @@ export class EarsivPortalService {
       source: "cached",
       message: "Aktif e-Arsiv oturumu yeni sekmede acildi."
     };
+  }
+
+  private async readLaunchSession(): Promise<CachedPortalLaunchSession | undefined> {
+    try {
+      return await this.settings.readEncryptedSetting<CachedPortalLaunchSession>(GIB_PORTAL_LAUNCH_SESSION_KEY);
+    } catch {
+      return undefined;
+    }
+  }
+
+  private async expireLaunchSession(portalUrl: string, message: string) {
+    const now = new Date();
+    await this.settings.writeEncryptedSetting<CachedPortalLaunchSession>(GIB_PORTAL_LAUNCH_SESSION_KEY, {
+      portalUrl,
+      launchUrl: "",
+      tokenReceived: false,
+      openedAt: now.toISOString(),
+      expiresAt: new Date(now.getTime() - 1000).toISOString(),
+      source: "fresh",
+      message
+    });
   }
 
   private async rememberLaunchSession(
@@ -462,6 +588,7 @@ export class EarsivPortalService {
     const cached: CachedPortalLaunchSession = {
       portalUrl: connection.portalUrl,
       launchUrl: launchUrl(connection.portalUrl, response),
+      ...(response.token ? { token: response.token } : {}),
       tokenReceived,
       openedAt: openedAt.toISOString(),
       expiresAt: new Date(openedAt.getTime() + portalSessionTtlMs()).toISOString(),

@@ -23,6 +23,7 @@ import {
   RefreshCw,
   RotateCcw,
   Search,
+  ShieldOff,
   UploadCloud,
   X
 } from "lucide-react";
@@ -91,6 +92,7 @@ interface InvoicesViewProps {
   onUploadExternalInvoicePdf: (id: string, file: File) => void;
   onSendInvoiceToTrendyol: (id: string) => void;
   onOpenGibPortal: () => void;
+  onCloseGibPortalSession: () => void;
 }
 
 function initialInvoiceDeskQuery() {
@@ -636,7 +638,8 @@ export function InvoicesView({
   onPromoteExternalInvoice,
   onUploadExternalInvoicePdf,
   onSendInvoiceToTrendyol,
-  onOpenGibPortal
+  onOpenGibPortal,
+  onCloseGibPortalSession
 }: InvoicesViewProps) {
   const initialDeskQuery = initialInvoiceDeskQuery();
   const [selectedDrafts, setSelectedDrafts] = useState<string[]>([]);
@@ -1120,6 +1123,10 @@ export function InvoicesView({
                     {busyAction === "open-gib" ? <Loader2 size={16} className="spin" /> : <Link2 size={16} />}
                     e-Arsiv'de ac
                   </button>
+                  <button className="ui-button ghost compact" type="button" onClick={onCloseGibPortalSession} disabled={busyAction === "logout-gib"}>
+                    {busyAction === "logout-gib" ? <Loader2 size={16} className="spin" /> : <ShieldOff size={16} />}
+                    Guvenli cikis
+                  </button>
                   <button className="ui-button primary compact" type="button" onClick={() => onSyncGibExternalInvoices(externalDays)} disabled={busyAction === "external-gib-sync"}>
                     {busyAction === "external-gib-sync" ? <Loader2 size={16} className="spin" /> : <FileSearch size={16} />}
                     Sorgula ve Trendyol'a gonder
@@ -1239,6 +1246,17 @@ export function InvoicesView({
                     >
                       {busyAction === "open-gib" ? <Loader2 size={16} className="spin" /> : <Link2 size={16} />}
                       e-Arsiv'de ac
+                    </button>
+                  ) : null}
+                  {draft.status === "PORTAL_DRAFTED" ? (
+                    <button
+                      className="ui-button ghost compact draft-inline-action"
+                      type="button"
+                      onClick={onCloseGibPortalSession}
+                      disabled={busyAction === "logout-gib"}
+                    >
+                      {busyAction === "logout-gib" ? <Loader2 size={16} className="spin" /> : <ShieldOff size={16} />}
+                      Guvenli cikis
                     </button>
                   ) : null}
                   <Link className="text-link route-link" href={orderDeskHref(draft.orderNumber)}>

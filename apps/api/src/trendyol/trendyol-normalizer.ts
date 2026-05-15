@@ -103,6 +103,86 @@ function invoiceAddressLine(invoiceAddress: UnknownRecord) {
     .trim();
 }
 
+type LineAmountStrategy = "line-total" | "unit-price";
+type LineAmountSource = "amount" | "price" | "totalPrice";
+
+const lineAmountSources: LineAmountSource[] = ["amount", "price", "totalPrice"];
+
+function moneyCents(value: unknown): number | undefined {
+  if (value === undefined || value === null || value === "") return undefined;
+  return toCents(value);
+}
+
+function hasMoneyValue(value: unknown) {
+  return value !== undefined && value !== null && value !== "";
+}
+
+function lineAmountCents(line: UnknownRecord, source?: LineAmountSource) {
+  return toCents(source ? line[source] : (line.amount ?? line.price ?? line.totalPrice));
+}
+
+function normalizeLines(lines: UnknownRecord[], strategy: LineAmountStrategy, source?: LineAmountSource): NormalizedLine[] {
+  return lines.map((line) => {
+    const quantity = Math.max(1, numberValue(line.quantity, 1));
+    const sourceCents = lineAmountCents(line, source);
+    const grossCents = strategy === "unit-price" ? sourceCents * quantity : sourceCents;
+    const discountCents = toCents(line.discount ?? line.totalDiscount ?? 0);
+    const payableCents = Math.max(0, grossCents - discountCents);
+    const unitPriceCents = grossCents > 0 ? Math.round(grossCents / quantity) : toCents(line.price);
+
+    return {
+      sku: firstText(line.merchantSku, line.sku),
+      barcode: firstText(line.barcode),
+      productName: firstText(line.productName, line.name, line.productCode, "Urun"),
+      quantity,
+      unitPriceCents,
+      grossCents,
+      discountCents,
+      payableCents,
+      vatRate: numberValue(line.vatBaseAmount, 20)
+    };
+  });
+}
+
+function scoreLines(
+  lines: NormalizedLine[],
+  expected: {
+    grossCents?: number;
+    discountCents?: number;
+    payableCents?: number;
+  }
+) {
+  const lineGross = lines.reduce((sum, line) => sum + line.grossCents, 0);
+  const lineDiscount = lines.reduce((sum, line) => sum + line.discountCents, 0);
+  const linePayable = lines.reduce((sum, line) => sum + line.payableCents, 0);
+  let score = 0;
+
+  if (expected.grossCents !== undefined) score += Math.abs(lineGross - expected.grossCents);
+  if (expected.discountCents !== undefined) score += Math.abs(lineDiscount - expected.discountCents);
+  if (expected.payableCents !== undefined) score += Math.abs(linePayable - expected.payableCents);
+
+  return score;
+}
+
+function normalizeLinesByPackageTotals(lines: UnknownRecord[], pkg: UnknownRecord) {
+  const expected = {
+    grossCents: moneyCents(pkg.grossAmount),
+    discountCents: moneyCents(pkg.totalDiscount),
+    payableCents: moneyCents(pkg.totalPrice)
+  };
+  const candidates = [
+    normalizeLines(lines, "line-total"),
+    normalizeLines(lines, "unit-price"),
+    ...lineAmountSources
+      .filter((source) => lines.some((line) => hasMoneyValue(line[source])))
+      .flatMap((source) => [normalizeLines(lines, "line-total", source), normalizeLines(lines, "unit-price", source)])
+  ];
+
+  return candidates
+    .map((candidate) => ({ lines: candidate, score: scoreLines(candidate, expected) }))
+    .reduce((best, candidate) => (candidate.score < best.score ? candidate : best)).lines;
+}
+
 export function extractTrendyolDeliveryDate(raw: unknown): Date | undefined {
   const pkg = record(raw);
 
@@ -131,25 +211,7 @@ export function normalizeTrendyolPackage(pkg: UnknownRecord): NormalizedOrder {
   const lastName = firstText(invoiceAddress.lastName, pkg.customerLastName);
   const fullName = firstText(invoiceAddress.fullName, `${firstName} ${lastName}`.trim(), pkg.customerName);
 
-  const normalizedLines = lines.map((line) => {
-    const quantity = Math.max(1, numberValue(line.quantity, 1));
-    const grossCents = toCents(line.amount ?? line.price ?? line.totalPrice);
-    const discountCents = toCents(line.discount ?? line.totalDiscount ?? 0);
-    const payableCents = Math.max(0, grossCents - discountCents);
-    const unitPriceCents = grossCents > 0 ? Math.round(grossCents / quantity) : toCents(line.price);
-
-    return {
-      sku: firstText(line.merchantSku, line.sku),
-      barcode: firstText(line.barcode),
-      productName: firstText(line.productName, line.name, line.productCode, "Urun"),
-      quantity,
-      unitPriceCents,
-      grossCents,
-      discountCents,
-      payableCents,
-      vatRate: numberValue(line.vatBaseAmount, 20)
-    };
-  });
+  const normalizedLines = normalizeLinesByPackageTotals(lines, pkg);
 
   const lineGross = normalizedLines.reduce((sum, line) => sum + line.grossCents, 0);
   const lineDiscount = normalizedLines.reduce((sum, line) => sum + line.discountCents, 0);
@@ -171,9 +233,9 @@ export function normalizeTrendyolPackage(pkg: UnknownRecord): NormalizedOrder {
       taxOffice: firstText(invoiceAddress.taxOffice) || undefined
     },
     lines: normalizedLines,
-    totalGrossCents: toCents(pkg.grossAmount) || lineGross,
-    totalDiscountCents: toCents(pkg.totalDiscount) || lineDiscount,
-    totalPayableCents: toCents(pkg.totalPrice) || linePayable,
+    totalGrossCents: moneyCents(pkg.grossAmount) ?? lineGross,
+    totalDiscountCents: moneyCents(pkg.totalDiscount) ?? lineDiscount,
+    totalPayableCents: moneyCents(pkg.totalPrice) ?? linePayable,
     currency: firstText(pkg.currencyCode, pkg.currency, "TRY"),
     lastModifiedAt: timestampToDate(pkg.lastModifiedDate),
     deliveredAt: extractTrendyolDeliveryDate(pkg),

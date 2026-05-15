@@ -9,4 +9,9 @@ export class EarsivPortalController {
   openSession() {
     return this.earsivPortal.openSession();
   }
+
+  @Post("logout-session")
+  logoutSession() {
+    return this.earsivPortal.logoutSession();
+  }
 }

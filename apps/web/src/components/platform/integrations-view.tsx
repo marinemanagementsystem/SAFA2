@@ -1,7 +1,7 @@
 "use client";
 
 import type { Dispatch, FormEvent, SetStateAction } from "react";
-import { ExternalLink, KeyRound, Loader2, LockKeyhole, LogIn, PlugZap, Send } from "lucide-react";
+import { ExternalLink, KeyRound, Loader2, LockKeyhole, LogIn, PlugZap, Send, ShieldOff } from "lucide-react";
 import { useEffect, useState } from "react";
 import {
   ConnectionsSnapshot,
@@ -52,6 +52,7 @@ interface IntegrationsViewProps {
   onSaveGibPortal: () => void;
   onSaveGibDirect: () => void;
   onOpenGibPortal: () => void;
+  onCloseGibPortalSession: () => void;
   onOpenTrendyolPartner: () => void;
   setMessage: (message: string) => void;
 }
@@ -73,6 +74,7 @@ export function IntegrationsView({
   onSaveGibPortal,
   onSaveGibDirect,
   onOpenGibPortal,
+  onCloseGibPortalSession,
   onOpenTrendyolPartner,
   setMessage
 }: IntegrationsViewProps) {
@@ -101,6 +103,7 @@ export function IntegrationsView({
         onSaveGibPortal={onSaveGibPortal}
         onSaveGibDirect={onSaveGibDirect}
         onOpenGibPortal={onOpenGibPortal}
+        onCloseGibPortalSession={onCloseGibPortalSession}
       />
 
       <section className="content-grid integration-forms">
@@ -243,6 +246,10 @@ export function IntegrationsView({
               <button className="ui-button ghost" type="button" onClick={onOpenGibPortal} disabled={busyAction === "open-gib"}>
                 {busyAction === "open-gib" ? <Loader2 size={18} className="spin" /> : <LogIn size={18} />}
                 Portal ac
+              </button>
+              <button className="ui-button ghost" type="button" onClick={onCloseGibPortalSession} disabled={busyAction === "logout-gib"}>
+                {busyAction === "logout-gib" ? <Loader2 size={18} className="spin" /> : <ShieldOff size={18} />}
+                Guvenli cikis
               </button>
               <button className="ui-button primary" type="submit" disabled={busyAction === "save-gib"}>
                 {busyAction === "save-gib" ? <Loader2 size={18} className="spin" /> : <LockKeyhole size={18} />}
@@ -513,7 +520,8 @@ function ConnectionWorkflow({
   onSaveTrendyol,
   onSaveGibPortal,
   onSaveGibDirect,
-  onOpenGibPortal
+  onOpenGibPortal,
+  onCloseGibPortalSession
 }: {
   apiAvailable: boolean;
   connections: ConnectionsSnapshot | null;
@@ -523,6 +531,7 @@ function ConnectionWorkflow({
   onSaveGibPortal: () => void;
   onSaveGibDirect: () => void;
   onOpenGibPortal: () => void;
+  onCloseGibPortalSession: () => void;
 }) {
   const trendyolConnected = Boolean(apiAvailable && connections?.trendyol.configured);
   const gibConnected = Boolean(apiAvailable && connections?.gibPortal.configured);
@@ -576,6 +585,10 @@ function ConnectionWorkflow({
             <button className="ui-button ghost compact" type="button" onClick={onOpenGibPortal} disabled={busyAction === "open-gib"}>
               {busyAction === "open-gib" ? <Loader2 size={17} className="spin" /> : <LogIn size={17} />}
               Portal ac
+            </button>
+            <button className="ui-button ghost compact" type="button" onClick={onCloseGibPortalSession} disabled={busyAction === "logout-gib"}>
+              {busyAction === "logout-gib" ? <Loader2 size={17} className="spin" /> : <ShieldOff size={17} />}
+              Guvenli cikis
             </button>
           </div>
         </article>
