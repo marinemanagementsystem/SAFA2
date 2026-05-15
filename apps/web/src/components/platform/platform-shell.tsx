@@ -158,7 +158,7 @@ export function PlatformShell({
               {apiAvailable ? "Trendyol cek" : "API bekleniyor"}
             </button>
             <button className="ui-button ghost" onClick={onOpenPortal} disabled={busyAction === "open-gib"}>
-              <LogIn size={18} />
+              {busyAction === "open-gib" ? <Loader2 size={18} className="spin" /> : <LogIn size={18} />}
               e-Arsiv ac
             </button>
             <button className="ui-button ghost" onClick={onLogout}>

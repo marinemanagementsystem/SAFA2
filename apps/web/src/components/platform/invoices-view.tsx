@@ -87,6 +87,7 @@ interface InvoicesViewProps {
   onSyncTrendyolExternalInvoices: () => void;
   onReconcileExternalInvoices: () => void;
   onMatchExternalInvoice: (id: string, target: string) => void;
+  onOpenGibPortal: () => void;
 }
 
 function initialInvoiceDeskQuery() {
@@ -628,7 +629,8 @@ export function InvoicesView({
   onSyncGibExternalInvoices,
   onSyncTrendyolExternalInvoices,
   onReconcileExternalInvoices,
-  onMatchExternalInvoice
+  onMatchExternalInvoice,
+  onOpenGibPortal
 }: InvoicesViewProps) {
   const initialDeskQuery = initialInvoiceDeskQuery();
   const [selectedDrafts, setSelectedDrafts] = useState<string[]>([]);
@@ -1107,6 +1109,12 @@ export function InvoicesView({
               <div className="form-alert table-note portal-draft-finder">
                 <strong>{portalDraftedDrafts.length} taslak GIB portalina yuklendi ve manuel imza bekliyor.</strong>
                 <span>Portalda Duzenlenen Belgeler ekraninda bugunun tarihi, alici adi ve tutarla bulun.</span>
+                <div className="portal-draft-finder-actions">
+                  <button className="ui-button ghost compact" type="button" onClick={onOpenGibPortal} disabled={busyAction === "open-gib"}>
+                    {busyAction === "open-gib" ? <Loader2 size={16} className="spin" /> : <Link2 size={16} />}
+                    e-Arsiv'de ac
+                  </button>
+                </div>
                 <div className="portal-draft-finder-list">
                   {portalDraftedDrafts.slice(0, 5).map((draft) => (
                     <div key={draft.id}>
@@ -1212,6 +1220,17 @@ export function InvoicesView({
                   <a className="text-link" href={api.draftPdfUrl(draft.id)} target="_blank" rel="noreferrer">
                     Taslak PDF
                   </a>
+                  {draft.status === "PORTAL_DRAFTED" ? (
+                    <button
+                      className="ui-button ghost compact draft-inline-action"
+                      type="button"
+                      onClick={onOpenGibPortal}
+                      disabled={busyAction === "open-gib"}
+                    >
+                      {busyAction === "open-gib" ? <Loader2 size={16} className="spin" /> : <Link2 size={16} />}
+                      e-Arsiv'de ac
+                    </button>
+                  ) : null}
                   <Link className="text-link route-link" href={orderDeskHref(draft.orderNumber)}>
                     Siparise git
                   </Link>

@@ -137,6 +137,17 @@ export interface ExternalInvoiceSyncResult {
   invoices: ExternalInvoiceListItem[];
 }
 
+export interface EarsivPortalSessionResponse {
+  portalUrl: string;
+  launchUrl: string;
+  tokenReceived: boolean;
+  openedAt: string;
+  expiresAt: string;
+  source: "fresh" | "cached";
+  message: string;
+  lastPortalMessage?: string;
+}
+
 function getRequestMethod(init?: RequestInit) {
   return (init?.method ?? "GET").toUpperCase();
 }
@@ -386,7 +397,7 @@ export const api = {
       body: JSON.stringify(input)
     }),
   openEarsivPortalSession: () =>
-    request<{ launchUrl: string; tokenReceived: boolean; openedAt: string }>("/earsiv-portal/open-session", {
+    request<EarsivPortalSessionResponse>("/earsiv-portal/open-session", {
       method: "POST"
     }),
   importExternalInvoices: (source: ExternalInvoiceSource, invoices: Array<Record<string, unknown>>) =>

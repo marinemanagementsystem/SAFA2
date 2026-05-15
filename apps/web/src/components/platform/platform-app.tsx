@@ -69,6 +69,7 @@ export function PlatformApp({ view }: PlatformAppProps) {
               onSyncTrendyolExternalInvoices={() => void platform.syncTrendyolExternalInvoices()}
               onReconcileExternalInvoices={() => void platform.reconcileExternalInvoices()}
               onMatchExternalInvoice={(id, target) => void platform.matchExternalInvoice(id, target)}
+              onOpenGibPortal={() => void platform.openGibPortal()}
             />
           ) : null}
           {view === "integrations" ? (

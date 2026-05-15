@@ -154,6 +154,11 @@ a {
   color: #684000;
 }
 
+.portal-draft-finder-actions {
+  display: flex;
+  justify-content: flex-start;
+}
+
 .portal-draft-finder-list {
   display: grid;
   gap: 6px;
@@ -1345,6 +1350,10 @@ a {
 .draft-body em {
   font-size: 13px;
   line-height: 1.4;
+}
+
+.draft-inline-action {
+  justify-self: flex-start;
 }
 
 .invoice-selection-note {

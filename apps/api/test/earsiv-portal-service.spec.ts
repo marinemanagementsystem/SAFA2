@@ -11,14 +11,23 @@ vi.mock("axios", () => ({
 }));
 
 const post = vi.mocked(axios.post);
+const launchSessionKey = "session.gibPortal.launch";
 
 function settings() {
+  const store = new Map<string, unknown>();
+  const readEncryptedSetting = vi.fn(async (key: string) => store.get(key)) as unknown as SettingsService["readEncryptedSetting"];
+  const writeEncryptedSetting = vi.fn(async (key: string, value: unknown) => {
+    store.set(key, value);
+  }) as unknown as SettingsService["writeEncryptedSetting"];
+
   return {
     getGibPortalConnection: vi.fn(async () => ({
       username: "user",
       password: "pass",
       portalUrl: "https://earsivportal.efatura.gov.tr/intragiris.html"
-    }))
+    })),
+    readEncryptedSetting,
+    writeEncryptedSetting
   } satisfies Partial<SettingsService>;
 }
 
@@ -133,6 +142,129 @@ const payload: GibPortalInvoiceDraftPayload = {
 describe("EarsivPortalService", () => {
   beforeEach(() => {
     post.mockReset();
+  });
+
+  it("caches fresh tokenized portal launch sessions", async () => {
+    const settingsMock = settings();
+    post.mockResolvedValueOnce({
+      status: 200,
+      data: {
+        token: "portal-token",
+        redirectUrl: "/intragiris.html"
+      }
+    });
+
+    const service = new EarsivPortalService(settingsMock as unknown as SettingsService);
+    const result = await service.openSession();
+
+    expect(result).toMatchObject({
+      portalUrl: "https://earsivportal.efatura.gov.tr/intragiris.html",
+      tokenReceived: true,
+      source: "fresh"
+    });
+    expect(result.launchUrl).toContain("token=portal-token");
+    expect(settingsMock.writeEncryptedSetting).toHaveBeenCalledWith(
+      launchSessionKey,
+      expect.objectContaining({
+        launchUrl: expect.stringContaining("token=portal-token"),
+        source: "fresh"
+      })
+    );
+  });
+
+  it("uses a valid cached portal launch session without a new login", async () => {
+    const settingsMock = settings();
+    vi.mocked(settingsMock.readEncryptedSetting).mockResolvedValueOnce({
+      portalUrl: "https://earsivportal.efatura.gov.tr/intragiris.html",
+      launchUrl: "https://earsivportal.efatura.gov.tr/intragiris.html?token=cached",
+      tokenReceived: true,
+      openedAt: new Date().toISOString(),
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+      source: "fresh",
+      message: "cached"
+    });
+
+    const service = new EarsivPortalService(settingsMock as unknown as SettingsService);
+    const result = await service.openSession();
+
+    expect(result).toMatchObject({
+      launchUrl: "https://earsivportal.efatura.gov.tr/intragiris.html?token=cached",
+      source: "cached"
+    });
+    expect(post).not.toHaveBeenCalled();
+  });
+
+  it("ignores expired cached portal launch sessions", async () => {
+    const settingsMock = settings();
+    vi.mocked(settingsMock.readEncryptedSetting).mockResolvedValueOnce({
+      portalUrl: "https://earsivportal.efatura.gov.tr/intragiris.html",
+      launchUrl: "https://earsivportal.efatura.gov.tr/intragiris.html?token=expired",
+      tokenReceived: true,
+      openedAt: new Date(Date.now() - 120_000).toISOString(),
+      expiresAt: new Date(Date.now() - 60_000).toISOString(),
+      source: "fresh",
+      message: "expired"
+    });
+    post.mockResolvedValueOnce({
+      status: 200,
+      data: {
+        token: "fresh-token",
+        redirectUrl: "/intragiris.html"
+      }
+    });
+
+    const service = new EarsivPortalService(settingsMock as unknown as SettingsService);
+    const result = await service.openSession();
+
+    expect(result.source).toBe("fresh");
+    expect(result.launchUrl).toContain("token=fresh-token");
+    expect(post).toHaveBeenCalledTimes(1);
+  });
+
+  it("returns a cached launch link when GIB reports an active concurrent session", async () => {
+    const settingsMock = settings();
+    vi.mocked(settingsMock.readEncryptedSetting)
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce({
+        portalUrl: "https://earsivportal.efatura.gov.tr/intragiris.html",
+        launchUrl: "https://earsivportal.efatura.gov.tr/intragiris.html?token=cached-after-conflict",
+        tokenReceived: true,
+        openedAt: new Date().toISOString(),
+        expiresAt: new Date(Date.now() + 60_000).toISOString(),
+        source: "fresh",
+        message: "cached"
+      });
+    post.mockResolvedValueOnce({
+      status: 200,
+      data: {
+        error: true,
+        messages: [{ text: "Birden fazla oturum acilamaz. Lutfen Guvenli Cikis yapin." }]
+      }
+    });
+
+    const service = new EarsivPortalService(settingsMock as unknown as SettingsService);
+    const result = await service.openSession();
+
+    expect(result).toMatchObject({
+      launchUrl: "https://earsivportal.efatura.gov.tr/intragiris.html?token=cached-after-conflict",
+      source: "cached",
+      lastPortalMessage: "Birden fazla oturum acilamaz. Lutfen Guvenli Cikis yapin."
+    });
+  });
+
+  it("returns a clear error when GIB reports an active session and there is no cached link", async () => {
+    const settingsMock = settings();
+    vi.mocked(settingsMock.readEncryptedSetting).mockResolvedValue(undefined);
+    post.mockResolvedValueOnce({
+      status: 200,
+      data: {
+        error: true,
+        messages: [{ text: "Birden fazla oturum acilamaz. Lutfen Guvenli Cikis yapin." }]
+      }
+    });
+
+    const service = new EarsivPortalService(settingsMock as unknown as SettingsService);
+    await expect(service.openSession()).rejects.toThrow("SAFA'da kullanilabilir tokenli link yok");
   });
 
   it("lets the 5000/30000 portal create request generate its own ETTN", async () => {

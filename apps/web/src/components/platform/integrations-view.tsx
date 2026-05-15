@@ -240,8 +240,8 @@ export function IntegrationsView({
               />
             </label>
             <div className="form-actions">
-              <button className="ui-button ghost" type="button" onClick={onOpenGibPortal}>
-                <LogIn size={18} />
+              <button className="ui-button ghost" type="button" onClick={onOpenGibPortal} disabled={busyAction === "open-gib"}>
+                {busyAction === "open-gib" ? <Loader2 size={18} className="spin" /> : <LogIn size={18} />}
                 Portal ac
               </button>
               <button className="ui-button primary" type="submit" disabled={busyAction === "save-gib"}>
@@ -573,8 +573,8 @@ function ConnectionWorkflow({
               {busyAction === "save-gib" ? <Loader2 size={17} className="spin" /> : <KeyRound size={17} />}
               e-Arsiv'e baglan
             </button>
-            <button className="ui-button ghost compact" type="button" onClick={onOpenGibPortal}>
-              <LogIn size={17} />
+            <button className="ui-button ghost compact" type="button" onClick={onOpenGibPortal} disabled={busyAction === "open-gib"}>
+              {busyAction === "open-gib" ? <Loader2 size={17} className="spin" /> : <LogIn size={17} />}
               Portal ac
             </button>
           </div>

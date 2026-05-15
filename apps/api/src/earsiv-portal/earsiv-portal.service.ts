@@ -26,6 +26,30 @@ interface PortalDraftUploadInput {
   payload: GibPortalInvoiceDraftPayload;
 }
 
+type PortalSessionSource = "fresh" | "cached";
+
+interface CachedPortalLaunchSession {
+  portalUrl: string;
+  launchUrl: string;
+  tokenReceived: boolean;
+  openedAt: string;
+  expiresAt: string;
+  source: "fresh";
+  message: string;
+  lastPortalMessage?: string;
+}
+
+export interface PortalLaunchSession {
+  portalUrl: string;
+  launchUrl: string;
+  tokenReceived: boolean;
+  openedAt: string;
+  expiresAt: string;
+  source: PortalSessionSource;
+  message: string;
+  lastPortalMessage?: string;
+}
+
 export interface PortalDraftUploadResult {
   localDraftId: string;
   ok: boolean;
@@ -38,6 +62,22 @@ export interface PortalDraftUploadResult {
   pageName: string;
   response?: DispatchResponse;
   error?: string;
+}
+
+const GIB_PORTAL_LAUNCH_SESSION_KEY = "session.gibPortal.launch";
+const DEFAULT_PORTAL_SESSION_TTL_SECONDS = 10 * 60;
+
+class GibConcurrentSessionError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "GibConcurrentSessionError";
+  }
+}
+
+function portalSessionTtlMs() {
+  const configured = Number(process.env.GIB_PORTAL_SESSION_TTL_SECONDS ?? DEFAULT_PORTAL_SESSION_TTL_SECONDS);
+  const seconds = Number.isFinite(configured) && configured > 0 ? configured : DEFAULT_PORTAL_SESSION_TTL_SECONDS;
+  return seconds * 1000;
 }
 
 function loginEndpoint(portalUrl: string) {
@@ -95,6 +135,14 @@ function stringifyResponseData(response: DispatchResponse) {
   } catch {
     return String(value);
   }
+}
+
+function portalMessage(response: AssosLoginResponse) {
+  return response.messages?.map((message) => message.text).find(Boolean);
+}
+
+function isGibConcurrentSessionMessage(message: string) {
+  return /birden fazla/i.test(message) && /güvenli|guvenli/i.test(message);
 }
 
 function successText(value: string) {
@@ -158,18 +206,38 @@ export class EarsivPortalService {
   constructor(@Inject(SettingsService) private readonly settings: SettingsService) {}
 
   async openSession() {
-    const { connection, response } = await this.login("SAFA local e-arsiv portal launcher");
+    const connection = await this.getConnection();
+    const cached = await this.readValidLaunchSession(connection.portalUrl);
+    if (cached) return cached;
 
-    return {
-      portalUrl: connection.portalUrl,
-      launchUrl: launchUrl(connection.portalUrl, response),
-      tokenReceived: Boolean(response.token),
-      openedAt: new Date().toISOString()
-    };
+    try {
+      const { launchSession } = await this.login("SAFA local e-arsiv portal launcher", connection);
+      if (!launchSession) {
+        throw new ServiceUnavailableException("e-Arsiv portali giris yanitinda redirectUrl donmedi.");
+      }
+      return launchSession;
+    } catch (error) {
+      if (error instanceof GibConcurrentSessionError) {
+        const fallback = await this.readValidLaunchSession(connection.portalUrl);
+        if (fallback) {
+          return {
+            ...fallback,
+            lastPortalMessage: error.message,
+            message: "Aktif e-Arsiv oturumu yeni sekmede acildi."
+          };
+        }
+
+        throw new BadRequestException(
+          "GIB aktif oturum bildirdi; SAFA'da kullanilabilir tokenli link yok. Portaldan Guvenli Cikis yapip tekrar deneyin."
+        );
+      }
+
+      throw error;
+    }
   }
 
   async listIssuedInvoices(startDate: Date, endDate: Date) {
-    const { connection, response } = await this.login("SAFA live e-arsiv invoice query");
+    const { connection, response } = await this.loginForOperation("SAFA live e-arsiv invoice query");
     if (!response.token) {
       throw new ServiceUnavailableException("e-Arsiv portali oturum tokeni donmedi; harici fatura sorgusu baslatilamadi.");
     }
@@ -215,7 +283,7 @@ export class EarsivPortalService {
   async createInvoiceDrafts(inputs: PortalDraftUploadInput[]): Promise<PortalDraftUploadResult[]> {
     if (inputs.length === 0) return [];
 
-    const { connection, response } = await this.login("SAFA live e-arsiv portal draft upload");
+    const { connection, response } = await this.loginForOperation("SAFA live e-arsiv portal draft upload");
     if (!response.token) {
       throw new ServiceUnavailableException("e-Arsiv portali oturum tokeni donmedi; portal taslagi yuklenemedi.");
     }
@@ -273,12 +341,34 @@ export class EarsivPortalService {
     return results;
   }
 
-  private async login(userAgent: string): Promise<{ connection: GibPortalConnection; response: AssosLoginResponse }> {
+  private async getConnection() {
     const connection = await this.settings.getGibPortalConnection();
     if (!connection?.username || !connection.password) {
       throw new BadRequestException("e-Arsiv portal kullanici adi ve sifre once Baglantilar bolumunden kaydedilmeli.");
     }
 
+    return connection;
+  }
+
+  private async loginForOperation(userAgent: string) {
+    try {
+      return await this.login(userAgent);
+    } catch (error) {
+      if (error instanceof GibConcurrentSessionError) {
+        throw new BadRequestException(
+          "GIB aktif oturum bildirdi. SAFA'dan e-Arsiv ac ile mevcut tokenli oturumu acin veya portaldan Guvenli Cikis yapip tekrar deneyin."
+        );
+      }
+
+      throw error;
+    }
+  }
+
+  private async login(
+    userAgent: string,
+    inputConnection?: GibPortalConnection
+  ): Promise<{ connection: GibPortalConnection; response: AssosLoginResponse; launchSession?: PortalLaunchSession }> {
+    const connection = inputConnection ?? (await this.getConnection());
     const form = new URLSearchParams({
       assoscmd: "anologin",
       rtype: "json",
@@ -303,10 +393,57 @@ export class EarsivPortalService {
 
     if (response.data?.error) {
       const message = response.data.messages?.[0]?.text ?? "e-Arsiv portal girisi basarisiz. Kullanici kodu veya sifreyi kontrol edin.";
+      if (isGibConcurrentSessionMessage(message)) {
+        throw new GibConcurrentSessionError(message);
+      }
       throw new BadRequestException(message);
     }
 
-    return { connection, response: response.data };
+    const launchSession = await this.rememberLaunchSession(connection, response.data, portalMessage(response.data));
+    return { connection, response: response.data, launchSession };
+  }
+
+  private async readValidLaunchSession(portalUrl: string): Promise<PortalLaunchSession | undefined> {
+    let cached: CachedPortalLaunchSession | undefined;
+    try {
+      cached = await this.settings.readEncryptedSetting<CachedPortalLaunchSession>(GIB_PORTAL_LAUNCH_SESSION_KEY);
+    } catch {
+      return undefined;
+    }
+
+    if (!cached?.launchUrl || cached.portalUrl !== portalUrl) return undefined;
+    const expiresAt = new Date(cached.expiresAt).getTime();
+    if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) return undefined;
+
+    return {
+      ...cached,
+      source: "cached",
+      message: "Aktif e-Arsiv oturumu yeni sekmede acildi."
+    };
+  }
+
+  private async rememberLaunchSession(
+    connection: GibPortalConnection,
+    response: AssosLoginResponse,
+    lastPortalMessage?: string
+  ): Promise<PortalLaunchSession | undefined> {
+    if (!response.redirectUrl) return undefined;
+
+    const openedAt = new Date();
+    const tokenReceived = Boolean(response.token);
+    const cached: CachedPortalLaunchSession = {
+      portalUrl: connection.portalUrl,
+      launchUrl: launchUrl(connection.portalUrl, response),
+      tokenReceived,
+      openedAt: openedAt.toISOString(),
+      expiresAt: new Date(openedAt.getTime() + portalSessionTtlMs()).toISOString(),
+      source: "fresh",
+      message: tokenReceived ? "e-Arsiv portali tokenli oturumla acildi." : "e-Arsiv portali acildi.",
+      lastPortalMessage
+    };
+
+    await this.settings.writeEncryptedSetting(GIB_PORTAL_LAUNCH_SESSION_KEY, cached);
+    return cached;
   }
 
   private async getPortalInvoiceUuid(connection: GibPortalConnection, token: string) {

@@ -228,6 +228,14 @@ export class SettingsService {
     });
   }
 
+  async readEncryptedSetting<T>(key: string): Promise<T | undefined> {
+    return this.getStoredSecret<T>(key);
+  }
+
+  async writeEncryptedSetting<T>(key: string, value: T) {
+    await this.setEncryptedSetting(key, value);
+  }
+
   async connections() {
     const trendyol = await this.getTrendyolConnection();
     const gibPortal = await this.getGibPortalConnection();

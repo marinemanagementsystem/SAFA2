@@ -598,16 +598,16 @@ export function usePlatformData() {
   }, [gibDirectForm, gibPortalForm, load, trendyolForm]);
 
   const openGibPortal = useCallback(async () => {
-    const popup = window.open("about:blank", "gib-earsiv-portal", "popup=yes,width=1280,height=860");
-    if (!popup) {
+    const portalTab = window.open("about:blank", "_blank");
+    if (!portalTab) {
       setMessage("Popup engellendi. Tarayicida bu site icin popup izni verin.");
       return;
     }
 
-    popup.document.write('<p style="font-family:Arial;padding:24px">e-Arsiv oturumu aciliyor...</p>');
+    portalTab.document.write('<p style="font-family:Arial;padding:24px">e-Arsiv oturumu aciliyor...</p>');
 
     if (!snapshot.connections?.gibPortal.configured) {
-      popup.location.href = gibPortalForm.portalUrl;
+      portalTab.location.href = gibPortalForm.portalUrl;
       setMessage(
         API_AVAILABLE
           ? "e-Arsiv portal bilgisi kayitli degil; portal manuel giris icin acildi."
@@ -617,7 +617,7 @@ export function usePlatformData() {
     }
 
     if (!API_AVAILABLE) {
-      popup.location.href = gibPortalForm.portalUrl;
+      portalTab.location.href = gibPortalForm.portalUrl;
       setMessage("Canli API bagli degil; e-Arsiv portali manuel giris icin acildi.");
       return;
     }
@@ -626,11 +626,12 @@ export function usePlatformData() {
 
     try {
       const session = await api.openEarsivPortalSession();
-      popup.location.href = session.launchUrl;
-      setMessage(session.tokenReceived ? "e-Arsiv portali tokenli oturumla acildi." : "e-Arsiv portali acildi.");
+      portalTab.location.href = session.launchUrl;
+      setMessage(session.source === "cached" ? "Aktif e-Arsiv oturumu yeni sekmede acildi." : session.message);
     } catch (error) {
-      popup.location.href = gibPortalForm.portalUrl;
-      setMessage(errorMessage(error, "e-Arsiv oturumu acilamadi; portal manuel giris icin acildi."));
+      portalTab.location.href = gibPortalForm.portalUrl;
+      const details = errorMessage(error, "e-Arsiv oturumu acilamadi; portal manuel giris icin acildi.");
+      setMessage(`${details} GIB portali acilirsa Guvenli Cikis yapip SAFA'dan tekrar deneyin.`);
     } finally {
       setBusyAction(null);
     }
