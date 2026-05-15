@@ -133,6 +133,11 @@ export interface ExternalInvoiceSyncResult {
   imported: number;
   matched: number;
   unmatched: number;
+  promoted?: number;
+  trendyolSent?: number;
+  trendyolAlreadySent?: number;
+  trendyolFailed?: number;
+  pdfMissing?: number;
   message?: string;
   invoices: ExternalInvoiceListItem[];
 }
@@ -293,12 +298,13 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   logApiRequest(method, path, url, init);
 
   let response: Response;
+  const isFormDataBody = typeof FormData !== "undefined" && init?.body instanceof FormData;
   try {
     response = await fetch(url, {
       ...init,
       ...localNetworkFetchOptions(url),
       headers: {
-        "Content-Type": "application/json",
+        ...(isFormDataBody ? {} : { "Content-Type": "application/json" }),
         ...(init?.headers ?? {})
       },
       credentials: "include",
@@ -419,6 +425,22 @@ export const api = {
     request<ExternalInvoiceSyncResult>("/external-invoices/sync/trendyol", {
       method: "POST"
     }),
+  promoteExternalInvoice: (id: string) =>
+    request<ExternalInvoiceSyncResult>(`/external-invoices/${id}/promote`, {
+      method: "POST"
+    }),
+  promoteAndSendExternalInvoice: (id: string) =>
+    request<ExternalInvoiceSyncResult>(`/external-invoices/${id}/promote-and-send-to-trendyol`, {
+      method: "POST"
+    }),
+  uploadExternalInvoicePdf: (id: string, file: File) => {
+    const body = new FormData();
+    body.append("file", file);
+    return request<ExternalInvoiceSyncResult>(`/external-invoices/${id}/pdf`, {
+      method: "POST",
+      body
+    });
+  },
   matchExternalInvoice: (id: string, target: { orderNumber?: string; shipmentPackageId?: string }) =>
     request<ExternalInvoiceListItem>(`/external-invoices/${id}/match`, {
       method: "POST",
@@ -431,6 +453,10 @@ export const api = {
   draftPdfUrl: (draftId: string) => `${API_BASE}/invoice-drafts/${draftId}/pdf`,
   draftXmlUrl: (draftId: string) => `${API_BASE}/invoice-drafts/${draftId}/earsiv-xml`,
   invoicePdfUrl: (invoiceId: string) => `${API_BASE}/invoices/${invoiceId}/pdf`,
+  sendInvoiceToTrendyol: (invoiceId: string) =>
+    request<InvoiceListItem>(`/invoices/${invoiceId}/send-to-trendyol`, {
+      method: "POST"
+    }),
   sync: () =>
     request<{
       packageCount: number;

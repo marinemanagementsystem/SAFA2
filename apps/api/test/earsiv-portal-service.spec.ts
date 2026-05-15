@@ -267,6 +267,47 @@ describe("EarsivPortalService", () => {
     await expect(service.openSession()).rejects.toThrow("SAFA'da kullanilabilir tokenli link yok");
   });
 
+  it("collects issued invoice rows across supported portal list commands", async () => {
+    post
+      .mockResolvedValueOnce({ status: 200, data: { token: "portal-token" } })
+      .mockResolvedValueOnce({
+        status: 200,
+        data: {
+          data: [
+            {
+              uuid: "11111111-1111-4111-8111-111111111111",
+              faturaNo: "TMP2026001",
+              durum: "Onaylanmadı"
+            }
+          ]
+        }
+      })
+      .mockResolvedValueOnce({ status: 200, data: { data: [] } })
+      .mockResolvedValueOnce({
+        status: 200,
+        data: {
+          data: [
+            {
+              uuid: "22222222-2222-4222-8222-222222222222",
+              faturaNo: "GIB2026001",
+              durum: "Onaylandı"
+            }
+          ]
+        }
+      });
+
+    const service = new EarsivPortalService(settings() as unknown as SettingsService);
+    const result = await service.listIssuedInvoices(new Date("2026-05-01T00:00:00.000Z"), new Date("2026-05-15T00:00:00.000Z"));
+
+    expect(result).toHaveLength(2);
+    expect(result.map((row) => row.faturaNo)).toEqual(["TMP2026001", "GIB2026001"]);
+    expect(result[1]).toMatchObject({
+      kaynakKomut: "EARSIV_PORTAL_ADIMA_KESILEN_BELGELERI_GETIR",
+      kaynakSayfa: "RG_ALICI_TASLAKLAR"
+    });
+    expect(post).toHaveBeenCalledTimes(4);
+  });
+
   it("lets the 5000/30000 portal create request generate its own ETTN", async () => {
     post
       .mockResolvedValueOnce({ status: 200, data: { token: "portal-token" } })

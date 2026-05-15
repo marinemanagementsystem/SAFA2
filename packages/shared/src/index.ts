@@ -32,6 +32,10 @@ export interface ExternalInvoiceListItem {
   matchedShipmentPackageId?: string;
   matchScore: number;
   matchReason?: string;
+  promotedInvoiceId?: string;
+  promotedInvoiceNumber?: string;
+  promotedInvoiceStatus?: InvoiceStatus;
+  requiresPdfUpload?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -58,6 +62,9 @@ export interface OrderListItem {
   invoiceId?: string;
   invoiceNumber?: string;
   invoiceDate?: string;
+  invoiceProvider?: string;
+  invoiceSourceLabel?: string;
+  invoicePdfAvailable?: boolean;
   trendyolStatus?: string;
   externalInvoiceCount: number;
   externalInvoiceSources: ExternalInvoiceSource[];
@@ -106,7 +113,9 @@ export interface OrderDetail {
     invoiceNumber: string;
     invoiceDate: string;
     status: InvoiceStatus;
+    sourceLabel?: string;
     pdfUrl?: string;
+    pdfAvailable?: boolean;
     trendyolSentAt?: string;
     trendyolStatus?: string;
     error?: string;
@@ -149,8 +158,13 @@ export interface InvoiceListItem {
   invoiceDate: string;
   deliveredAt?: string;
   status: InvoiceStatus;
+  provider: string;
+  sourceLabel?: string;
+  externalInvoiceId?: string;
   pdfUrl?: string;
+  pdfAvailable: boolean;
   trendyolStatus?: string;
+  error?: string;
 }
 
 export interface PortalDraftUploadFailure {

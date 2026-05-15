@@ -71,7 +71,7 @@ export class TrendyolService {
     invoiceNumber: string;
     invoiceDate: Date;
     pdfPath: string;
-  }): Promise<{ ok: true; mode: "api"; response?: unknown }> {
+  }): Promise<{ ok: true; mode: "api"; alreadySent?: boolean; response?: unknown }> {
     const credentials = await this.settings.getTrendyolConnection();
     const sellerId = credentials?.sellerId ?? requiredEnv("TRENDYOL_SELLER_ID");
     const apiKey = credentials?.apiKey ?? requiredEnv("TRENDYOL_API_KEY");
@@ -94,8 +94,17 @@ export class TrendyolService {
         "User-Agent": credentials?.userAgent ?? process.env.TRENDYOL_USER_AGENT ?? `SAFA-${sellerId}`
       },
       maxBodyLength: 10 * 1024 * 1024,
-      timeout: 30_000
+      timeout: 30_000,
+      validateStatus: () => true
     });
+
+    if (response.status === 409) {
+      return { ok: true, mode: "api", alreadySent: true, response: response.data };
+    }
+
+    if (response.status < 200 || response.status >= 300) {
+      throw new Error(`Trendyol fatura PDF yukleme HTTP ${response.status}: ${JSON.stringify(response.data).slice(0, 240)}`);
+    }
 
     return { ok: true, mode: "api", response: response.data };
   }

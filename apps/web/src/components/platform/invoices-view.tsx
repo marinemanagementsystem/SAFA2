@@ -87,6 +87,9 @@ interface InvoicesViewProps {
   onSyncTrendyolExternalInvoices: () => void;
   onReconcileExternalInvoices: () => void;
   onMatchExternalInvoice: (id: string, target: string) => void;
+  onPromoteExternalInvoice: (id: string, sendToTrendyol: boolean) => void;
+  onUploadExternalInvoicePdf: (id: string, file: File) => void;
+  onSendInvoiceToTrendyol: (id: string) => void;
   onOpenGibPortal: () => void;
 }
 
@@ -630,6 +633,9 @@ export function InvoicesView({
   onSyncTrendyolExternalInvoices,
   onReconcileExternalInvoices,
   onMatchExternalInvoice,
+  onPromoteExternalInvoice,
+  onUploadExternalInvoicePdf,
+  onSendInvoiceToTrendyol,
   onOpenGibPortal
 }: InvoicesViewProps) {
   const initialDeskQuery = initialInvoiceDeskQuery();
@@ -1114,6 +1120,10 @@ export function InvoicesView({
                     {busyAction === "open-gib" ? <Loader2 size={16} className="spin" /> : <Link2 size={16} />}
                     e-Arsiv'de ac
                   </button>
+                  <button className="ui-button primary compact" type="button" onClick={() => onSyncGibExternalInvoices(externalDays)} disabled={busyAction === "external-gib-sync"}>
+                    {busyAction === "external-gib-sync" ? <Loader2 size={16} className="spin" /> : <FileSearch size={16} />}
+                    Sorgula ve Trendyol'a gonder
+                  </button>
                 </div>
                 <div className="portal-draft-finder-list">
                   {portalDraftedDrafts.slice(0, 5).map((draft) => (
@@ -1305,8 +1315,18 @@ export function InvoicesView({
             </label>
           </div>
 
-          <InvoiceArchiveSection title="Bugun kesilenler" invoices={invoiceGroups.newInvoices} />
-          <InvoiceArchiveSection title="Onceki faturalar" invoices={invoiceGroups.previousInvoices.slice(0, 12)} />
+          <InvoiceArchiveSection
+            title="Bugun kesilenler"
+            invoices={invoiceGroups.newInvoices}
+            busyAction={busyAction}
+            onSendInvoiceToTrendyol={onSendInvoiceToTrendyol}
+          />
+          <InvoiceArchiveSection
+            title="Onceki faturalar"
+            invoices={invoiceGroups.previousInvoices.slice(0, 12)}
+            busyAction={busyAction}
+            onSendInvoiceToTrendyol={onSendInvoiceToTrendyol}
+          />
         </article>
       </section>
 
@@ -1432,7 +1452,13 @@ export function InvoicesView({
                 <ExternalInvoiceRow
                   invoice={invoice}
                   busy={busyAction === `external-match-${invoice.id}`}
+                  actionBusy={
+                    busyAction === `external-promote-${invoice.id}` ||
+                    busyAction === `external-pdf-${invoice.id}`
+                  }
                   onMatch={(target) => onMatchExternalInvoice(invoice.id, target)}
+                  onPromote={(sendToTrendyol) => onPromoteExternalInvoice(invoice.id, sendToTrendyol)}
+                  onUploadPdf={(file) => onUploadExternalInvoicePdf(invoice.id, file)}
                   key={invoice.id}
                 />
               ))}
@@ -1454,18 +1480,25 @@ export function InvoicesView({
 function ExternalInvoiceRow({
   invoice,
   busy,
-  onMatch
+  actionBusy,
+  onMatch,
+  onPromote,
+  onUploadPdf
 }: {
   invoice: ExternalInvoiceListItem;
   busy: boolean;
+  actionBusy: boolean;
   onMatch: (target: string) => void;
+  onPromote: (sendToTrendyol: boolean) => void;
+  onUploadPdf: (file: File) => void;
 }) {
   const [target, setTarget] = useState("");
+  const promoted = Boolean(invoice.promotedInvoiceId);
 
   return (
     <div className="external-invoice-row">
       <span className={cx("status-pill", invoice.matchedOrderId ? "success" : "warning")}>
-        {invoice.matchedOrderId ? "Eslesti" : "Acik"}
+        {promoted ? "Arsivde" : invoice.matchedOrderId ? "Eslesti" : "Acik"}
       </span>
       <div>
         <strong>{invoice.invoiceNumber ?? "Fatura no yok"}</strong>
@@ -1473,6 +1506,12 @@ function ExternalInvoiceRow({
           {sourceLabel(invoice.source)} · {invoice.matchedOrderNumber ?? invoice.orderNumber ?? "Siparis eslesmedi"} ·{" "}
           {invoice.invoiceDate ? formatDateTime(invoice.invoiceDate) : "Tarih yok"}
         </small>
+        {promoted ? (
+          <em>
+            SAFA arsivi: {invoice.promotedInvoiceNumber}
+            {invoice.requiresPdfUpload ? " · resmi PDF bekliyor" : ""}
+          </em>
+        ) : null}
         {!invoice.matchedOrderId ? (
           <div className="manual-match">
             <input value={target} onChange={(event) => setTarget(event.target.value)} placeholder="Siparis no veya paket no" />
@@ -1486,13 +1525,51 @@ function ExternalInvoiceRow({
             Siparise git
           </Link>
         ) : null}
+        {invoice.source === "GIB_PORTAL" && invoice.matchedOrderId ? (
+          <div className="manual-match external-actions">
+            <button className="ui-button ghost compact" onClick={() => onPromote(false)} disabled={promoted || actionBusy}>
+              {actionBusy ? <Loader2 size={16} className="spin" /> : <Check size={16} />}
+              Arsive al
+            </button>
+            <button className="ui-button primary compact" onClick={() => onPromote(true)} disabled={actionBusy || invoice.requiresPdfUpload}>
+              {actionBusy ? <Loader2 size={16} className="spin" /> : <UploadCloud size={16} />}
+              Trendyol'a gonder
+            </button>
+            {invoice.requiresPdfUpload ? (
+              <label className="ui-button ghost compact file-action">
+                <UploadCloud size={16} />
+                Resmi PDF yukle
+                <input
+                  type="file"
+                  accept="application/pdf"
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    if (file) onUploadPdf(file);
+                    event.currentTarget.value = "";
+                  }}
+                  disabled={actionBusy}
+                />
+              </label>
+            ) : null}
+          </div>
+        ) : null}
       </div>
       <span>{invoice.totalPayableCents ? money(invoice.totalPayableCents, invoice.currency) : "-"}</span>
     </div>
   );
 }
 
-function InvoiceArchiveSection({ title, invoices }: { title: string; invoices: InvoiceListItem[] }) {
+function InvoiceArchiveSection({
+  title,
+  invoices,
+  busyAction,
+  onSendInvoiceToTrendyol
+}: {
+  title: string;
+  invoices: InvoiceListItem[];
+  busyAction: string | null;
+  onSendInvoiceToTrendyol: (id: string) => void;
+}) {
   return (
     <section className="archive-section">
       <div className="archive-head">
@@ -1505,13 +1582,29 @@ function InvoiceArchiveSection({ title, invoices }: { title: string; invoices: I
             <span className={cx("status-pill", statusTone(invoice.status))}>{statusLabel(invoice.status)}</span>
             <strong>{invoice.invoiceNumber}</strong>
             <small>
-              {invoice.orderNumber} · Fatura {formatDateTime(invoice.invoiceDate)}
+              {invoice.orderNumber} · {invoice.sourceLabel ?? "SAFA"} · Fatura {formatDateTime(invoice.invoiceDate)}
               {invoice.deliveredAt ? ` · Teslim ${formatDateTime(invoice.deliveredAt)}` : ""}
+              {invoice.trendyolStatus ? ` · Trendyol ${statusLabel(invoice.trendyolStatus)}` : ""}
             </small>
+            {invoice.error ? <em>{invoice.error}</em> : null}
             <div className="inline-link-row">
-              <a className="text-link" href={api.invoicePdfUrl(invoice.id)} target="_blank" rel="noreferrer">
-                PDF
-              </a>
+              {invoice.pdfAvailable ? (
+                <a className="text-link" href={api.invoicePdfUrl(invoice.id)} target="_blank" rel="noreferrer">
+                  PDF
+                </a>
+              ) : (
+                <span className="muted">PDF bekliyor</span>
+              )}
+              {invoice.pdfAvailable && invoice.trendyolStatus !== "SENT" && invoice.trendyolStatus !== "ALREADY_SENT" ? (
+                <button
+                  className="text-link button-link"
+                  type="button"
+                  onClick={() => onSendInvoiceToTrendyol(invoice.id)}
+                  disabled={busyAction === `invoice-send-${invoice.id}`}
+                >
+                  {busyAction === `invoice-send-${invoice.id}` ? "Gonderiliyor" : "Trendyol'a gonder"}
+                </button>
+              ) : null}
               <Link className="text-link route-link" href={orderDeskHref(invoice.orderNumber)}>
                 Siparise git
               </Link>

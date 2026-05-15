@@ -69,6 +69,9 @@ export function PlatformApp({ view }: PlatformAppProps) {
               onSyncTrendyolExternalInvoices={() => void platform.syncTrendyolExternalInvoices()}
               onReconcileExternalInvoices={() => void platform.reconcileExternalInvoices()}
               onMatchExternalInvoice={(id, target) => void platform.matchExternalInvoice(id, target)}
+              onPromoteExternalInvoice={(id, sendToTrendyol) => void platform.promoteExternalInvoice(id, sendToTrendyol)}
+              onUploadExternalInvoicePdf={(id, file) => void platform.uploadExternalInvoicePdf(id, file)}
+              onSendInvoiceToTrendyol={(id) => void platform.sendInvoiceToTrendyol(id)}
               onOpenGibPortal={() => void platform.openGibPortal()}
             />
           ) : null}

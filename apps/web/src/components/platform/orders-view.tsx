@@ -363,10 +363,12 @@ function OrderTableRow({ order, selected, onSelect }: { order: OrderListItem; se
         <span className={cx("status-pill", invoiceDisplay.tone)}>{invoiceDisplay.label}</span>
       </td>
       <td onClick={(event) => event.stopPropagation()}>
-        {order.invoiceId ? (
+        {order.invoiceId && order.invoicePdfAvailable ? (
           <a className="text-link" href={api.invoicePdfUrl(order.invoiceId)} target="_blank" rel="noreferrer">
             PDF
           </a>
+        ) : order.invoiceId ? (
+          <span className="muted">PDF bekliyor</span>
         ) : order.draftId ? (
           <a className="text-link" href={api.draftPdfUrl(order.draftId)} target="_blank" rel="noreferrer">
             Taslak
@@ -385,7 +387,7 @@ function OrderTableRow({ order, selected, onSelect }: { order: OrderListItem; se
 function invoiceStateForOrder(order: OrderListItem) {
   if (order.invoiceId) {
     return {
-      label: order.invoiceNumber ?? "SAFA'da kesildi",
+      label: order.invoiceSourceLabel ? `${order.invoiceSourceLabel}: ${order.invoiceNumber ?? "kesildi"}` : order.invoiceNumber ?? "SAFA'da kesildi",
       tone: statusTone(order.trendyolStatus ?? "ISSUED")
     };
   }
@@ -501,11 +503,13 @@ function OrderDetailPanel({
           <FileText size={18} />
           Fatura masasi
         </Link>
-        {selectedOrder.invoice ? (
+        {selectedOrder.invoice?.pdfAvailable ? (
           <a className="ui-button primary" href={api.invoicePdfUrl(selectedOrder.invoice.id)} target="_blank" rel="noreferrer">
             <FileText size={18} />
             Fatura PDF
           </a>
+        ) : selectedOrder.invoice ? (
+          <span className="status-pill warning">PDF bekliyor</span>
         ) : selectedOrder.draft ? (
           <a className="ui-button primary" href={api.draftPdfUrl(selectedOrder.draft.id)} target="_blank" rel="noreferrer">
             <FileText size={18} />

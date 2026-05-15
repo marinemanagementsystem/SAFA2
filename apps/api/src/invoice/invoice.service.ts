@@ -67,6 +67,12 @@ function deliveredSortTime(value?: string) {
   return Number.isFinite(time) ? time : 0;
 }
 
+function invoiceSourceLabel(provider?: string | null) {
+  if (provider === "gib-portal-manual") return "e-Arsiv manuel";
+  if (provider === "gib-direct") return "GIB direct";
+  return "SAFA";
+}
+
 @Injectable()
 export class InvoiceService {
   constructor(
@@ -130,11 +136,18 @@ export class InvoiceService {
   }
 
   async listInvoices() {
-    const invoices = await this.prisma.invoice.findMany({
-      orderBy: [{ invoiceDate: "desc" }],
-      include: { draft: { include: { order: true } } },
-      take: 500
-    });
+    const [invoices, externalInvoices] = await Promise.all([
+      this.prisma.invoice.findMany({
+        orderBy: [{ invoiceDate: "desc" }],
+        include: { draft: { include: { order: true } } },
+        take: 500
+      }),
+      this.prisma.externalInvoice.findMany({
+        where: { source: "GIB_PORTAL" },
+        take: 5000
+      })
+    ]);
+    const externalByKey = new Map((externalInvoices as any[]).map((invoice) => [invoice.externalKey, invoice.id]));
 
     return invoices
       .map((invoice) => {
@@ -149,8 +162,13 @@ export class InvoiceService {
           invoiceDate: invoice.invoiceDate.toISOString(),
           deliveredAt: deliveredAt?.toISOString(),
           status: invoice.status,
+          provider: invoice.provider,
+          sourceLabel: invoiceSourceLabel(invoice.provider),
+          externalInvoiceId: invoice.provider === "gib-portal-manual" ? externalByKey.get(invoice.providerInvoiceId) : undefined,
           pdfUrl: invoice.pdfUrl,
-          trendyolStatus: invoice.trendyolStatus
+          pdfAvailable: Boolean(invoice.pdfPath),
+          trendyolStatus: invoice.trendyolStatus,
+          error: invoice.error ?? undefined
         };
       })
       .sort(
@@ -539,12 +557,13 @@ export class InvoiceService {
         invoiceDate: invoice.invoiceDate,
         pdfPath: invoice.pdfPath
       });
+      const alreadySent = Boolean(response.alreadySent);
 
       return this.prisma.invoice.update({
         where: { id: invoice.id },
         data: {
           status: InvoiceStatus.TRENDYOL_SENT,
-          trendyolStatus: "SENT",
+          trendyolStatus: alreadySent ? "ALREADY_SENT" : "SENT",
           trendyolSentAt: new Date(),
           error: null
         }

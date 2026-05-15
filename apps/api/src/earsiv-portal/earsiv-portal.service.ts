@@ -188,6 +188,28 @@ function extractPortalUuid(value: unknown): string | undefined {
   return undefined;
 }
 
+function portalRecordKey(record: Record<string, unknown>) {
+  for (const key of ["faturaUuid", "uuid", "ettn", "ETTN", "belgeOid", "faturaOid", "faturaNo", "belgeNo", "seriSiraNo"]) {
+    const value = record[key];
+    if (value !== undefined && value !== null && String(value).trim()) return String(value).trim();
+  }
+  return JSON.stringify(record);
+}
+
+function dedupePortalRecords(records: Record<string, unknown>[]) {
+  const seen = new Set<string>();
+  const output: Record<string, unknown>[] = [];
+
+  for (const record of records) {
+    const key = portalRecordKey(record);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    output.push(record);
+  }
+
+  return output;
+}
+
 function shouldLetPortalGenerateUuid(payload: GibPortalInvoiceDraftPayload) {
   return payload.hangiTip === "5000/30000";
 }
@@ -258,6 +280,7 @@ export class EarsivPortalService {
     ];
 
     const failures: string[] = [];
+    const records: Record<string, unknown>[] = [];
     for (const candidate of candidates) {
       const dispatch = await this.dispatch(connection, response.token, candidate.cmd, candidate.pageName, queryPayload);
       if (dispatch.error) {
@@ -267,13 +290,18 @@ export class EarsivPortalService {
 
       const arrays = findArrays(dispatch.data ?? dispatch.result ?? dispatch.rows ?? dispatch);
       const rows = arrays.sort((left, right) => right.length - left.length)[0] ?? [];
-      return rows.map((row) => ({
-        ...row,
-        sorguBaslangic: start,
-        sorguBitis: end,
-        kaynakKomut: candidate.cmd
-      }));
+      records.push(
+        ...rows.map((row) => ({
+          ...row,
+          sorguBaslangic: start,
+          sorguBitis: end,
+          kaynakKomut: candidate.cmd,
+          kaynakSayfa: candidate.pageName
+        }))
+      );
     }
+
+    if (records.length > 0) return dedupePortalRecords(records);
 
     throw new ServiceUnavailableException(
       `e-Arsiv portal fatura sorgusu calismadi. Portal cevap verdi fakat desteklenen fatura liste komutu bulunamadi. Denenenler: ${failures.join(" | ")}`

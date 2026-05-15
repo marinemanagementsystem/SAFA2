@@ -1,4 +1,5 @@
-import { Body, Controller, Delete, Get, Inject, Param, Post, Query } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Inject, Param, Post, Query, UploadedFile, UseInterceptors } from "@nestjs/common";
+import { FileInterceptor } from "@nestjs/platform-express";
 import { ExternalInvoiceSource } from "@prisma/client";
 import { z } from "zod";
 import { ExternalInvoicesService } from "./external-invoices.service";
@@ -67,6 +68,25 @@ export class ExternalInvoicesController {
   manualMatch(@Param("id") id: string, @Body() body: unknown) {
     const parsed = manualMatchSchema.parse(body);
     return this.externalInvoices.manualMatch(id, parsed);
+  }
+
+  @Post("external-invoices/:id/promote")
+  promote(@Param("id") id: string) {
+    return this.externalInvoices.promoteOne(id);
+  }
+
+  @Post("external-invoices/:id/promote-and-send-to-trendyol")
+  promoteAndSend(@Param("id") id: string) {
+    return this.externalInvoices.promoteOne(id, { autoSendTrendyol: true });
+  }
+
+  @Post("external-invoices/:id/pdf")
+  @UseInterceptors(FileInterceptor("file"))
+  uploadOfficialPdf(
+    @Param("id") id: string,
+    @UploadedFile() file: { buffer: Buffer; originalname?: string; mimetype?: string; size?: number }
+  ) {
+    return this.externalInvoices.attachOfficialPdf(id, file);
   }
 
   @Delete("external-invoices/:id/match")

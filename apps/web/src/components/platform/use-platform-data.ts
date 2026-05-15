@@ -104,6 +104,20 @@ function portalUploadedSummary(items: Array<{ orderNumber: string; shipmentPacka
   return ` Yuklenen fatura: ${visible}${extra}.`;
 }
 
+function externalSyncSummary(prefix: string, result: { imported: number; matched: number; promoted?: number; trendyolSent?: number; trendyolAlreadySent?: number; trendyolFailed?: number; pdfMissing?: number }) {
+  const parts = [
+    `${result.imported ?? 0} kayit sorgulandi`,
+    `${result.matched ?? 0} eslesti`,
+    result.promoted ? `${result.promoted} fatura arsive alindi` : undefined,
+    result.trendyolSent ? `${result.trendyolSent} Trendyol'a gonderildi` : undefined,
+    result.trendyolAlreadySent ? `${result.trendyolAlreadySent} Trendyol'da zaten vardi` : undefined,
+    result.pdfMissing ? `${result.pdfMissing} PDF bekliyor` : undefined,
+    result.trendyolFailed ? `${result.trendyolFailed} Trendyol hatasi` : undefined
+  ].filter(Boolean);
+
+  return `${prefix}: ${parts.join(", ")}.`;
+}
+
 function readStoredJson<T>(key: string, fallback: T): T {
   if (typeof window === "undefined") return fallback;
 
@@ -652,7 +666,7 @@ export function usePlatformData() {
 
       try {
         const result = await api.importExternalInvoices(source, invoices);
-        setMessage(`${result.imported} harici fatura alindi, ${result.matched} kayit siparisle eslesti.`);
+        setMessage(externalSyncSummary("Harici fatura aktarimi", result));
         await load();
       } catch (error) {
         setMessage(errorMessage(error, "Harici fatura listesi alinamadi."));
@@ -674,7 +688,7 @@ export function usePlatformData() {
 
       try {
         const result = await api.syncGibExternalInvoices({ days });
-        setMessage(`${result.imported} e-Arsiv faturasi sorgulandi, ${result.matched} kayit siparisle eslesti.`);
+        setMessage(externalSyncSummary("e-Arsiv sorgusu", result));
         await load();
       } catch (error) {
         setMessage(errorMessage(error, "e-Arsiv harici fatura sorgusu basarisiz."));
@@ -695,7 +709,7 @@ export function usePlatformData() {
 
     try {
       const result = await api.syncTrendyolExternalInvoices();
-      setMessage(result.message ?? `${result.imported} Trendyol fatura kaydi okundu, ${result.matched} kayit siparisle eslesti.`);
+      setMessage(result.message ?? externalSyncSummary("Trendyol fatura izi", result));
       await load();
     } catch (error) {
       setMessage(errorMessage(error, "Trendyol harici fatura sorgusu basarisiz."));
@@ -712,8 +726,8 @@ export function usePlatformData() {
 
     setBusyAction("external-reconcile");
 
-    try {
-      const result = await api.reconcileExternalInvoices();
+      try {
+        const result = await api.reconcileExternalInvoices();
       setMessage(`${result.matched} harici fatura siparisle eslesti, ${result.unmatched} kayit acik kaldi.`);
       await load();
     } catch (error) {
@@ -754,6 +768,72 @@ export function usePlatformData() {
     [load]
   );
 
+  const promoteExternalInvoice = useCallback(
+    async (id: string, sendToTrendyol: boolean) => {
+      if (!API_AVAILABLE) {
+        setMessage(apiOfflineMessage);
+        return;
+      }
+
+      setBusyAction(`external-promote-${id}`);
+
+      try {
+        const result = sendToTrendyol ? await api.promoteAndSendExternalInvoice(id) : await api.promoteExternalInvoice(id);
+        setMessage(externalSyncSummary(sendToTrendyol ? "e-Arsiv fatura arsivi ve Trendyol" : "e-Arsiv fatura arsivi", result));
+        await load();
+      } catch (error) {
+        setMessage(errorMessage(error, "e-Arsiv faturasi arsive alinamadi."));
+      } finally {
+        setBusyAction(null);
+      }
+    },
+    [load]
+  );
+
+  const uploadExternalInvoicePdf = useCallback(
+    async (id: string, file: File) => {
+      if (!API_AVAILABLE) {
+        setMessage(apiOfflineMessage);
+        return;
+      }
+
+      setBusyAction(`external-pdf-${id}`);
+
+      try {
+        const result = await api.uploadExternalInvoicePdf(id, file);
+        setMessage(externalSyncSummary("Resmi PDF yuklendi", result));
+        await load();
+      } catch (error) {
+        setMessage(errorMessage(error, "Resmi e-Arsiv PDF yuklenemedi."));
+      } finally {
+        setBusyAction(null);
+      }
+    },
+    [load]
+  );
+
+  const sendInvoiceToTrendyol = useCallback(
+    async (id: string) => {
+      if (!API_AVAILABLE) {
+        setMessage(apiOfflineMessage);
+        return;
+      }
+
+      setBusyAction(`invoice-send-${id}`);
+
+      try {
+        const invoice = await api.sendInvoiceToTrendyol(id);
+        setMessage(invoice.trendyolStatus === "ALREADY_SENT" ? "Fatura Trendyol'da zaten kayitli." : "Fatura PDF'i Trendyol'a gonderildi.");
+        await load();
+      } catch (error) {
+        setMessage(errorMessage(error, "Fatura Trendyol'a gonderilemedi."));
+      } finally {
+        setBusyAction(null);
+      }
+    },
+    [load]
+  );
+
   return {
     snapshot,
     apiAvailable: API_AVAILABLE,
@@ -785,6 +865,9 @@ export function usePlatformData() {
     syncGibExternalInvoices,
     syncTrendyolExternalInvoices,
     reconcileExternalInvoices,
-    matchExternalInvoice
+    matchExternalInvoice,
+    promoteExternalInvoice,
+    uploadExternalInvoicePdf,
+    sendInvoiceToTrendyol
   };
 }

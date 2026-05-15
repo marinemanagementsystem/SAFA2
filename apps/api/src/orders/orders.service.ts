@@ -20,6 +20,12 @@ function deliveredSortTime(value?: string) {
   return Number.isFinite(time) ? time : 0;
 }
 
+function invoiceSourceLabel(provider?: string | null) {
+  if (provider === "gib-portal-manual") return "e-Arsiv manuel";
+  if (provider === "gib-direct") return "GIB direct";
+  return "SAFA";
+}
+
 @Injectable()
 export class OrdersService {
   constructor(
@@ -70,6 +76,9 @@ export class OrdersService {
           invoiceId: order.invoiceDraft?.invoice?.id,
           invoiceNumber: order.invoiceDraft?.invoice?.invoiceNumber,
           invoiceDate: order.invoiceDraft?.invoice?.invoiceDate.toISOString(),
+          invoiceProvider: order.invoiceDraft?.invoice?.provider,
+          invoiceSourceLabel: order.invoiceDraft?.invoice ? invoiceSourceLabel(order.invoiceDraft.invoice.provider) : undefined,
+          invoicePdfAvailable: Boolean(order.invoiceDraft?.invoice?.pdfPath),
           trendyolStatus: order.invoiceDraft?.invoice?.trendyolStatus,
           externalInvoiceCount: order._count.externalInvoices,
           externalInvoiceSources: Array.from(new Set(order.externalInvoices.map((invoice: any) => invoice.source))),
@@ -147,7 +156,9 @@ export class OrdersService {
             invoiceNumber: order.invoiceDraft.invoice.invoiceNumber,
             invoiceDate: order.invoiceDraft.invoice.invoiceDate.toISOString(),
             status: order.invoiceDraft.invoice.status,
+            sourceLabel: invoiceSourceLabel(order.invoiceDraft.invoice.provider),
             pdfUrl: order.invoiceDraft.invoice.pdfUrl,
+            pdfAvailable: Boolean(order.invoiceDraft.invoice.pdfPath),
             trendyolSentAt: order.invoiceDraft.invoice.trendyolSentAt?.toISOString(),
             trendyolStatus: order.invoiceDraft.invoice.trendyolStatus,
             error: order.invoiceDraft.invoice.error,
