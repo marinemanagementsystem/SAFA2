@@ -30,10 +30,9 @@ export function OverviewView({ snapshot, loadState, busyAction, apiAvailable, on
     <div className="view-stack">
       <section className="overview-hero">
         <div className="hero-copy">
-          <h2>Pazaryeri fatura akisini tek komut merkezinden yonet.</h2>
+          <h2>Bugunku operasyon durumu</h2>
           <p>
-            Trendyol teslim paketleri, e-Arsiv taslaklari, PDF ciktilari ve entegrasyon sagligi modern bir operasyon
-            ritmine ayrildi. Yeni pazaryeri ve kargo adaptorleri icin yuzey hazir.
+            Trendyol teslim paketleri, e-Arsiv taslaklari, PDF ciktilari ve entegrasyon sagligi burada ozetlenir.
           </p>
           <div className="hero-actions">
             <button className="ui-button primary" onClick={onSync} disabled={!apiAvailable || busyAction === "sync"}>

@@ -36,32 +36,32 @@ const navIcons: Record<PlatformView, ComponentType<{ size?: number }>> = {
 
 const viewTitles: Record<PlatformView, { title: string; subtitle: string }> = {
   overview: {
-    title: "SAFA ticaret operasyon merkezi",
-    subtitle: "Pazaryeri siparisleri, e-Arsiv faturalar, PDF gonderimleri ve entegrasyon sagligi tek platformda."
+    title: "Operasyon merkezi",
+    subtitle: "Siparis, fatura, e-Arsiv ve entegrasyon durumunu tek yerden takip et."
   },
   orders: {
-    title: "Siparis ve paket takibi",
-    subtitle: "Trendyol teslim paketlerini filtrele, fatura durumlarini gor ve satir detayina in."
+    title: "Siparisler",
+    subtitle: "Teslim paketlerini filtrele, fatura durumunu gor ve detaya in."
   },
   invoices: {
-    title: "Fatura onay masasi",
-    subtitle: "Hazir taslaklari kontrol et, toplu onayla, fatura kesimini kuyruga al ve PDF arsivini izle."
+    title: "Faturalar",
+    subtitle: "Taslaklari onayla, portal imzasini takip et ve aylik arsivi indir."
   },
   integrations: {
-    title: "Entegrasyon merkezi",
-    subtitle: "Canli Trendyol ve GIB baglantilarini yonet; yeni pazaryeri ve kargo adaptorlerini hazir izle."
+    title: "Entegrasyonlar",
+    subtitle: "Trendyol, e-Arsiv ve GIB baglanti bilgilerini yonet."
   },
   "saved-information": {
-    title: "Kayitli bilgiler kasasi",
-    subtitle: "API, portal ve entegrasyon bilgilerini sifreli profiller halinde sakla ve formlara aktar."
+    title: "Kayitli bilgiler",
+    subtitle: "Profil kasasindan API ve portal bilgilerini formlara aktar."
   },
   operations: {
     title: "Operasyon izleme",
-    subtitle: "Sync, fatura kesme ve Trendyol gonderim denemelerini kuyruk ve hata durumlariyla takip et."
+    subtitle: "Sync, fatura ve Trendyol gonderim denemelerini izle."
   },
   settings: {
-    title: "Platform ayarlari",
-    subtitle: "Runtime modu, saglayici durumu ve saklama katmanini sade bir operasyon gorunumuyle kontrol et."
+    title: "Ayarlar",
+    subtitle: "Runtime, saglayici ve saklama durumunu kontrol et."
   }
 };
 
