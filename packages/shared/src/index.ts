@@ -167,6 +167,20 @@ export interface InvoiceListItem {
   error?: string;
 }
 
+export interface MonthlyInvoiceArchiveResult {
+  year: number;
+  month: number;
+  invoiceCount: number;
+  missingPdfCount: number;
+  missingXmlCount: number;
+  draftXmlAvailableCount: number;
+  excelFileName: string;
+  archiveFileName: string;
+  archivePath: string;
+  downloadUrl: string;
+  generatedAt: string;
+}
+
 export interface PortalDraftUploadFailure {
   draftId: string;
   error: string;

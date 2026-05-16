@@ -1,15 +1,24 @@
-import { Body, Controller, Get, Header, Inject, Param, Post, Res } from "@nestjs/common";
+import { Body, Controller, Get, Header, Inject, Param, Post, Query, Res } from "@nestjs/common";
 import { Response } from "express";
 import { z } from "zod";
 import { InvoiceService } from "./invoice.service";
+import { MonthlyInvoiceArchiveService } from "./monthly-invoice-archive.service";
 
 const portalDraftUploadSchema = z.object({
   draftIds: z.array(z.string().min(1)).min(1).max(500)
 });
 
+const monthlyInvoiceSchema = z.object({
+  year: z.coerce.number().int().min(2000).max(2100),
+  month: z.coerce.number().int().min(1).max(12)
+});
+
 @Controller()
 export class InvoiceController {
-  constructor(@Inject(InvoiceService) private readonly invoiceService: InvoiceService) {}
+  constructor(
+    @Inject(InvoiceService) private readonly invoiceService: InvoiceService,
+    @Inject(MonthlyInvoiceArchiveService) private readonly monthlyArchiveService: MonthlyInvoiceArchiveService
+  ) {}
 
   @Get("invoice-drafts")
   listDrafts() {
@@ -44,6 +53,30 @@ export class InvoiceController {
   @Get("invoices")
   listInvoices() {
     return this.invoiceService.listInvoices();
+  }
+
+  @Get("invoices/monthly-export.xlsx")
+  async exportMonthlyExcel(@Query() query: unknown, @Res() response: Response) {
+    const parsed = monthlyInvoiceSchema.parse(query);
+    const buffer = await this.monthlyArchiveService.buildMonthlyExcel(parsed);
+    response.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    response.setHeader("Content-Disposition", `attachment; filename="${this.monthlyArchiveService.excelFileName(parsed)}"`);
+    response.send(buffer);
+  }
+
+  @Post("invoices/monthly-archives")
+  createMonthlyArchive(@Body() body: unknown) {
+    const parsed = monthlyInvoiceSchema.parse(body);
+    return this.monthlyArchiveService.createMonthlyArchive(parsed);
+  }
+
+  @Get("invoices/monthly-archives/:year/:month/download")
+  async downloadMonthlyArchive(@Param() params: unknown, @Res() response: Response) {
+    const parsed = monthlyInvoiceSchema.parse(params);
+    const buffer = await this.monthlyArchiveService.readMonthlyArchive(parsed);
+    response.setHeader("Content-Type", "application/zip");
+    response.setHeader("Content-Disposition", `attachment; filename="${this.monthlyArchiveService.archiveFileName(parsed)}"`);
+    response.send(buffer);
   }
 
   @Get("invoices/:id/pdf")

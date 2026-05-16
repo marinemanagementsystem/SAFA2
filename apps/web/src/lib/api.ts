@@ -4,6 +4,7 @@ import type {
   IntegrationJobListItem,
   InvoiceDraftListItem,
   InvoiceListItem,
+  MonthlyInvoiceArchiveResult,
   OrderDetail,
   OrderListItem,
   PortalDraftUploadResult
@@ -466,6 +467,13 @@ export const api = {
   draftPdfUrl: (draftId: string) => `${API_BASE}/invoice-drafts/${draftId}/pdf`,
   draftXmlUrl: (draftId: string) => `${API_BASE}/invoice-drafts/${draftId}/earsiv-xml`,
   invoicePdfUrl: (invoiceId: string) => `${API_BASE}/invoices/${invoiceId}/pdf`,
+  monthlyInvoiceExcelUrl: (year: number, month: number) => `${API_BASE}/invoices/monthly-export.xlsx?year=${year}&month=${month}`,
+  monthlyInvoiceArchiveDownloadUrl: (year: number, month: number) => `${API_BASE}/invoices/monthly-archives/${year}/${month}/download`,
+  createMonthlyInvoiceArchive: (input: { year: number; month: number }) =>
+    request<MonthlyInvoiceArchiveResult>("/invoices/monthly-archives", {
+      method: "POST",
+      body: JSON.stringify(input)
+    }),
   sendInvoiceToTrendyol: (invoiceId: string) =>
     request<InvoiceListItem>(`/invoices/${invoiceId}/send-to-trendyol`, {
       method: "POST"

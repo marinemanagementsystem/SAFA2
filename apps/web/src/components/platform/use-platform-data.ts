@@ -6,6 +6,7 @@ import type {
   IntegrationJobListItem,
   InvoiceDraftListItem,
   InvoiceListItem,
+  MonthlyInvoiceArchiveResult,
   OrderDetail,
   OrderListItem
 } from "@safa/shared";
@@ -858,6 +859,28 @@ export function usePlatformData() {
     [load]
   );
 
+  const createMonthlyInvoiceArchive = useCallback(async (year: number, month: number): Promise<MonthlyInvoiceArchiveResult | null> => {
+    if (!API_AVAILABLE) {
+      setMessage(apiOfflineMessage);
+      return null;
+    }
+
+    setBusyAction("monthly-archive");
+
+    try {
+      const result = await api.createMonthlyInvoiceArchive({ year, month });
+      setMessage(
+        `Aylik arsiv hazirlandi: ${result.invoiceCount} fatura, ${result.missingPdfCount} PDF eksik, ${result.missingXmlCount} resmi XML eksik.`
+      );
+      return result;
+    } catch (error) {
+      setMessage(errorMessage(error, "Aylik fatura arsivi olusturulamadi."));
+      return null;
+    } finally {
+      setBusyAction(null);
+    }
+  }, []);
+
   return {
     snapshot,
     apiAvailable: API_AVAILABLE,
@@ -893,6 +916,7 @@ export function usePlatformData() {
     matchExternalInvoice,
     promoteExternalInvoice,
     uploadExternalInvoicePdf,
-    sendInvoiceToTrendyol
+    sendInvoiceToTrendyol,
+    createMonthlyInvoiceArchive
   };
 }

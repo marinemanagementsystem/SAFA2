@@ -6,15 +6,19 @@ import type {
   IntegrationJobListItem,
   InvoiceDraftListItem,
   InvoiceListItem,
-  InvoiceStatus
+  InvoiceStatus,
+  MonthlyInvoiceArchiveResult
 } from "@safa/shared";
 import {
   AlertTriangle,
+  Archive,
   Bell,
+  CalendarDays,
   Check,
   CheckCircle2,
   Clock3,
   CircleDollarSign,
+  Download,
   FileSearch,
   FileText,
   Link2,
@@ -91,6 +95,7 @@ interface InvoicesViewProps {
   onPromoteExternalInvoice: (id: string, sendToTrendyol: boolean) => void;
   onUploadExternalInvoicePdf: (id: string, file: File) => void;
   onSendInvoiceToTrendyol: (id: string) => void;
+  onCreateMonthlyArchive: (year: number, month: number) => Promise<MonthlyInvoiceArchiveResult | null>;
   onOpenGibPortal: () => void;
   onCloseGibPortalSession: () => void;
 }
@@ -113,6 +118,30 @@ function draftDeliveryTime(draft: InvoiceDraftListItem) {
 
 function invoiceDeliveryTime(invoice: InvoiceListItem) {
   return dateTimeValue(invoice.deliveredAt ?? invoice.invoiceDate);
+}
+
+function currentMonthValue() {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function parseMonthValue(value: string) {
+  const match = value.match(/^(\d{4})-(\d{2})$/);
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  if (!Number.isInteger(year) || !Number.isInteger(month) || month < 1 || month > 12) return null;
+  return { year, month };
+}
+
+function triggerDownload(url: string) {
+  if (typeof document === "undefined") return;
+  const link = document.createElement("a");
+  link.href = url;
+  link.rel = "noreferrer";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
 }
 
 function orderDeskHref(orderNumber: string) {
@@ -638,6 +667,7 @@ export function InvoicesView({
   onPromoteExternalInvoice,
   onUploadExternalInvoicePdf,
   onSendInvoiceToTrendyol,
+  onCreateMonthlyArchive,
   onOpenGibPortal,
   onCloseGibPortalSession
 }: InvoicesViewProps) {
@@ -651,6 +681,8 @@ export function InvoicesView({
   const [archiveQuery, setArchiveQuery] = useState("");
   const [archiveStatusFilter, setArchiveStatusFilter] = useState<ArchiveStatusFilter>("all");
   const [archiveDateFilter, setArchiveDateFilter] = useState<DateFilter>("all");
+  const [monthlyArchiveMonth, setMonthlyArchiveMonth] = useState(currentMonthValue);
+  const [monthlyArchiveResult, setMonthlyArchiveResult] = useState<MonthlyInvoiceArchiveResult | null>(null);
   const [externalQuery, setExternalQuery] = useState("");
   const [externalListSource, setExternalListSource] = useState<ExternalListSourceFilter>("all");
   const [externalMatchFilter, setExternalMatchFilter] = useState<ExternalMatchFilter>("all");
@@ -675,6 +707,7 @@ export function InvoicesView({
   const selectedApprovedCount = selectedDraftItems.filter((draft) => draft.status === "APPROVED").length;
   const selectedNeedsApprovalCount = selectedReadyCount + selectedRetryCount;
   const archiveStatuses = useMemo(() => Array.from(new Set(invoices.map((invoice) => invoice.status))).sort(), [invoices]);
+  const selectedArchiveMonth = parseMonthValue(monthlyArchiveMonth);
   const selectionAdvice =
     selectedDrafts.length === 0
       ? ""
@@ -744,6 +777,14 @@ export function InvoicesView({
   }, [draftDeskFilter, draftExternalFilter, draftQuery, draftSort, drafts, invoiceByDraftId, jobs, selectedDrafts, showSelectedOnly]);
 
   const filteredSelectableDrafts = filteredDrafts.filter(isSelectableDraft);
+
+  async function createMonthlyArchive() {
+    if (!selectedArchiveMonth) return;
+    const result = await onCreateMonthlyArchive(selectedArchiveMonth.year, selectedArchiveMonth.month);
+    if (!result) return;
+    setMonthlyArchiveResult(result);
+    triggerDownload(api.monthlyInvoiceArchiveDownloadUrl(result.year, result.month));
+  }
 
   const filteredInvoices = useMemo(() => {
     const search = stringValue(archiveQuery);
@@ -1294,6 +1335,37 @@ export function InvoicesView({
           </div>
 
           <div className="archive-filter-bar" aria-label="PDF arsivi filtreleri">
+            <label className="field">
+              <span>
+                <CalendarDays size={17} />
+                Aylik arsiv
+              </span>
+              <input type="month" value={monthlyArchiveMonth} onChange={(event) => setMonthlyArchiveMonth(event.target.value)} />
+            </label>
+            <a
+              className="ui-button ghost"
+              aria-disabled={selectedArchiveMonth ? undefined : true}
+              href={
+                selectedArchiveMonth
+                  ? api.monthlyInvoiceExcelUrl(selectedArchiveMonth.year, selectedArchiveMonth.month)
+                  : "#"
+              }
+              onClick={(event) => {
+                if (!selectedArchiveMonth) event.preventDefault();
+              }}
+            >
+              <Download size={17} />
+              Aylik Excel indir
+            </a>
+            <button
+              className="ui-button primary"
+              type="button"
+              onClick={() => void createMonthlyArchive()}
+              disabled={!selectedArchiveMonth || busyAction === "monthly-archive"}
+            >
+              {busyAction === "monthly-archive" ? <Loader2 size={17} className="spin" /> : <Archive size={17} />}
+              ZIP olustur/indir
+            </button>
             <label className="field search-field">
               <span>
                 <Search size={17} />
@@ -1332,6 +1404,13 @@ export function InvoicesView({
               </select>
             </label>
           </div>
+
+          {monthlyArchiveResult ? (
+            <div className="form-alert table-note">
+              Aylik arsiv hazir: {monthlyArchiveResult.invoiceCount} resmi fatura. Eksik PDF: {monthlyArchiveResult.missingPdfCount}; eksik resmi XML:{" "}
+              {monthlyArchiveResult.missingXmlCount}. Dosya: {monthlyArchiveResult.archiveFileName}
+            </div>
+          ) : null}
 
           <InvoiceArchiveSection
             title="Bugun kesilenler"
