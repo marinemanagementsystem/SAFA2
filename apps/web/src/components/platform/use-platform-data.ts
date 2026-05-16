@@ -91,6 +91,31 @@ function errorMessage(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
 }
 
+function canUseServerIssuedPortalLaunchUrl() {
+  if (typeof window === "undefined") return false;
+
+  const host = window.location.hostname.toLowerCase();
+  if (host === "localhost" || host === "127.0.0.1" || host === "::1") return true;
+  if (host.startsWith("192.168.") || host.startsWith("10.")) return true;
+  if (/^172\.(1[6-9]|2\d|3[01])\./.test(host)) return true;
+  return host.endsWith(".local");
+}
+
+async function releaseServerPortalSessionBeforeManualOpen() {
+  const timeout = new Promise<string>((resolve) => {
+    window.setTimeout(() => {
+      resolve("SAFA e-Arsiv oturum kapatma yaniti beklenmeden portal manuel giris icin acildi.");
+    }, 8000);
+  });
+
+  const release = api
+    .logoutEarsivPortalSession()
+    .then((result) => result.message)
+    .catch((error) => errorMessage(error, "SAFA e-Arsiv oturumunu kapatamadi; portal manuel giris icin acildi."));
+
+  return Promise.race([release, timeout]);
+}
+
 function portalUploadedSummary(items: Array<{ orderNumber: string; shipmentPackageId: string; customerName: string; totalPayableCents: number; currency: string }>) {
   if (items.length === 0) return "";
 
@@ -640,6 +665,17 @@ export function usePlatformData() {
     setBusyAction("open-gib");
 
     try {
+      if (!canUseServerIssuedPortalLaunchUrl()) {
+        portalTab.document.body.innerHTML =
+          '<p style="font-family:Arial;padding:24px">SAFA e-Arsiv oturumu kapatiliyor; portal manuel giris icin acilacak...</p>';
+        const releaseMessage = await releaseServerPortalSessionBeforeManualOpen();
+        portalTab.location.href = gibPortalForm.portalUrl;
+        setMessage(
+          `${releaseMessage} GIB tokenli linki canli Cloud Run IP'sine bagli oldugu icin tarayicida dogrudan acilmadi; portal manuel giris icin acildi.`
+        );
+        return;
+      }
+
       const session = await api.openEarsivPortalSession();
       portalTab.location.href = session.launchUrl;
       setMessage(session.source === "cached" ? "Aktif e-Arsiv oturumu yeni sekmede acildi." : session.message);
