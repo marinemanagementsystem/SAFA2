@@ -150,6 +150,34 @@ function vatExclusiveCents(inclusiveCents: number, vatRate: number) {
   return Math.round((inclusiveCents * 100) / (100 + vatRate));
 }
 
+function allocateCents(totalCents: number, weights: number[]) {
+  if (weights.length === 0) return [];
+  if (totalCents <= 0) return weights.map(() => 0);
+
+  const positiveWeights = weights.map((weight) => Math.max(0, weight));
+  const weightTotal = positiveWeights.reduce((sum, weight) => sum + weight, 0);
+  if (weightTotal <= 0) {
+    const base = Math.floor(totalCents / weights.length);
+    const remainder = totalCents - base * weights.length;
+    return weights.map((_, index) => base + (index < remainder ? 1 : 0));
+  }
+
+  const allocations = positiveWeights.map((weight, index) => {
+    const exact = (totalCents * weight) / weightTotal;
+    const floor = Math.floor(exact);
+    return { index, cents: floor, remainder: exact - floor };
+  });
+  let allocated = allocations.reduce((sum, allocation) => sum + allocation.cents, 0);
+
+  for (const allocation of [...allocations].sort((left, right) => right.remainder - left.remainder)) {
+    if (allocated >= totalCents) break;
+    allocation.cents += 1;
+    allocated += 1;
+  }
+
+  return allocations.sort((left, right) => left.index - right.index).map((allocation) => allocation.cents);
+}
+
 function formatPortalDate(date: Date) {
   const day = String(date.getDate()).padStart(2, "0");
   const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -179,15 +207,17 @@ function normalizeBuyerIdentifier(value: string) {
 
 function buildPortalLine(
   line: ArchiveInvoicePayload["lines"][number],
+  adjustedGrossCents: number,
+  adjustedPayableCents: number,
   unitCode: string
 ): GibPortalInvoiceDraftLine & { numeric: { fiyat: number; iskontoTutari: number; malHizmetTutari: number; kdvTutari: number } } {
   const quantity = line.quantity > 0 ? line.quantity : 1;
-  const grossInclusiveCents = Math.max(line.grossCents, line.payableCents + line.discountCents);
-  const discountInclusiveCents = Math.max(0, line.discountCents);
+  const grossInclusiveCents = Math.max(adjustedGrossCents, adjustedPayableCents);
   const grossBaseCents = vatExclusiveCents(grossInclusiveCents, line.vatRate);
-  const discountBaseCents = vatExclusiveCents(discountInclusiveCents, line.vatRate);
-  const taxableBaseCents = Math.max(0, grossBaseCents - discountBaseCents);
-  const vatCents = Math.max(0, line.payableCents - taxableBaseCents);
+  const targetTaxableBaseCents = vatExclusiveCents(adjustedPayableCents, line.vatRate);
+  const taxableBaseCents = Math.min(Math.max(0, targetTaxableBaseCents), grossBaseCents);
+  const discountBaseCents = Math.max(0, grossBaseCents - taxableBaseCents);
+  const vatCents = Math.max(0, adjustedPayableCents - taxableBaseCents);
   const discountRate = grossBaseCents > 0 ? (discountBaseCents / grossBaseCents) * 100 : 0;
   const unitPrice = centsToAmount(Math.round(grossBaseCents / quantity));
   const grossBase = centsToAmount(grossBaseCents);
@@ -230,7 +260,17 @@ export function buildGibPortalInvoiceDraftPayload(
   const isCompany = buyerIdentifier.length === 10;
   const buyerName = payload.buyerName.trim();
   const personName = splitBuyerName(buyerName);
-  const linesWithTotals = payload.lines.map((line) => buildPortalLine(line, unitCode));
+  const grossAllocations = allocateCents(
+    payload.totals.grossCents,
+    payload.lines.map((line) => Math.max(line.grossCents, line.payableCents + line.discountCents))
+  );
+  const payableAllocations = allocateCents(
+    payload.totals.payableCents,
+    payload.lines.map((line) => line.payableCents || Math.max(line.grossCents, line.payableCents + line.discountCents))
+  );
+  const linesWithTotals = payload.lines.map((line, index) =>
+    buildPortalLine(line, grossAllocations[index] ?? line.grossCents, payableAllocations[index] ?? line.payableCents, unitCode)
+  );
   const serviceTotal = roundAmount(linesWithTotals.reduce((sum, line) => sum + line.numeric.fiyat, 0));
   const discountTotal = roundAmount(linesWithTotals.reduce((sum, line) => sum + line.numeric.iskontoTutari, 0));
   const taxableTotal = roundAmount(linesWithTotals.reduce((sum, line) => sum + line.numeric.malHizmetTutari, 0));

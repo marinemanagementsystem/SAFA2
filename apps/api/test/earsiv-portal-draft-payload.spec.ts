@@ -119,10 +119,81 @@ describe("buildGibPortalInvoiceDraftPayload", () => {
     expect(draft.not).toBe("ikiyüzkırktürklirasısıfırkuruş. Trendyol siparis no: 11190835272 / Paket: 3809481475");
     expect(draft.malHizmetTable[0]).toMatchObject({
       miktar: 2,
-      birimFiyat: "50.00",
-      fiyat: "100.00",
-      malHizmetTutari: "100.00"
+      birimFiyat: "100.00",
+      fiyat: "200.00",
+      malHizmetTutari: "200.00",
+      kdvTutari: "40.00"
     });
+  });
+
+  it("keeps GIB-calculated VAT totals consistent with the payable amount when Trendyol has hidden discounts", () => {
+    const draft = buildGibPortalInvoiceDraftPayload(
+      {
+        ...payload,
+        lines: [
+          {
+            description: "Trendyol urunu",
+            quantity: 1,
+            unitPriceCents: 22744,
+            grossCents: 22744,
+            discountCents: 2366,
+            payableCents: 20378,
+            vatRate: 20
+          }
+        ],
+        totals: {
+          grossCents: 22744,
+          discountCents: 2366,
+          payableCents: 18012,
+          currency: "TRY"
+        }
+      },
+      { uuid: "7a4a02f7-1dfb-4686-aefc-f86494a99f73" }
+    );
+
+    expect(draft.malhizmetToplamTutari).toBe("189.53");
+    expect(draft.toplamIskonto).toBe("39.43");
+    expect(draft.hesaplanankdv).toBe("30.02");
+    expect(draft.vergilerDahilToplamTutar).toBe("180.12");
+    expect(draft.odenecekTutar).toBe("180.12");
+    expect(draft.malHizmetTable[0]).toMatchObject({
+      fiyat: "189.53",
+      iskontoTutari: "39.43",
+      malHizmetTutari: "150.10",
+      kdvTutari: "30.02"
+    });
+  });
+
+  it("matches the GIB portal discount and VAT equation for the accepted sample totals", () => {
+    const draft = buildGibPortalInvoiceDraftPayload(
+      {
+        ...payload,
+        lines: [
+          {
+            description: "Trendyol urunu",
+            quantity: 1,
+            unitPriceCents: 48554,
+            grossCents: 48554,
+            discountCents: 10218,
+            payableCents: 38336,
+            vatRate: 20
+          }
+        ],
+        totals: {
+          grossCents: 48554,
+          discountCents: 10218,
+          payableCents: 38336,
+          currency: "TRY"
+        }
+      },
+      { uuid: "a19a9a82-bf80-4955-b0d7-7c4f44a2f719" }
+    );
+
+    expect(draft.malhizmetToplamTutari).toBe("404.62");
+    expect(draft.toplamIskonto).toBe("85.15");
+    expect(draft.hesaplanankdv).toBe("63.89");
+    expect(draft.vergilerDahilToplamTutar).toBe("383.36");
+    expect(draft.odenecekTutar).toBe("383.36");
   });
 
   it("normalizes ETTN before sending it to the GIB portal", () => {
