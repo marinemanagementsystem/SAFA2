@@ -7,7 +7,7 @@ import { AppModule } from "./app.module";
 import { apiAuthMiddleware } from "./auth/auth.middleware";
 
 const httpLogger = new Logger("SAFA HTTP");
-const SENSITIVE_FIELD_PATTERN = /(password|secret|token|apikey|api_key|authorization|signercommand|clientcert|clientkey|clientpfx)/i;
+const SENSITIVE_FIELD_PATTERN = /(password|secret|token|session|cookie|apikey|api_key|authorization|signercommand|clientcert|clientkey|clientpfx)/i;
 const defaultCorsOrigins = [
   /^http:\/\/localhost:\d+$/,
   /^https:\/\/.*\.onrender\.com$/,

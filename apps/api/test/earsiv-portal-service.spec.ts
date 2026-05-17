@@ -6,11 +6,13 @@ import type { SettingsService } from "../src/settings/settings.service";
 
 vi.mock("axios", () => ({
   default: {
-    post: vi.fn()
+    post: vi.fn(),
+    request: vi.fn()
   }
 }));
 
 const post = vi.mocked(axios.post);
+const proxyRequest = vi.mocked(axios.request);
 const launchSessionKey = "session.gibPortal.launch";
 
 function settings() {
@@ -142,6 +144,7 @@ const payload: GibPortalInvoiceDraftPayload = {
 describe("EarsivPortalService", () => {
   beforeEach(() => {
     post.mockReset();
+    proxyRequest.mockReset();
   });
 
   it("caches fresh tokenized portal launch sessions", async () => {
@@ -171,6 +174,67 @@ describe("EarsivPortalService", () => {
         source: "fresh"
       })
     );
+  });
+
+  it("creates a proxied portal session from a fresh tokenized login", async () => {
+    const settingsMock = settings();
+    post.mockResolvedValueOnce({
+      status: 200,
+      headers: {
+        "set-cookie": ["GIBSESSION=abc123; Path=/; HttpOnly"]
+      },
+      data: {
+        token: "portal-token",
+        redirectUrl: "/intragiris.html"
+      }
+    });
+
+    const service = new EarsivPortalService(settingsMock as unknown as SettingsService);
+    const result = await service.createProxySession();
+
+    expect(result).toMatchObject({
+      message: "e-Arsiv portali SAFA proxy oturumuyla acildi."
+    });
+    expect(result.proxyUrl).toMatch(/^\/api\/earsiv-portal\/proxy\/[^/]+\/intragiris\.html\?/);
+    expect(result.proxyUrl).toContain("token=portal-token");
+    expect(settingsMock.writeEncryptedSetting).toHaveBeenCalledWith(
+      expect.stringMatching(/^session\.gibPortal\.proxy\./),
+      expect.objectContaining({
+        token: "portal-token",
+        cookieJar: { GIBSESSION: "abc123" },
+        portalOrigin: "https://earsivportal.efatura.gov.tr"
+      })
+    );
+  });
+
+  it("keeps proxied portal requests restricted to the GIB origin", async () => {
+    const settingsMock = settings();
+    vi.mocked(settingsMock.readEncryptedSetting).mockResolvedValueOnce({
+      sessionId: "session-1",
+      portalUrl: "https://earsivportal.efatura.gov.tr/intragiris.html",
+      portalOrigin: "https://earsivportal.efatura.gov.tr",
+      launchUrl: "https://earsivportal.efatura.gov.tr/intragiris.html?token=portal-token",
+      token: "portal-token",
+      cookieJar: {},
+      openedAt: new Date().toISOString(),
+      expiresAt: new Date(Date.now() + 60_000).toISOString()
+    });
+
+    const service = new EarsivPortalService(settingsMock as unknown as SettingsService);
+
+    await expect(
+      service.proxyPortalRequest(
+        "session-1",
+        {
+          method: "GET",
+          originalUrl: "/api/earsiv-portal/proxy/session-1//example.com/secret",
+          headers: {}
+        } as never,
+        {} as never
+      )
+    ).rejects.toThrow("kayitli GIB portal adresine");
+
+    expect(proxyRequest).not.toHaveBeenCalled();
   });
 
   it("logs out a cached portal token and expires the local launch session", async () => {

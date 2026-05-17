@@ -163,6 +163,12 @@ export interface EarsivPortalLogoutResponse {
   portalMessage?: string;
 }
 
+export interface EarsivPortalProxySessionResponse {
+  proxyUrl: string;
+  expiresAt: string;
+  message: string;
+}
+
 function getRequestMethod(init?: RequestInit) {
   return (init?.method ?? "GET").toUpperCase();
 }
@@ -414,6 +420,10 @@ export const api = {
     }),
   openEarsivPortalSession: () =>
     request<EarsivPortalSessionResponse>("/earsiv-portal/open-session", {
+      method: "POST"
+    }),
+  openEarsivPortalProxySession: () =>
+    request<EarsivPortalProxySessionResponse>("/earsiv-portal/proxy-session", {
       method: "POST"
     }),
   logoutEarsivPortalSession: () =>

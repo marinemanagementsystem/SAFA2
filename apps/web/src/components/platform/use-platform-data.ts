@@ -101,21 +101,6 @@ function canUseServerIssuedPortalLaunchUrl() {
   return host.endsWith(".local");
 }
 
-async function releaseServerPortalSessionBeforeManualOpen() {
-  const timeout = new Promise<string>((resolve) => {
-    window.setTimeout(() => {
-      resolve("SAFA e-Arsiv oturum kapatma yaniti beklenmeden portal manuel giris icin acildi.");
-    }, 8000);
-  });
-
-  const release = api
-    .logoutEarsivPortalSession()
-    .then((result) => result.message)
-    .catch((error) => errorMessage(error, "SAFA e-Arsiv oturumunu kapatamadi; portal manuel giris icin acildi."));
-
-  return Promise.race([release, timeout]);
-}
-
 function portalUploadedSummary(items: Array<{ orderNumber: string; shipmentPackageId: string; customerName: string; totalPayableCents: number; currency: string }>) {
   if (items.length === 0) return "";
 
@@ -667,12 +652,10 @@ export function usePlatformData() {
     try {
       if (!canUseServerIssuedPortalLaunchUrl()) {
         portalTab.document.body.innerHTML =
-          '<p style="font-family:Arial;padding:24px">SAFA e-Arsiv oturumu kapatiliyor; portal manuel giris icin acilacak...</p>';
-        const releaseMessage = await releaseServerPortalSessionBeforeManualOpen();
-        portalTab.location.href = gibPortalForm.portalUrl;
-        setMessage(
-          `${releaseMessage} GIB tokenli linki canli Cloud Run IP'sine bagli oldugu icin tarayicida dogrudan acilmadi; portal manuel giris icin acildi.`
-        );
+          '<p style="font-family:Arial;padding:24px">e-Arsiv proxy oturumu aciliyor...</p>';
+        const proxySession = await api.openEarsivPortalProxySession();
+        portalTab.location.href = proxySession.proxyUrl;
+        setMessage(proxySession.message);
         return;
       }
 

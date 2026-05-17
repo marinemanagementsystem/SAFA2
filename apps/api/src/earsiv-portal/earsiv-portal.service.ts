@@ -1,10 +1,17 @@
 import { BadRequestException, Inject, Injectable, ServiceUnavailableException } from "@nestjs/common";
 import axios from "axios";
+import type { Request, Response } from "express";
 import { randomUUID } from "node:crypto";
 import { SettingsService } from "../settings/settings.service";
 import type { GibPortalConnection } from "../settings/connection-types";
 import type { GibPortalInvoiceDraftPayload } from "./portal-draft-payload";
 import { normalizePortalEttn } from "./portal-draft-payload";
+import {
+  proxiedPortalUrl,
+  rewritePortalHtml,
+  rewritePortalText,
+  type PortalProxyRewriteContext
+} from "./portal-proxy-rewrite";
 
 interface AssosLoginResponse {
   token?: string;
@@ -46,6 +53,18 @@ interface CachedPortalLaunchSession {
   lastPortalMessage?: string;
 }
 
+interface CachedPortalProxySession {
+  sessionId: string;
+  portalUrl: string;
+  portalOrigin: string;
+  launchUrl: string;
+  token?: string;
+  cookieJar: Record<string, string>;
+  openedAt: string;
+  expiresAt: string;
+  lastTargetUrl?: string;
+}
+
 export interface PortalLaunchSession {
   portalUrl: string;
   launchUrl: string;
@@ -80,8 +99,16 @@ export interface PortalLogoutResult {
   portalMessage?: string;
 }
 
+export interface PortalProxySessionResult {
+  proxyUrl: string;
+  expiresAt: string;
+  message: string;
+}
+
 const GIB_PORTAL_LAUNCH_SESSION_KEY = "session.gibPortal.launch";
+const GIB_PORTAL_PROXY_SESSION_PREFIX = "session.gibPortal.proxy";
 const DEFAULT_PORTAL_SESSION_TTL_SECONDS = 10 * 60;
+const DEFAULT_PORTAL_PROXY_SESSION_TTL_SECONDS = 30 * 60;
 
 class GibConcurrentSessionError extends Error {
   constructor(message: string) {
@@ -93,6 +120,12 @@ class GibConcurrentSessionError extends Error {
 function portalSessionTtlMs() {
   const configured = Number(process.env.GIB_PORTAL_SESSION_TTL_SECONDS ?? DEFAULT_PORTAL_SESSION_TTL_SECONDS);
   const seconds = Number.isFinite(configured) && configured > 0 ? configured : DEFAULT_PORTAL_SESSION_TTL_SECONDS;
+  return seconds * 1000;
+}
+
+function portalProxySessionTtlMs() {
+  const configured = Number(process.env.GIB_PORTAL_PROXY_SESSION_TTL_SECONDS ?? DEFAULT_PORTAL_PROXY_SESSION_TTL_SECONDS);
+  const seconds = Number.isFinite(configured) && configured > 0 ? configured : DEFAULT_PORTAL_PROXY_SESSION_TTL_SECONDS;
   return seconds * 1000;
 }
 
@@ -116,6 +149,111 @@ function tokenFromLaunchSession(session: CachedPortalLaunchSession | undefined) 
   } catch {
     return undefined;
   }
+}
+
+function proxySessionKey(sessionId: string) {
+  return `${GIB_PORTAL_PROXY_SESSION_PREFIX}.${sessionId}`;
+}
+
+function setCookieValues(value: unknown): string[] {
+  if (Array.isArray(value)) return value.map(String);
+  if (typeof value === "string" && value.trim()) return [value];
+  return [];
+}
+
+function cookieJarFromSetCookie(values: string[], base: Record<string, string> = {}) {
+  const output = { ...base };
+
+  for (const value of values) {
+    const [pair, ...attributes] = value.split(";");
+    const separator = pair.indexOf("=");
+    if (separator <= 0) continue;
+
+    const name = pair.slice(0, separator).trim();
+    const cookieValue = pair.slice(separator + 1).trim();
+    const shouldDelete = attributes.some((attribute) => /^max-age=0$/i.test(attribute.trim())) || !cookieValue;
+
+    if (shouldDelete) {
+      delete output[name];
+    } else {
+      output[name] = cookieValue;
+    }
+  }
+
+  return output;
+}
+
+function cookieHeader(cookieJar: Record<string, string>) {
+  return Object.entries(cookieJar)
+    .map(([name, value]) => `${name}=${value}`)
+    .join("; ");
+}
+
+function isTextContentType(contentType: string) {
+  return (
+    /^text\//i.test(contentType) ||
+    /(?:json|javascript|ecmascript|xml|x-www-form-urlencoded)/i.test(contentType) ||
+    /application\/(?:xhtml\+xml|rss\+xml|atom\+xml)/i.test(contentType)
+  );
+}
+
+function isHtmlContentType(contentType: string) {
+  return /text\/html|application\/xhtml\+xml/i.test(contentType);
+}
+
+function safeHeaderValue(value: unknown) {
+  if (Array.isArray(value)) return value[0];
+  if (typeof value === "string") return value;
+  if (typeof value === "number") return String(value);
+  return undefined;
+}
+
+function shouldForwardRequestBody(method: string) {
+  return !["GET", "HEAD"].includes(method.toUpperCase());
+}
+
+function bodyForProxyRequest(request: Request) {
+  if (!shouldForwardRequestBody(request.method)) return undefined;
+
+  const body = request.body as unknown;
+  const contentType = String(request.headers["content-type"] ?? "");
+
+  if (Buffer.isBuffer(body) || typeof body === "string") return body;
+  if (!body || typeof body !== "object") return undefined;
+
+  if (contentType.includes("application/x-www-form-urlencoded")) {
+    const form = new URLSearchParams();
+    for (const [key, value] of Object.entries(body as Record<string, unknown>)) {
+      if (Array.isArray(value)) {
+        for (const item of value) form.append(key, String(item));
+      } else if (value !== undefined && value !== null) {
+        form.set(key, String(value));
+      }
+    }
+    return form.toString();
+  }
+
+  return JSON.stringify(body);
+}
+
+function stripHopByHopHeaders(headers: Record<string, unknown>) {
+  const blocked = new Set([
+    "connection",
+    "keep-alive",
+    "proxy-authenticate",
+    "proxy-authorization",
+    "te",
+    "trailer",
+    "transfer-encoding",
+    "upgrade",
+    "set-cookie",
+    "content-encoding",
+    "content-length",
+    "content-security-policy",
+    "x-frame-options"
+  ]);
+
+  return Object.fromEntries(Object.entries(headers).filter(([key]) => !blocked.has(key.toLowerCase())));
 }
 
 function launchUrl(portalUrl: string, response: AssosLoginResponse) {
@@ -332,6 +470,99 @@ export class EarsivPortalService {
     }
   }
 
+  async createProxySession(): Promise<PortalProxySessionResult> {
+    const connection = await this.getConnection();
+
+    const cachedLaunch = await this.readValidLaunchSessionForProxy(connection.portalUrl);
+    if (cachedLaunch) {
+      return this.rememberProxySession(connection, cachedLaunch.launchUrl, tokenFromLaunchSession(cachedLaunch), {});
+    }
+
+    try {
+      const { response, launchSession, setCookie } = await this.login("SAFA live e-arsiv portal proxy", connection);
+      if (!launchSession) {
+        throw new ServiceUnavailableException("e-Arsiv portali giris yanitinda redirectUrl donmedi.");
+      }
+      return this.rememberProxySession(connection, launchSession.launchUrl, response.token, cookieJarFromSetCookie(setCookie ?? []));
+    } catch (error) {
+      if (error instanceof GibConcurrentSessionError) {
+        const fallback = await this.readValidLaunchSessionForProxy(connection.portalUrl);
+        if (fallback) {
+          return this.rememberProxySession(connection, fallback.launchUrl, tokenFromLaunchSession(fallback), {});
+        }
+        throw new BadRequestException(
+          "GIB aktif oturum bildirdi; SAFA proxy icin kullanilabilir token yok. Portaldan Guvenli Cikis yapip tekrar deneyin."
+        );
+      }
+
+      throw error;
+    }
+  }
+
+  async proxyPortalRequest(sessionId: string, request: Request, response: Response) {
+    const session = await this.readValidProxySession(sessionId);
+    if (!session) {
+      response.status(410).send("e-Arsiv proxy oturumunun suresi doldu. SAFA'dan e-Arsiv ac ile tekrar deneyin.");
+      return;
+    }
+
+    const targetUrl = this.targetUrlFromProxyRequest(session, request);
+    const proxyHeaders = this.proxyRequestHeaders(session, request, targetUrl);
+    const proxyResponse = await axios.request<ArrayBuffer | Buffer>({
+      method: request.method,
+      url: targetUrl.toString(),
+      headers: proxyHeaders,
+      data: bodyForProxyRequest(request),
+      responseType: "arraybuffer",
+      maxRedirects: 0,
+      timeout: 30_000,
+      validateStatus: () => true
+    });
+
+    const nextCookieJar = cookieJarFromSetCookie(setCookieValues(proxyResponse.headers["set-cookie"]), session.cookieJar);
+    const nextSession: CachedPortalProxySession = {
+      ...session,
+      cookieJar: nextCookieJar,
+      lastTargetUrl: targetUrl.toString()
+    };
+    await this.writeProxySession(nextSession);
+
+    const context = this.proxyRewriteContext(session);
+    const headers = stripHopByHopHeaders(proxyResponse.headers as Record<string, unknown>);
+    for (const [key, value] of Object.entries(headers)) {
+      if (value !== undefined) response.setHeader(key, value as string | number | readonly string[]);
+    }
+
+    const location = safeHeaderValue(proxyResponse.headers.location);
+    if (location) {
+      response.setHeader("Location", proxiedPortalUrl(context, location, targetUrl.toString()));
+    }
+
+    response.setHeader("Cache-Control", "no-store");
+    response.status(proxyResponse.status);
+
+    if (request.method === "HEAD" || proxyResponse.status === 204 || proxyResponse.status === 304) {
+      response.end();
+      return;
+    }
+
+    const responseData = proxyResponse.data;
+    const body = Buffer.isBuffer(responseData) ? responseData : Buffer.from(new Uint8Array(responseData));
+    const contentType = safeHeaderValue(proxyResponse.headers["content-type"]) ?? "";
+
+    if (isHtmlContentType(contentType)) {
+      response.send(rewritePortalHtml(context, body.toString("utf8"), targetUrl.toString()));
+      return;
+    }
+
+    if (isTextContentType(contentType)) {
+      response.send(rewritePortalText(context, body.toString("utf8"), targetUrl.toString()));
+      return;
+    }
+
+    response.end(body);
+  }
+
   async listIssuedInvoices(startDate: Date, endDate: Date) {
     const { connection, response } = await this.loginForOperation("SAFA live e-arsiv invoice query");
     if (!response.token) {
@@ -443,6 +674,110 @@ export class EarsivPortalService {
     return results;
   }
 
+  private async rememberProxySession(
+    connection: GibPortalConnection,
+    launchUrlValue: string,
+    token: string | undefined,
+    cookieJar: Record<string, string>
+  ): Promise<PortalProxySessionResult> {
+    const openedAt = new Date();
+    const sessionId = randomUUID();
+    const portalOrigin = new URL(connection.portalUrl).origin;
+    const session: CachedPortalProxySession = {
+      sessionId,
+      portalUrl: connection.portalUrl,
+      portalOrigin,
+      launchUrl: launchUrlValue,
+      ...(token ? { token } : {}),
+      cookieJar,
+      openedAt: openedAt.toISOString(),
+      expiresAt: new Date(openedAt.getTime() + portalProxySessionTtlMs()).toISOString(),
+      lastTargetUrl: launchUrlValue
+    };
+
+    await this.writeProxySession(session);
+
+    return {
+      proxyUrl: this.proxyUrlForTarget(session, launchUrlValue),
+      expiresAt: session.expiresAt,
+      message: "e-Arsiv portali SAFA proxy oturumuyla acildi."
+    };
+  }
+
+  private proxyRewriteContext(session: CachedPortalProxySession): PortalProxyRewriteContext {
+    return {
+      sessionId: session.sessionId,
+      portalOrigin: session.portalOrigin,
+      proxyPrefix: `/api/earsiv-portal/proxy/${encodeURIComponent(session.sessionId)}`
+    };
+  }
+
+  private proxyUrlForTarget(session: CachedPortalProxySession, targetUrl: string) {
+    return proxiedPortalUrl(this.proxyRewriteContext(session), targetUrl, session.launchUrl);
+  }
+
+  private targetUrlFromProxyRequest(session: CachedPortalProxySession, request: Request) {
+    const requestUrl = new URL(request.originalUrl, session.portalOrigin);
+    const proxyPrefix = `/api/earsiv-portal/proxy/${encodeURIComponent(session.sessionId)}`;
+    let targetPath = requestUrl.pathname.slice(proxyPrefix.length);
+    if (!targetPath) targetPath = "/";
+    if (!targetPath.startsWith("/")) targetPath = `/${targetPath}`;
+    if (targetPath.startsWith("//")) {
+      throw new BadRequestException("e-Arsiv proxy sadece kayitli GIB portal adresine istek atabilir.");
+    }
+
+    const target = new URL(`${targetPath}${requestUrl.search}`, session.portalOrigin);
+    if (target.origin !== session.portalOrigin) {
+      throw new BadRequestException("e-Arsiv proxy sadece kayitli GIB portal adresine istek atabilir.");
+    }
+
+    return target;
+  }
+
+  private proxyRequestHeaders(session: CachedPortalProxySession, request: Request, targetUrl: URL) {
+    const headers: Record<string, string> = {
+      Accept: safeHeaderValue(request.headers.accept) ?? "*/*",
+      "Accept-Language": safeHeaderValue(request.headers["accept-language"]) ?? "tr,en-US;q=0.9,en;q=0.8",
+      "Cache-Control": "no-cache",
+      Pragma: "no-cache",
+      Referer: session.lastTargetUrl ?? session.launchUrl,
+      "User-Agent": safeHeaderValue(request.headers["user-agent"]) ?? "SAFA e-arsiv portal proxy"
+    };
+
+    const contentType = safeHeaderValue(request.headers["content-type"]);
+    if (contentType && shouldForwardRequestBody(request.method)) headers["Content-Type"] = contentType;
+    if (!["GET", "HEAD"].includes(request.method.toUpperCase())) headers.Origin = targetUrl.origin;
+
+    const cookies = cookieHeader(session.cookieJar);
+    if (cookies) headers.Cookie = cookies;
+
+    return headers;
+  }
+
+  private async readValidLaunchSessionForProxy(portalUrl: string): Promise<CachedPortalLaunchSession | undefined> {
+    const cached = await this.readLaunchSession();
+    if (!cached?.launchUrl || cached.portalUrl !== portalUrl || !tokenFromLaunchSession(cached)) return undefined;
+    const expiresAt = new Date(cached.expiresAt).getTime();
+    if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) return undefined;
+    return cached;
+  }
+
+  private async readValidProxySession(sessionId: string): Promise<CachedPortalProxySession | undefined> {
+    try {
+      const cached = await this.settings.readEncryptedSetting<CachedPortalProxySession>(proxySessionKey(sessionId));
+      if (!cached?.sessionId || cached.sessionId !== sessionId || !cached.portalOrigin) return undefined;
+      const expiresAt = new Date(cached.expiresAt).getTime();
+      if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) return undefined;
+      return cached;
+    } catch {
+      return undefined;
+    }
+  }
+
+  private async writeProxySession(session: CachedPortalProxySession) {
+    await this.settings.writeEncryptedSetting(proxySessionKey(session.sessionId), session);
+  }
+
   private async getConnection() {
     const connection = await this.settings.getGibPortalConnection();
     if (!connection?.username || !connection.password) {
@@ -469,7 +804,7 @@ export class EarsivPortalService {
   private async login(
     userAgent: string,
     inputConnection?: GibPortalConnection
-  ): Promise<{ connection: GibPortalConnection; response: AssosLoginResponse; launchSession?: PortalLaunchSession }> {
+  ): Promise<{ connection: GibPortalConnection; response: AssosLoginResponse; launchSession?: PortalLaunchSession; setCookie?: string[] }> {
     const connection = inputConnection ?? (await this.getConnection());
     const form = new URLSearchParams({
       assoscmd: "anologin",
@@ -502,7 +837,7 @@ export class EarsivPortalService {
     }
 
     const launchSession = await this.rememberLaunchSession(connection, response.data, portalMessage(response.data));
-    return { connection, response: response.data, launchSession };
+    return { connection, response: response.data, launchSession, setCookie: setCookieValues(response.headers?.["set-cookie"]) };
   }
 
   private async logout(connection: GibPortalConnection, token: string) {
