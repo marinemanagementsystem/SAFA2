@@ -207,6 +207,34 @@ describe("EarsivPortalService", () => {
     );
   });
 
+  it("does not reuse cached launch tokens for fresh proxy sessions", async () => {
+    const settingsMock = settings();
+    vi.mocked(settingsMock.readEncryptedSetting).mockResolvedValueOnce({
+      portalUrl: "https://earsivportal.efatura.gov.tr/intragiris.html",
+      launchUrl: "https://earsivportal.efatura.gov.tr/intragiris.html?token=cached-token",
+      token: "cached-token",
+      tokenReceived: true,
+      openedAt: new Date().toISOString(),
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+      source: "fresh",
+      message: "cached"
+    });
+    post.mockResolvedValueOnce({
+      status: 200,
+      data: {
+        token: "fresh-proxy-token",
+        redirectUrl: "/intragiris.html"
+      }
+    });
+
+    const service = new EarsivPortalService(settingsMock as unknown as SettingsService);
+    const result = await service.createProxySession();
+
+    expect(result.proxyUrl).toContain("token=fresh-proxy-token");
+    expect(result.proxyUrl).not.toContain("token=cached-token");
+    expect(post).toHaveBeenCalledTimes(1);
+  });
+
   it("keeps proxied portal requests restricted to the GIB origin", async () => {
     const settingsMock = settings();
     vi.mocked(settingsMock.readEncryptedSetting).mockResolvedValueOnce({

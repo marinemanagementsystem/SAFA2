@@ -473,11 +473,6 @@ export class EarsivPortalService {
   async createProxySession(): Promise<PortalProxySessionResult> {
     const connection = await this.getConnection();
 
-    const cachedLaunch = await this.readValidLaunchSessionForProxy(connection.portalUrl);
-    if (cachedLaunch) {
-      return this.rememberProxySession(connection, cachedLaunch.launchUrl, tokenFromLaunchSession(cachedLaunch), {});
-    }
-
     try {
       const { response, launchSession, setCookie } = await this.login("SAFA live e-arsiv portal proxy", connection);
       if (!launchSession) {
