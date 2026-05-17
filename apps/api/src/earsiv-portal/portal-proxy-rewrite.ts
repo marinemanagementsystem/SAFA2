@@ -75,15 +75,15 @@ export function rewritePortalHtml(context: PortalProxyRewriteContext, html: stri
 }
 
 export function rewritePortalText(context: PortalProxyRewriteContext, text: string, baseUrl: string) {
-  const originPattern = new RegExp(escapeRegExp(context.portalOrigin), "g");
-  const rootPathPattern = /(["'`])\/(?!\/|api\/)([^"'`<>\s)]*)/g;
+  const quotedAbsolutePattern = new RegExp("([\"'`])(" + escapeRegExp(context.portalOrigin) + "\\/[^\"'`<>\\s)]*)\\1", "g");
+  const quotedRootPathPattern = /(["'`])(\/(?!\/|api\/)[^"'`<>\s)]*)\1/g;
   const cssUrlPattern = /url\((['"]?)([^)'"]+)\1\)/g;
 
   return text
-    .replace(originPattern, context.proxyPrefix)
     .replace(cssUrlPattern, (match, quote: string, target: string) => {
       const proxied = proxiedPortalUrl(context, target.trim(), baseUrl);
       return `url(${quote}${proxied}${quote})`;
     })
-    .replace(rootPathPattern, (match, quote: string, path: string) => `${quote}${context.proxyPrefix}/${path}`);
+    .replace(quotedAbsolutePattern, (match, quote: string, target: string) => `${quote}${proxiedPortalUrl(context, target, baseUrl)}${quote}`)
+    .replace(quotedRootPathPattern, (match, quote: string, target: string) => `${quote}${proxiedPortalUrl(context, target, baseUrl)}${quote}`);
 }

@@ -46,4 +46,12 @@ describe("portal proxy rewrite", () => {
 
     expect(rewritten).toContain('"/api/earsiv-portal/proxy/session-1/earsiv-services/dispatch"');
   });
+
+  it("does not rewrite JavaScript regex literals", () => {
+    const source = 'const re = /https:\\/\\/earsivportal\\.efatura\\.gov\\.tr\\/index\\.jsp/g; const endpoint = "/earsiv-services/dispatch";';
+    const rewritten = rewritePortalText(context, source, "https://earsivportal.efatura.gov.tr/intragiris.html");
+
+    expect(rewritten).toContain("/https:\\/\\/earsivportal\\.efatura\\.gov\\.tr\\/index\\.jsp/g");
+    expect(rewritten).toContain('"/api/earsiv-portal/proxy/session-1/earsiv-services/dispatch"');
+  });
 });
