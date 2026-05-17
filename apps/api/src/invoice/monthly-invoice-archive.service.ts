@@ -1,6 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import { ExternalInvoiceSource, Prisma } from "@prisma/client";
-import type { MonthlyInvoiceArchiveResult } from "@safa/shared";
 import archiver = require("archiver");
 import axios from "axios";
 import ExcelJS from "exceljs";
@@ -20,6 +19,20 @@ type ExternalInvoiceRecord = Prisma.ExternalInvoiceGetPayload<{
 interface MonthlyInvoiceInput {
   year: number;
   month: number;
+}
+
+interface MonthlyInvoiceArchiveResult {
+  year: number;
+  month: number;
+  invoiceCount: number;
+  missingPdfCount: number;
+  missingXmlCount: number;
+  draftXmlAvailableCount: number;
+  excelFileName: string;
+  archiveFileName: string;
+  archivePath: string;
+  downloadUrl: string;
+  generatedAt: string;
 }
 
 interface MonthlyTotals {
