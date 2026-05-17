@@ -40,7 +40,7 @@ const staleDraft = {
   invoice: null
 };
 
-function serviceWith(existingDraft: Record<string, unknown> | null) {
+function serviceWith(existingDraft: Record<string, unknown> | null, packages: Record<string, unknown>[] = [deliveredPackage]) {
   const prisma = {
     order: {
       upsert: vi.fn(async () => ({ id: "order-1" }))
@@ -55,7 +55,7 @@ function serviceWith(existingDraft: Record<string, unknown> | null) {
     }
   };
   const trendyol = {
-    fetchDeliveredPackages: vi.fn(async () => [deliveredPackage])
+    fetchDeliveredPackages: vi.fn(async () => packages)
   };
   const externalInvoices = {
     syncTrendyolMetadata: vi.fn(async () => ({ imported: 0, matched: 0 }))
@@ -107,5 +107,39 @@ describe("OrdersService", () => {
     expect(result.draftsUpdated).toBe(0);
     expect(prisma.invoiceDraft.update).not.toHaveBeenCalled();
     expect(prisma.invoiceDraft.create).not.toHaveBeenCalled();
+  });
+
+  it("refreshes open drafts with corporate invoice VKN from Trendyol invoice address", async () => {
+    const corporatePackage = {
+      ...deliveredPackage,
+      orderNumber: "11227170653",
+      identityNumber: "11111111111",
+      taxNumber: undefined,
+      invoiceAddress: {
+        fullName: "Eren yiğit kaplan",
+        companyName: "YK TEKNOLOJİ",
+        taxId: "56200450596",
+        taxOfficeName: "Gaziler",
+        address1: "Pazar mahallesi demirciler caddesi Subaşı işhanı no :4 iç kapı no :24 giriş kat YK teknoloji",
+        district: "İlkadım",
+        city: "Samsun",
+        countryCode: "TR",
+        postalCode: "55000"
+      }
+    };
+    const { service, prisma } = serviceWith({ ...staleDraft, status: DraftStatus.READY }, [corporatePackage]);
+
+    const result = await service.syncDeliveredOrders();
+
+    expect(result.draftsUpdated).toBe(1);
+    const update = prisma.invoiceDraft.update.mock.calls[0][0];
+    expect(update.data.totals.buyerIdentifier).toBe("56200450596");
+    expect(update.data.totals.buyerType).toBe("company");
+    expect(update.data.validation.warnings).not.toContain("TCKN/VKN gelmedi; nihai tuketici varsayimiyla 11111111111 kullanilacak.");
+    const upsert = (prisma.order.upsert.mock.calls as any[])[0][0];
+    expect(upsert.update).toMatchObject({
+      customerName: "YK TEKNOLOJİ",
+      customerIdentifier: "56200450596"
+    });
   });
 });

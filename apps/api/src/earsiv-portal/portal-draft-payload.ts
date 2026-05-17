@@ -257,7 +257,7 @@ export function buildGibPortalInvoiceDraftPayload(
   const ettn = normalizePortalEttn(options.uuid ?? randomUUID());
   const unitCode = options.unitCode ?? "C62";
   const buyerIdentifier = normalizeBuyerIdentifier(payload.buyerIdentifier);
-  const isCompany = buyerIdentifier.length === 10;
+  const isCompany = payload.buyerType === "company" || buyerIdentifier.length === 10;
   const buyerName = payload.buyerName.trim();
   const personName = splitBuyerName(buyerName);
   const grossAllocations = allocateCents(
@@ -296,7 +296,7 @@ export function buildGibPortalInvoiceDraftPayload(
     binaNo: "",
     kapiNo: "",
     kasabaKoy: "",
-    vergiDairesi: "",
+    vergiDairesi: payload.address.taxOffice ?? "",
     ulke: payload.address.countryCode === "TR" ? "T\u00fcrkiye" : payload.address.countryCode,
     bulvarcaddesokak: payload.address.addressLine,
     mahalleSemtIlce: payload.address.district ?? "",

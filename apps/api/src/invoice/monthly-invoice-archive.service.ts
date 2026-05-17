@@ -13,7 +13,7 @@ type InvoiceRecord = Prisma.InvoiceGetPayload<{
   include: { draft: { include: { order: true } } };
 }>;
 type ExternalInvoiceRecord = Prisma.ExternalInvoiceGetPayload<{
-  include: { matchedOrder: true };
+  include: { matchedOrder: { include: { invoiceDraft: true } } };
 }>;
 
 interface MonthlyInvoiceInput {
@@ -373,7 +373,11 @@ export class MonthlyInvoiceArchiveService {
     });
     const externalInvoices = await this.prisma.externalInvoice.findMany({
       include: {
-        matchedOrder: true
+        matchedOrder: {
+          include: {
+            invoiceDraft: true
+          }
+        }
       },
       orderBy: { invoiceDate: "asc" },
       take: MAX_REPORT_ROWS
@@ -454,21 +458,27 @@ export class MonthlyInvoiceArchiveService {
     const draftTotals = this.computeDraftTotals(invoice.draft);
     if (draftTotals.vatCents !== undefined || draftTotals.taxExclusiveCents !== undefined) return draftTotals;
 
+    const externalTotals = this.computeExternalTotals(external);
     return {
-      ...this.computeExternalTotals(external),
-      payableCents: draftTotals.payableCents ?? this.computeExternalTotals(external).payableCents
+      ...externalTotals,
+      payableCents: draftTotals.payableCents ?? externalTotals.payableCents
     };
   }
 
   private computeDraftTotals(draft: InvoiceRecord["draft"]): MonthlyTotals {
-    const lines = asArray(draft.lines);
-    const totalsRecord = asRecord(draft.totals);
+    return this.computeLineTotals(draft.lines, draft.totals, draft.order.totalPayableCents);
+  }
+
+  private computeLineTotals(linesInput: unknown, totalsInput: unknown, fallbackPayableCents?: number | null): MonthlyTotals {
+    const lines = asArray(linesInput);
+    const totalsRecord = asRecord(totalsInput);
     const declaredPayable =
       parseMoneyCents(totalsRecord.payableCents, "payableCents") ??
       parseMoneyCents(totalsRecord.totalPayableCents, "totalPayableCents") ??
       parseMoneyCents(totalsRecord.payable) ??
       parseMoneyCents(totalsRecord.totalPayable) ??
-      draft.order.totalPayableCents;
+      fallbackPayableCents ??
+      undefined;
 
     let linePayableTotal = 0;
     let taxExclusiveTotal = 0;
@@ -509,10 +519,24 @@ export class MonthlyInvoiceArchiveService {
     if (!external) return {};
 
     const raw = asRecord(external.raw);
-    return {
+    const rawTotals = {
       payableCents: external.totalPayableCents ?? centsFromRecord(raw, rawFieldAliases.payable),
       vatCents: centsFromRecord(raw, rawFieldAliases.vat),
       taxExclusiveCents: centsFromRecord(raw, rawFieldAliases.taxExclusive)
+    };
+    const matchedDraft = external.matchedOrder?.invoiceDraft;
+    const draftTotals = matchedDraft
+      ? this.computeLineTotals(
+          matchedDraft.lines,
+          matchedDraft.totals,
+          rawTotals.payableCents ?? external.matchedOrder?.totalPayableCents ?? external.totalPayableCents
+        )
+      : {};
+
+    return {
+      payableCents: rawTotals.payableCents ?? draftTotals.payableCents,
+      vatCents: rawTotals.vatCents ?? draftTotals.vatCents,
+      taxExclusiveCents: rawTotals.taxExclusiveCents ?? draftTotals.taxExclusiveCents
     };
   }
 

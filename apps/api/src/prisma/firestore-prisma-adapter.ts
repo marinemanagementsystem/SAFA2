@@ -639,8 +639,9 @@ async function hydrateExternalInvoice(store: FirestorePrismaAdapter, invoice: An
   if (!include?.matchedOrder || !invoice.matchedOrderId) return invoice;
   const order = await store.get(firestoreCollections.orders, invoice.matchedOrderId);
   if (!order) return { ...invoice, matchedOrder: null };
+  const hydratedOrder = include.matchedOrder.include ? await hydrateOrder(store, order, include.matchedOrder.include) : order;
   return {
     ...invoice,
-    matchedOrder: applySelect(order, include.matchedOrder.select)
+    matchedOrder: applySelect(hydratedOrder, include.matchedOrder.select)
   };
 }

@@ -173,6 +173,66 @@ describe("MonthlyInvoiceArchiveService", () => {
     expect(sheet.getCell("G3").value).toBe(150.1);
   });
 
+  it("does not export unsigned portal drafts to the official monthly Excel", async () => {
+    const prisma = makePrismaMock();
+    prisma.invoice.findMany.mockResolvedValue([]);
+    prisma.externalInvoice.findMany.mockResolvedValue([
+      makeExternal({
+        id: "draft-external",
+        externalKey: "draft-external",
+        invoiceNumber: "TMP202600003",
+        status: "Onaylanmadı",
+        raw: {
+          kaynakKomut: "EARSIV_PORTAL_TASLAKLARI_GETIR"
+        }
+      })
+    ]);
+    const service = new MonthlyInvoiceArchiveService(prisma as never);
+
+    const sheet = await workbookFromBuffer(await service.buildMonthlyExcel({ year: 2026, month: 5 }));
+
+    expect(sheet.actualRowCount).toBe(1);
+  });
+
+  it("fills VAT and tax-exclusive totals from the matched draft when signed external raw totals are incomplete", async () => {
+    const prisma = makePrismaMock();
+    prisma.invoice.findMany.mockResolvedValue([]);
+    prisma.externalInvoice.findMany.mockResolvedValue([
+      makeExternal({
+        id: "external-matched-draft",
+        externalKey: "external-matched-draft",
+        invoiceNumber: "GIB202600004",
+        totalPayableCents: 38336,
+        raw: {
+          kaynakKomut: "EARSIV_PORTAL_ADIMA_KESILEN_BELGELERI_GETIR"
+        },
+        matchedOrder: {
+          id: "order-1",
+          shipmentPackageId: "pkg-1",
+          orderNumber: "order-1",
+          customerName: "Sarper Test",
+          customerIdentifier: "12345678901",
+          totalPayableCents: 38336,
+          currency: "TRY",
+          invoiceDraft: {
+            id: "draft-1",
+            lines: [{ description: "Urun", quantity: 1, payableCents: 38336, vatRate: 20 }],
+            totals: { payableCents: 38336 }
+          }
+        }
+      })
+    ]);
+    const service = new MonthlyInvoiceArchiveService(prisma as never);
+
+    const sheet = await workbookFromBuffer(await service.buildMonthlyExcel({ year: 2026, month: 5 }));
+
+    expect(sheet.actualRowCount).toBe(2);
+    expect(sheet.getCell("A2").value).toBe("GIB202600004");
+    expect(sheet.getCell("E2").value).toBe(63.89);
+    expect(sheet.getCell("F2").value).toBe(383.36);
+    expect(sheet.getCell("G2").value).toBe(319.47);
+  });
+
   it("creates a monthly ZIP package without inventing official XML", async () => {
     const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "safa-monthly-archive-"));
     process.env.STORAGE_DIR = tempDir;

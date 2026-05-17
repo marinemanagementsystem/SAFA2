@@ -466,15 +466,20 @@ function resolveRealStatusCheck(
 
   if (draft.externalInvoiceCount > 0) {
     const hasPortalDraft = draft.status === "PORTAL_DRAFTED";
+    const hasGibExternal = draft.externalInvoiceSources.includes("GIB_PORTAL");
     return {
-      tone: "warning",
-      actual: "Harici fatura bulundu",
-      safa: hasPortalDraft
-        ? "Trendyol faturasi bulundu. SAFA bu siparisi tekrar fatura kesimine kapatti; portaldaki taslak imzalanmamali."
+      tone: hasGibExternal ? "success" : "warning",
+      actual: hasGibExternal ? "Imzali e-Arsiv bulundu" : "Harici fatura bulundu",
+      safa: hasPortalDraft && hasGibExternal
+        ? "GIB portalinda imzali kayit bulundu; SAFA bu siparisi tekrar fatura kesimine kapatti ve arsiv eslesmesini takip ediyor."
+        : hasPortalDraft
+        ? "Harici fatura bulundu. SAFA bu siparisi tekrar fatura kesimine kapatti; portaldaki taslak tekrar imzalanmamali."
         : "SAFA bu siparisi tekrar fatura kesimine kapatti; cift fatura riski engellendi.",
       gib: externalInvoiceSummary(draft),
-      nextAction: hasPortalDraft
-        ? "GIB portalinda bu taslagi imzalamayin. Duzenlenen Belgeler/Taslaklar ekranindan taslagi silin veya isleme almayin; Trendyol faturasini harici eslesme olarak takip edin."
+      nextAction: hasPortalDraft && hasGibExternal
+        ? "e-Arsiv sorgula tamamlandiginda kayit PDF arsivi ve aylik Excel'de resmi fatura olarak gorunmeli."
+        : hasPortalDraft
+        ? "GIB portalinda bu taslagi tekrar imzalamayin. Harici fatura eslesmesini kontrol edin."
         : "Bu sipariste yeniden fatura kesmeyin. Gerekirse harici fatura listesinden eslesmeyi kontrol edin.",
       source: "Kontrol: SAFA harici fatura eslesmesi."
     };
@@ -1188,9 +1193,9 @@ export function InvoicesView({
               </div>
             ) : null}
             {portalDraftsWithExternalInvoices.length > 0 ? (
-              <div className="form-alert danger table-note portal-draft-finder">
-                <strong>{portalDraftsWithExternalInvoices.length} portal taslaginda Trendyol faturasi zaten var.</strong>
-                <span>Bu kayitlari GIB portalinda imzalamayin; Trendyol faturasi harici fatura olarak takip edilmeli.</span>
+              <div className="form-alert table-note portal-draft-finder">
+                <strong>{portalDraftsWithExternalInvoices.length} portal taslaginda resmi/harici fatura kaydi bulundu.</strong>
+                <span>Bu kayitlar tekrar imza bekliyor gibi islenmeyecek; e-Arsiv sorgula/promote akisi arsiv ve Excel durumunu onarir.</span>
                 <div className="portal-draft-finder-list">
                   {portalDraftsWithExternalInvoices.slice(0, 5).map((draft) => (
                     <div key={draft.id}>
@@ -1238,7 +1243,7 @@ export function InvoicesView({
                       {draft.externalInvoiceNumber ? ` · ${draft.externalInvoiceNumber}` : ""}
                     </em>
                   ) : null}
-                  {draft.status === "PORTAL_DRAFTED" ? (
+                  {draft.status === "PORTAL_DRAFTED" && draft.externalInvoiceCount === 0 ? (
                     <em>
                       GIB portal taslagi yuklendi
                       {draft.portalDraftNumber ? ` · ${draft.portalDraftNumber}` : ""}
@@ -1278,7 +1283,7 @@ export function InvoicesView({
                   <a className="text-link" href={api.draftPdfUrl(draft.id)} target="_blank" rel="noreferrer">
                     Taslak PDF
                   </a>
-                  {draft.status === "PORTAL_DRAFTED" ? (
+                  {draft.status === "PORTAL_DRAFTED" && draft.externalInvoiceCount === 0 ? (
                     <button
                       className="ui-button ghost compact draft-inline-action"
                       type="button"
@@ -1289,7 +1294,7 @@ export function InvoicesView({
                       e-Arsiv'de ac
                     </button>
                   ) : null}
-                  {draft.status === "PORTAL_DRAFTED" ? (
+                  {draft.status === "PORTAL_DRAFTED" && draft.externalInvoiceCount === 0 ? (
                     <button
                       className="ui-button ghost compact draft-inline-action"
                       type="button"

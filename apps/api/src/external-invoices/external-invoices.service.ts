@@ -1,5 +1,5 @@
 import { BadRequestException, Inject, Injectable, NotFoundException, ServiceUnavailableException } from "@nestjs/common";
-import { ExternalInvoice, ExternalInvoiceSource, InvoiceStatus, Prisma } from "@prisma/client";
+import { DraftStatus, ExternalInvoice, ExternalInvoiceSource, InvoiceStatus, Prisma } from "@prisma/client";
 import axios from "axios";
 import { createHash } from "node:crypto";
 import fs from "node:fs/promises";
@@ -43,8 +43,10 @@ interface PortalDraftMatchCandidate {
   orderId: string;
   orderNumber: string;
   shipmentPackageId: string;
+  status: DraftStatus;
   portalDraftUuid?: string | null;
   portalDraftNumber?: string | null;
+  portalDraftStatus?: string | null;
   invoice?: {
     id: string;
     provider: string;
@@ -486,8 +488,10 @@ export class ExternalInvoicesService {
         orderId: draft.orderId,
         orderNumber: draft.order?.orderNumber,
         shipmentPackageId: draft.order?.shipmentPackageId,
+        status: draft.status,
         portalDraftUuid: draft.portalDraftUuid,
         portalDraftNumber: draft.portalDraftNumber,
+        portalDraftStatus: draft.portalDraftStatus,
         invoice: draft.invoice
       };
       draftByOrderId.set(candidate.orderId, candidate);
@@ -546,6 +550,8 @@ export class ExternalInvoicesService {
           }
         }));
 
+      const signedPortalStatus = externalInvoice.status ?? "Imzalandi";
+
       if (!existingForDraft) {
         promoted += 1;
         invoiceByNumber.set(invoice.invoiceNumber, invoice);
@@ -553,8 +559,8 @@ export class ExternalInvoicesService {
         await this.prisma.invoiceDraft.update({
           where: { id: match.id },
           data: {
-            status: "ISSUED",
-            portalDraftStatus: externalInvoice.status ?? "Imzalandi"
+            status: DraftStatus.ISSUED,
+            portalDraftStatus: signedPortalStatus
           }
         });
         await this.prisma.auditLog.create({
@@ -572,11 +578,23 @@ export class ExternalInvoicesService {
             })
           }
         });
-      } else if (pdfPath && !existingForDraft.pdfPath) {
-        await this.prisma.invoice.update({
-          where: { id: existingForDraft.id },
-          data: { pdfPath, pdfUrl: externalInvoice.pdfUrl, error: null }
-        });
+      } else {
+        if (match.status !== DraftStatus.ISSUED || match.portalDraftStatus !== signedPortalStatus) {
+          await this.prisma.invoiceDraft.update({
+            where: { id: match.id },
+            data: {
+              status: DraftStatus.ISSUED,
+              portalDraftStatus: signedPortalStatus
+            }
+          });
+        }
+
+        if (pdfPath && !existingForDraft.pdfPath) {
+          await this.prisma.invoice.update({
+            where: { id: existingForDraft.id },
+            data: { pdfPath, pdfUrl: externalInvoice.pdfUrl, error: null }
+          });
+        }
       }
 
       const currentPdfPath = pdfPath ?? invoice.pdfPath;

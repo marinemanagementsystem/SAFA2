@@ -377,18 +377,44 @@ function portalRecordKey(record: Record<string, unknown>) {
   return JSON.stringify(record);
 }
 
+function normalizedPortalText(value: unknown) {
+  return String(value ?? "")
+    .toLocaleLowerCase("tr-TR")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/ı/g, "i");
+}
+
+function portalRecordPriority(record: Record<string, unknown>) {
+  const command = String(record.kaynakKomut ?? record.sourceCommand ?? "");
+  const statusText = normalizedPortalText(record.durum ?? record.status ?? record.belgeDurumu ?? record.onayDurumu ?? record.faturaDurumu);
+
+  if (/iptal|silindi|hata|reddedildi/.test(statusText)) return -10;
+  if (/ADIMA_KESILEN|KESILEN|ONAYLI/i.test(command)) return 20;
+  if (/onaylandi|imzalandi|imzali|kesildi|duzenlendi|basarili/.test(statusText)) return 15;
+  if (/taslak|onaylanmadi|onay bekliyor|imza bekliyor/.test(statusText)) return 0;
+  return 1;
+}
+
 function dedupePortalRecords(records: Record<string, unknown>[]) {
-  const seen = new Set<string>();
-  const output: Record<string, unknown>[] = [];
+  const byKey = new Map<string, Record<string, unknown>>();
+  const keys: string[] = [];
 
   for (const record of records) {
     const key = portalRecordKey(record);
-    if (seen.has(key)) continue;
-    seen.add(key);
-    output.push(record);
+    const existing = byKey.get(key);
+    if (!existing) {
+      keys.push(key);
+      byKey.set(key, record);
+      continue;
+    }
+
+    if (portalRecordPriority(record) > portalRecordPriority(existing)) {
+      byKey.set(key, record);
+    }
   }
 
-  return output;
+  return keys.map((key) => byKey.get(key)).filter((record): record is Record<string, unknown> => Boolean(record));
 }
 
 function shouldLetPortalGenerateUuid(payload: GibPortalInvoiceDraftPayload) {

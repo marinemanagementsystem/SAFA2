@@ -36,6 +36,7 @@ export function buildGibDraftInvoiceXml(payload: ArchiveInvoicePayload, options:
   const uuid = options.uuid ?? randomUUID();
   const sellerTaxId = options.sellerTaxId ?? process.env.GIB_EARSIV_TAX_ID ?? "";
   const buyerId = payload.buyerIdentifier || options.defaultBuyerTckn || process.env.GIB_EARSIV_DEFAULT_BUYER_TCKN || "11111111111";
+  const buyerSchemeId = payload.buyerType === "company" || buyerId.length === 10 ? "VKN" : "TCKN";
   const unitCode = options.unitCode ?? process.env.GIB_EARSIV_UNIT_CODE ?? "C62";
 
   const lineXml = payload.lines
@@ -97,7 +98,7 @@ export function buildGibDraftInvoiceXml(payload: ArchiveInvoicePayload, options:
   <cac:AccountingCustomerParty>
     <cac:Party>
       <cac:PartyIdentification>
-        <cbc:ID schemeID="${buyerId.length === 10 ? "VKN" : "TCKN"}">${xml(buyerId)}</cbc:ID>
+        <cbc:ID schemeID="${buyerSchemeId}">${xml(buyerId)}</cbc:ID>
       </cac:PartyIdentification>
       <cac:PartyName>
         <cbc:Name>${xml(payload.buyerName)}</cbc:Name>

@@ -3,11 +3,13 @@ export interface ArchiveInvoicePayload {
   shipmentPackageId: string;
   buyerName: string;
   buyerIdentifier: string;
+  buyerType?: "company" | "person";
   address: {
     addressLine: string;
     district?: string;
     city: string;
     countryCode: string;
+    taxOffice?: string;
   };
   lines: Array<{
     description: string;

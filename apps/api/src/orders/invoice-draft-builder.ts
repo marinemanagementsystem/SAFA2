@@ -64,7 +64,8 @@ export function buildDraft(order: NormalizedOrder): {
       discountCents: order.totalDiscountCents,
       payableCents: order.totalPayableCents,
       currency: order.currency,
-      buyerIdentifier: order.customerIdentifier ?? "11111111111"
+      buyerIdentifier: order.customerIdentifier ?? "11111111111",
+      ...(order.customerType === "company" ? { buyerType: "company" } : {})
     },
     validation: { errors, warnings },
     status: errors.length > 0 ? "NEEDS_REVIEW" : "READY"

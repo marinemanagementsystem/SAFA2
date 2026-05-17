@@ -30,6 +30,7 @@ export interface NormalizedOrder {
   customerName: string;
   customerEmail?: string;
   customerIdentifier?: string;
+  customerType?: "company" | "person";
   invoiceAddress: NormalizedInvoiceAddress;
   lines: NormalizedLine[];
   totalGrossCents: number;
@@ -57,6 +58,21 @@ function firstText(...values: unknown[]): string {
   for (const value of values) {
     const candidate = text(value);
     if (candidate) return candidate;
+  }
+  return "";
+}
+
+function digitsOnly(value: unknown): string {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return String(Math.trunc(value)).replace(/\D/g, "");
+  }
+  return text(value).replace(/\D/g, "");
+}
+
+function firstIdentifier(...values: unknown[]): string {
+  for (const value of values) {
+    const candidate = digitsOnly(value);
+    if (candidate.length === 10 || candidate.length === 11) return candidate;
   }
   return "";
 }
@@ -209,7 +225,52 @@ export function normalizeTrendyolPackage(pkg: UnknownRecord): NormalizedOrder {
   const lines = Array.isArray(pkg.lines) ? (pkg.lines as UnknownRecord[]) : [];
   const firstName = firstText(invoiceAddress.firstName, pkg.customerFirstName);
   const lastName = firstText(invoiceAddress.lastName, pkg.customerLastName);
-  const fullName = firstText(invoiceAddress.fullName, `${firstName} ${lastName}`.trim(), pkg.customerName);
+  const personName = firstText(invoiceAddress.fullName, `${firstName} ${lastName}`.trim(), pkg.customerName);
+  const companyName = firstText(
+    invoiceAddress.companyName,
+    invoiceAddress.company,
+    invoiceAddress.corporateName,
+    invoiceAddress.commercialName,
+    invoiceAddress.title,
+    invoiceAddress.firmaAdi,
+    invoiceAddress.firmaUnvani,
+    invoiceAddress.unvan,
+    pkg.companyName,
+    pkg.company,
+    pkg.corporateName,
+    pkg.commercialName,
+    pkg.firmaAdi,
+    pkg.firmaUnvani,
+    pkg.unvan
+  );
+  const corporateIdentifier = firstIdentifier(
+    invoiceAddress.taxNumber,
+    invoiceAddress.taxId,
+    invoiceAddress.vkn,
+    invoiceAddress.vergiNo,
+    invoiceAddress.taxPayerId,
+    invoiceAddress.corporateTaxNumber,
+    invoiceAddress.companyTaxNumber,
+    pkg.taxNumber,
+    pkg.taxId,
+    pkg.vkn,
+    pkg.vergiNo,
+    pkg.taxPayerId,
+    pkg.corporateTaxNumber,
+    pkg.companyTaxNumber
+  );
+  const customerIdentifier = firstIdentifier(
+    corporateIdentifier,
+    invoiceAddress.identityNumber,
+    invoiceAddress.tcIdentityNumber,
+    invoiceAddress.identityNo,
+    pkg.identityNumber,
+    pkg.tcIdentityNumber,
+    pkg.identityNo
+  );
+  const isCorporateCustomer = Boolean(corporateIdentifier);
+  const fullName = corporateIdentifier || companyName ? firstText(companyName, personName) : firstText(personName, companyName);
+  const taxOffice = firstText(invoiceAddress.taxOffice, invoiceAddress.taxOfficeName, invoiceAddress.vergiDairesi, pkg.taxOffice, pkg.taxOfficeName, pkg.vergiDairesi);
 
   const normalizedLines = normalizeLinesByPackageTotals(lines, pkg);
 
@@ -223,14 +284,15 @@ export function normalizeTrendyolPackage(pkg: UnknownRecord): NormalizedOrder {
     status: firstText(pkg.shipmentPackageStatus, pkg.status, "Unknown"),
     customerName: fullName,
     customerEmail: firstText(pkg.customerEmail, invoiceAddress.email) || undefined,
-    customerIdentifier: firstText(pkg.taxNumber, pkg.identityNumber, invoiceAddress.taxNumber, invoiceAddress.identityNumber) || undefined,
+    customerIdentifier: customerIdentifier || undefined,
+    customerType: isCorporateCustomer ? "company" : "person",
     invoiceAddress: {
       fullName,
       addressLine: invoiceAddressLine(invoiceAddress),
       district: firstText(invoiceAddress.district, invoiceAddress.town),
       city: firstText(invoiceAddress.city, invoiceAddress.province),
       countryCode: firstText(invoiceAddress.countryCode, "TR"),
-      taxOffice: firstText(invoiceAddress.taxOffice) || undefined
+      taxOffice: taxOffice || undefined
     },
     lines: normalizedLines,
     totalGrossCents: moneyCents(pkg.grossAmount) ?? lineGross,

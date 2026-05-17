@@ -222,6 +222,8 @@ function buildHtml(payload: ArchiveInvoicePayload, options: InvoicePdfOptions) {
   const totalVatCents = rows.reduce((sum, line) => sum + line.vatCents, 0);
   const totalDiscountNetCents = rows.reduce((sum, line) => sum + line.discountNetCents, 0);
   const footerPath = `file:///SAFA/${ettn}_${options.documentNumber}.html`;
+  const sellerIdentifierLabel = seller.taxId.length === 10 ? "VKN" : "TCKN";
+  const buyerIdentifierLabel = payload.buyerType === "company" || payload.buyerIdentifier.length === 10 ? "VKN" : "TCKN";
 
   return `<!doctype html>
 <html lang="tr">
@@ -281,7 +283,7 @@ function buildHtml(payload: ArchiveInvoicePayload, options: InvoicePdfOptions) {
       <div>Web Sitesi:</div>
       <div>E-Posta:</div>
       <div>Vergi Dairesi: ${escapeHtml(seller.taxOffice)}</div>
-      <div>TCKN: ${escapeHtml(seller.taxId)}</div>
+      <div>${sellerIdentifierLabel}: ${escapeHtml(seller.taxId)}</div>
       <div class="bottom-rule"></div>
     </section>
     <section class="center-brand">
@@ -297,7 +299,7 @@ function buildHtml(payload: ArchiveInvoicePayload, options: InvoicePdfOptions) {
       <div>Web Sitesi:</div>
       <div>E-Posta:</div>
       <div>Tel: Fax:</div>
-      <div>TCKN: ${escapeHtml(payload.buyerIdentifier)}</div>
+      <div>${buyerIdentifierLabel}: ${escapeHtml(payload.buyerIdentifier)}</div>
       <div class="bottom-rule"></div>
     </section>
     <div class="ettn"><strong>ETTN:</strong> ${escapeHtml(ettn)}</div>

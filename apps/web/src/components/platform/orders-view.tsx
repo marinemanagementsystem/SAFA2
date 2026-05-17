@@ -296,21 +296,25 @@ export function OrdersView({ orders, selectedOrderId, selectedOrder, detailState
             </table>
 
             <div className="mobile-order-list" aria-label="Mobil siparis listesi">
-              {filteredOrders.map((order) => (
-                <button
-                  className={cx("mobile-order-card", selectedOrderId === order.id && "active")}
-                  onClick={() => onSelectOrder(order.id)}
-                  key={order.id}
-                >
-                  <span className="mono">{order.shipmentPackageId}</span>
-                  <strong>{order.customerName || "Alici eksik"}</strong>
-                  <small>
-                    {order.city || "Sehir yok"} · Teslim {order.deliveredAt ? formatDateTime(order.deliveredAt) : "-"} ·{" "}
-                    {money(order.totalPayableCents, order.currency)}
-                  </small>
-                  <span className={cx("status-pill", statusTone(order.draftStatus))}>{statusLabel(order.draftStatus ?? "YOK")}</span>
-                </button>
-              ))}
+              {filteredOrders.map((order) => {
+                const draftDisplay = draftStateForOrder(order);
+
+                return (
+                  <button
+                    className={cx("mobile-order-card", selectedOrderId === order.id && "active")}
+                    onClick={() => onSelectOrder(order.id)}
+                    key={order.id}
+                  >
+                    <span className="mono">{order.shipmentPackageId}</span>
+                    <strong>{order.customerName || "Alici eksik"}</strong>
+                    <small>
+                      {order.city || "Sehir yok"} · Teslim {order.deliveredAt ? formatDateTime(order.deliveredAt) : "-"} ·{" "}
+                      {money(order.totalPayableCents, order.currency)}
+                    </small>
+                    <span className={cx("status-pill", draftDisplay.tone)}>{draftDisplay.label}</span>
+                  </button>
+                );
+              })}
             </div>
 
             {orders.length === 0 ? <div className="empty-state table-empty">Once Trendyol cek islemini calistirin.</div> : null}
@@ -339,6 +343,7 @@ function SortableHead({ label, onClick }: { label: string; onClick: () => void }
 
 function OrderTableRow({ order, selected, onSelect }: { order: OrderListItem; selected: boolean; onSelect: () => void }) {
   const invoiceDisplay = invoiceStateForOrder(order);
+  const draftDisplay = draftStateForOrder(order);
 
   return (
     <tr
@@ -357,7 +362,7 @@ function OrderTableRow({ order, selected, onSelect }: { order: OrderListItem; se
       <td>{order.city || <span className="muted">Eksik</span>}</td>
       <td>{money(order.totalPayableCents, order.currency)}</td>
       <td>
-        <span className={cx("status-pill", statusTone(order.draftStatus))}>{statusLabel(order.draftStatus ?? "YOK")}</span>
+        <span className={cx("status-pill", draftDisplay.tone)}>{draftDisplay.label}</span>
       </td>
       <td>
         <span className={cx("status-pill", invoiceDisplay.tone)}>{invoiceDisplay.label}</span>
@@ -382,6 +387,28 @@ function OrderTableRow({ order, selected, onSelect }: { order: OrderListItem; se
       </td>
     </tr>
   );
+}
+
+function draftStateForOrder(order: OrderListItem) {
+  if (order.invoiceId) {
+    return {
+      label: "Fatura kesildi",
+      tone: statusTone(order.trendyolStatus ?? "ISSUED")
+    };
+  }
+
+  if (order.externalInvoiceCount > 0 && order.draftStatus === "PORTAL_DRAFTED") {
+    const source = order.externalInvoiceSources?.[0] ? sourceLabel(order.externalInvoiceSources[0]) : "Harici";
+    return {
+      label: `${source} imzali`,
+      tone: statusTone("ISSUED")
+    };
+  }
+
+  return {
+    label: statusLabel(order.draftStatus ?? "YOK"),
+    tone: statusTone(order.draftStatus)
+  };
 }
 
 function invoiceStateForOrder(order: OrderListItem) {

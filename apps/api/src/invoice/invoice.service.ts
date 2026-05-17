@@ -591,11 +591,13 @@ export class InvoiceService {
       shipmentPackageId: draft.order.shipmentPackageId,
       buyerName: draft.order.customerName,
       buyerIdentifier: String(totals.buyerIdentifier ?? draft.order.customerIdentifier ?? "11111111111"),
+      buyerType: totals.buyerType === "company" || totals.buyerType === "person" ? totals.buyerType : undefined,
       address: {
         addressLine: address.addressLine ?? "",
         district: address.district,
         city: address.city ?? "",
-        countryCode: address.countryCode ?? "TR"
+        countryCode: address.countryCode ?? "TR",
+        taxOffice: address.taxOffice
       },
       lines,
       totals: {

@@ -79,14 +79,22 @@ describe("buildGibPortalInvoiceDraftPayload", () => {
       {
         ...payload,
         buyerName: "SAFA TICARET LIMITED SIRKETI",
-        buyerIdentifier: "1234567890"
+        buyerIdentifier: "12345678901",
+        buyerType: "company",
+        address: {
+          ...payload.address,
+          taxOffice: "Gaziler"
+        }
       },
       { uuid: "6f0fdc0f-d6a7-4d1a-b4dd-ea1fd9d2da53" }
     );
 
+    expect(draft.vknTckn).toBe("12345678901");
     expect(draft.aliciUnvan).toBe("SAFA TICARET LIMITED SIRKETI");
     expect(draft.aliciAdi).toBe("");
     expect(draft.aliciSoyadi).toBe("");
+    expect(draft.vergiDairesi).toBe("Gaziler");
+    expect(draft.ulke).toBe("Türkiye");
   });
 
   it("keeps payable portal totals equal to the invoice payload total for quantity-based orders", () => {

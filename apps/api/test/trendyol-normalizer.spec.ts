@@ -113,4 +113,37 @@ describe("normalizeTrendyolPackage", () => {
     expect(normalized.invoiceAddress.addressLine).toBe("Fatura Mahallesi Fatura Caddesi No 10 Cankaya/Ankara Türkiye 06000");
     expect(normalized.invoiceAddress.addressLine).not.toContain("Teslimat Mahallesi");
   });
+
+  it("prefers corporate invoice VKN and company details over default consumer identity", () => {
+    const normalized = normalizeTrendyolPackage({
+      shipmentPackageId: 46,
+      orderNumber: "11227170653",
+      shipmentPackageStatus: "Delivered",
+      customerFirstName: "Eren yiğit",
+      customerLastName: "kaplan",
+      identityNumber: "11111111111",
+      invoiceAddress: {
+        fullName: "Eren yiğit kaplan",
+        companyName: "YK TEKNOLOJİ",
+        taxId: "56200450596",
+        taxOfficeName: "Gaziler",
+        address1: "Pazar mahallesi demirciler caddesi Subaşı işhanı no :4 iç kapı no :24 giriş kat YK teknoloji",
+        district: "İlkadım",
+        city: "Samsun",
+        countryCode: "TR",
+        postalCode: "55000"
+      },
+      grossAmount: 100,
+      totalPrice: 100,
+      lines: [{ productName: "Urun", quantity: 1, amount: 100, vatBaseAmount: 20 }]
+    });
+
+    expect(normalized.customerName).toBe("YK TEKNOLOJİ");
+    expect(normalized.customerIdentifier).toBe("56200450596");
+    expect(normalized.customerType).toBe("company");
+    expect(normalized.invoiceAddress.fullName).toBe("YK TEKNOLOJİ");
+    expect(normalized.invoiceAddress.taxOffice).toBe("Gaziler");
+    expect(normalized.invoiceAddress.countryCode).toBe("TR");
+    expect(normalized.invoiceAddress.addressLine).toContain("Türkiye");
+  });
 });

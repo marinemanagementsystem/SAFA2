@@ -523,6 +523,47 @@ describe("EarsivPortalService", () => {
     expect(post).toHaveBeenCalledTimes(4);
   });
 
+  it("keeps the signed issued portal row when draft and issued lists contain the same document", async () => {
+    post
+      .mockResolvedValueOnce({ status: 200, data: { token: "portal-token" } })
+      .mockResolvedValueOnce({
+        status: 200,
+        data: {
+          data: [
+            {
+              uuid: "33333333-3333-4333-8333-333333333333",
+              faturaNo: "GIB2026003",
+              durum: "Onaylanmadı"
+            }
+          ]
+        }
+      })
+      .mockResolvedValueOnce({ status: 200, data: { data: [] } })
+      .mockResolvedValueOnce({
+        status: 200,
+        data: {
+          data: [
+            {
+              uuid: "33333333-3333-4333-8333-333333333333",
+              faturaNo: "GIB2026003",
+              durum: "Onaylandı"
+            }
+          ]
+        }
+      });
+
+    const service = new EarsivPortalService(settings() as unknown as SettingsService);
+    const result = await service.listIssuedInvoices(new Date("2026-05-01T00:00:00.000Z"), new Date("2026-05-15T00:00:00.000Z"));
+
+    expect(result).toHaveLength(1);
+    expect(result[0]).toMatchObject({
+      uuid: "33333333-3333-4333-8333-333333333333",
+      faturaNo: "GIB2026003",
+      durum: "Onaylandı",
+      kaynakKomut: "EARSIV_PORTAL_ADIMA_KESILEN_BELGELERI_GETIR"
+    });
+  });
+
   it("lets the 5000/30000 portal create request generate its own ETTN", async () => {
     post
       .mockResolvedValueOnce({ status: 200, data: { token: "portal-token" } })
