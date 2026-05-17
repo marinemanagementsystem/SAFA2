@@ -14,6 +14,7 @@ vi.mock("axios", () => ({
 const post = vi.mocked(axios.post);
 const proxyRequest = vi.mocked(axios.request);
 const launchSessionKey = "session.gibPortal.launch";
+const latestProxySessionKey = "session.gibPortal.proxy.latest";
 
 function settings() {
   const store = new Map<string, unknown>();
@@ -205,6 +206,12 @@ describe("EarsivPortalService", () => {
         portalOrigin: "https://earsivportal.efatura.gov.tr"
       })
     );
+    expect(settingsMock.writeEncryptedSetting).toHaveBeenCalledWith(
+      latestProxySessionKey,
+      expect.objectContaining({
+        portalUrl: "https://earsivportal.efatura.gov.tr/intragiris.html"
+      })
+    );
   });
 
   it("does not reuse cached launch tokens for fresh proxy sessions", async () => {
@@ -267,15 +274,42 @@ describe("EarsivPortalService", () => {
 
   it("logs out a cached portal token and expires the local launch session", async () => {
     const settingsMock = settings();
-    vi.mocked(settingsMock.readEncryptedSetting).mockResolvedValueOnce({
-      portalUrl: "https://earsivportal.efatura.gov.tr/intragiris.html",
-      launchUrl: "https://earsivportal.efatura.gov.tr/intragiris.html?token=cached-token",
-      token: "cached-token",
-      tokenReceived: true,
-      openedAt: new Date().toISOString(),
-      expiresAt: new Date(Date.now() + 60_000).toISOString(),
-      source: "fresh",
-      message: "cached"
+    vi.mocked(settingsMock.readEncryptedSetting).mockImplementation(async (key: string) => {
+      if (key === launchSessionKey) {
+        return {
+          portalUrl: "https://earsivportal.efatura.gov.tr/intragiris.html",
+          launchUrl: "https://earsivportal.efatura.gov.tr/intragiris.html?token=cached-token",
+          token: "cached-token",
+          tokenReceived: true,
+          openedAt: new Date().toISOString(),
+          expiresAt: new Date(Date.now() + 60_000).toISOString(),
+          source: "fresh",
+          message: "cached"
+        };
+      }
+
+      if (key === latestProxySessionKey) {
+        return {
+          sessionId: "proxy-session-1",
+          portalUrl: "https://earsivportal.efatura.gov.tr/intragiris.html",
+          expiresAt: new Date(Date.now() + 60_000).toISOString()
+        };
+      }
+
+      if (key === "session.gibPortal.proxy.proxy-session-1") {
+        return {
+          sessionId: "proxy-session-1",
+          portalUrl: "https://earsivportal.efatura.gov.tr/intragiris.html",
+          portalOrigin: "https://earsivportal.efatura.gov.tr",
+          launchUrl: "https://earsivportal.efatura.gov.tr/intragiris.html?token=cached-token",
+          token: "cached-token",
+          cookieJar: { GIBSESSION: "abc123" },
+          openedAt: new Date().toISOString(),
+          expiresAt: new Date(Date.now() + 60_000).toISOString()
+        };
+      }
+
+      return undefined;
     });
     post.mockResolvedValueOnce({ status: 200, data: { data: "logout ok" } });
 
@@ -296,6 +330,13 @@ describe("EarsivPortalService", () => {
       expect.objectContaining({
         launchUrl: "",
         tokenReceived: false
+      })
+    );
+    expect(settingsMock.writeEncryptedSetting).toHaveBeenCalledWith(
+      "session.gibPortal.proxy.proxy-session-1",
+      expect.objectContaining({
+        cookieJar: {},
+        expiresAt: expect.any(String)
       })
     );
   });

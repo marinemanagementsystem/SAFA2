@@ -65,6 +65,12 @@ interface CachedPortalProxySession {
   lastTargetUrl?: string;
 }
 
+interface CachedPortalProxyIndex {
+  sessionId: string;
+  portalUrl: string;
+  expiresAt: string;
+}
+
 export interface PortalLaunchSession {
   portalUrl: string;
   launchUrl: string;
@@ -107,6 +113,7 @@ export interface PortalProxySessionResult {
 
 const GIB_PORTAL_LAUNCH_SESSION_KEY = "session.gibPortal.launch";
 const GIB_PORTAL_PROXY_SESSION_PREFIX = "session.gibPortal.proxy";
+const GIB_PORTAL_PROXY_LATEST_SESSION_KEY = "session.gibPortal.proxy.latest";
 const DEFAULT_PORTAL_SESSION_TTL_SECONDS = 10 * 60;
 const DEFAULT_PORTAL_PROXY_SESSION_TTL_SECONDS = 30 * 60;
 
@@ -439,6 +446,7 @@ export class EarsivPortalService {
 
     if (!token || cached?.portalUrl !== connection.portalUrl) {
       await this.expireLaunchSession(connection.portalUrl, "SAFA'nin kapatabilecegi aktif e-Arsiv oturum tokeni yok.");
+      await this.expireLatestProxySession(connection.portalUrl);
       return {
         portalUrl: connection.portalUrl,
         attempted: false,
@@ -452,6 +460,7 @@ export class EarsivPortalService {
     try {
       const response = await this.logout(connection, token);
       await this.expireLaunchSession(connection.portalUrl, "e-Arsiv oturum cache'i guvenli cikis sonrasi temizlendi.");
+      await this.expireLatestProxySession(connection.portalUrl);
       return {
         portalUrl: connection.portalUrl,
         attempted: true,
@@ -462,6 +471,7 @@ export class EarsivPortalService {
       };
     } catch (error) {
       await this.expireLaunchSession(connection.portalUrl, "e-Arsiv oturum cache'i guvenli cikis hatasi sonrasi temizlendi.");
+      await this.expireLatestProxySession(connection.portalUrl);
       return {
         portalUrl: connection.portalUrl,
         attempted: true,
@@ -700,6 +710,11 @@ export class EarsivPortalService {
     };
 
     await this.writeProxySession(session);
+    await this.settings.writeEncryptedSetting<CachedPortalProxyIndex>(GIB_PORTAL_PROXY_LATEST_SESSION_KEY, {
+      sessionId,
+      portalUrl: connection.portalUrl,
+      expiresAt: session.expiresAt
+    });
 
     return {
       proxyUrl: this.proxyUrlForTarget(session, launchUrlValue),
@@ -780,6 +795,31 @@ export class EarsivPortalService {
 
   private async writeProxySession(session: CachedPortalProxySession) {
     await this.settings.writeEncryptedSetting(proxySessionKey(session.sessionId), session);
+  }
+
+  private async expireLatestProxySession(portalUrl: string) {
+    try {
+      const latest = await this.settings.readEncryptedSetting<CachedPortalProxyIndex>(GIB_PORTAL_PROXY_LATEST_SESSION_KEY);
+      if (!latest?.sessionId || latest.portalUrl !== portalUrl) return;
+
+      const expiresAt = new Date(Date.now() - 1000).toISOString();
+      const cached = await this.settings.readEncryptedSetting<CachedPortalProxySession>(proxySessionKey(latest.sessionId));
+      if (cached?.sessionId === latest.sessionId) {
+        await this.writeProxySession({
+          ...cached,
+          cookieJar: {},
+          expiresAt
+        });
+      }
+
+      await this.settings.writeEncryptedSetting<CachedPortalProxyIndex>(GIB_PORTAL_PROXY_LATEST_SESSION_KEY, {
+        sessionId: latest.sessionId,
+        portalUrl,
+        expiresAt
+      });
+    } catch {
+      return;
+    }
   }
 
   private async getConnection() {
