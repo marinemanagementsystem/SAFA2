@@ -201,6 +201,10 @@ function isHtmlContentType(contentType: string) {
   return /text\/html|application\/xhtml\+xml/i.test(contentType);
 }
 
+function isCssContentType(contentType: string) {
+  return /text\/css/i.test(contentType);
+}
+
 function safeHeaderValue(value: unknown) {
   if (Array.isArray(value)) return value[0];
   if (typeof value === "string") return value;
@@ -550,8 +554,13 @@ export class EarsivPortalService {
       return;
     }
 
-    if (isTextContentType(contentType)) {
+    if (isCssContentType(contentType)) {
       response.send(rewritePortalText(context, body.toString("utf8"), targetUrl.toString()));
+      return;
+    }
+
+    if (isTextContentType(contentType)) {
+      response.send(body.toString("utf8"));
       return;
     }
 
