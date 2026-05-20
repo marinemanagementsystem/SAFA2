@@ -87,12 +87,26 @@ export function PlatformApp({ view }: PlatformAppProps) {
               busyAction={platform.busyAction}
               apiAvailable={platform.apiAvailable}
               trendyolForm={platform.trendyolForm}
+              hepsiburadaForm={platform.hepsiburadaForm}
+              hepsiburadaProducts={snapshot.hepsiburadaProducts}
+              hepsiburadaOrderLines={snapshot.hepsiburadaOrderLines}
               gibPortalForm={platform.gibPortalForm}
               gibDirectForm={platform.gibDirectForm}
               setTrendyolForm={platform.setTrendyolForm}
+              setHepsiburadaForm={platform.setHepsiburadaForm}
               setGibPortalForm={platform.setGibPortalForm}
               setGibDirectForm={platform.setGibDirectForm}
               onSaveTrendyol={() => void platform.saveTrendyol()}
+              onSaveHepsiburada={() => void platform.saveHepsiburada()}
+              onSaveHepsiburadaProduct={(input, id) => void platform.saveHepsiburadaProduct(input, id)}
+              onUploadHepsiburadaCatalog={() => void platform.uploadHepsiburadaCatalog()}
+              onCheckHepsiburadaCatalogStatus={(trackingId) => void platform.checkHepsiburadaCatalogStatus(trackingId)}
+              onSyncHepsiburadaInventory={() => void platform.syncHepsiburadaInventory()}
+              onUploadHepsiburadaPrices={() => void platform.uploadHepsiburadaPrices()}
+              onUploadHepsiburadaStocks={() => void platform.uploadHepsiburadaStocks()}
+              onSyncHepsiburadaOrders={() => void platform.syncHepsiburadaOrders()}
+              onCreateHepsiburadaTestOrder={() => void platform.createHepsiburadaTestOrder()}
+              onPackageHepsiburadaOrderLine={(id) => void platform.packageHepsiburadaOrderLine(id)}
               onSaveGibPortal={() => void platform.saveGibPortal()}
               onSaveGibDirect={() => void platform.saveGibDirect()}
               onOpenGibPortal={() => void platform.openGibPortal()}

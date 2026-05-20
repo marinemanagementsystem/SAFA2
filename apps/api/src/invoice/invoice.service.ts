@@ -8,6 +8,7 @@ import { PrismaService } from "../prisma/prisma.service";
 import { TrendyolService } from "../trendyol/trendyol.service";
 import { extractTrendyolDeliveryDate } from "../trendyol/trendyol-normalizer";
 import { ArchiveInvoicePayload, InvoiceProvider } from "./invoice-provider";
+import { hashPublicInvoiceToken } from "./public-invoice-token";
 import { buildInvoicePdf } from "./pdf/simple-invoice-pdf";
 import { INVOICE_PROVIDER } from "./providers/invoice-provider.token";
 
@@ -515,6 +516,18 @@ export class InvoiceService {
     const invoice = await this.prisma.invoice.findUnique({ where: { id: invoiceId } });
     if (!invoice?.pdfPath) throw new NotFoundException("Fatura PDF bulunamadi.");
     return fs.readFile(invoice.pdfPath);
+  }
+
+  async getPublicInvoicePdf(token: string) {
+    const tokenRecord = await (this.prisma as any).publicInvoiceToken.findUnique({
+      where: { tokenHash: hashPublicInvoiceToken(token) },
+      include: { invoice: true }
+    });
+    if (!tokenRecord || tokenRecord.expiresAt < new Date()) {
+      throw new NotFoundException("Fatura linki bulunamadi veya suresi doldu.");
+    }
+    if (!tokenRecord.invoice?.pdfPath) throw new NotFoundException("Fatura PDF bulunamadi.");
+    return fs.readFile(tokenRecord.invoice.pdfPath);
   }
 
   async getDraftPdf(draftId: string) {

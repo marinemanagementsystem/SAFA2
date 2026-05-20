@@ -151,6 +151,10 @@ export class FirestorePrismaAdapter {
   readonly order: OrderDelegate;
   readonly invoiceDraft: InvoiceDraftDelegate;
   readonly invoice: InvoiceDelegate;
+  readonly product: ProductDelegate;
+  readonly marketplaceListing: MarketplaceListingDelegate;
+  readonly hepsiburadaOrderLine: HepsiburadaOrderLineDelegate;
+  readonly publicInvoiceToken: PublicInvoiceTokenDelegate;
   readonly externalInvoice: ExternalInvoiceDelegate;
   readonly integrationJob: IntegrationJobDelegate;
   readonly auditLog: AuditLogDelegate;
@@ -162,6 +166,10 @@ export class FirestorePrismaAdapter {
     this.order = new OrderDelegate(this);
     this.invoiceDraft = new InvoiceDraftDelegate(this);
     this.invoice = new InvoiceDelegate(this);
+    this.product = new ProductDelegate(this);
+    this.marketplaceListing = new MarketplaceListingDelegate(this);
+    this.hepsiburadaOrderLine = new HepsiburadaOrderLineDelegate(this);
+    this.publicInvoiceToken = new PublicInvoiceTokenDelegate(this);
     this.externalInvoice = new ExternalInvoiceDelegate(this);
     this.integrationJob = new IntegrationJobDelegate(this);
     this.auditLog = new AuditLogDelegate(this);
@@ -285,6 +293,7 @@ class OrderDelegate extends BaseDelegate {
       const created = {
         id,
         ...args.create,
+        source: args.create.source ?? "TRENDYOL",
         shipmentPackageId,
         currency: args.create.currency ?? "TRY",
         createdAt: now(),
@@ -294,6 +303,159 @@ class OrderDelegate extends BaseDelegate {
       await this.store.writeIndex("order.shipmentPackageId", shipmentPackageId, id, tx);
       return created;
     });
+  }
+}
+
+class ProductDelegate extends BaseDelegate {
+  async findMany(args: AnyRecord = {}) {
+    let items = await this.records(firestoreCollections.products, args);
+    items = await hydrateProductsBatch(this.store, items, args.include);
+    return items.map((item) => applySelect(item, args.select));
+  }
+
+  async findUnique(args: { where: { id?: string; merchantSku?: string }; include?: AnyRecord }) {
+    const id = args.where.id ?? (args.where.merchantSku ? await this.store.findByIndex("product.merchantSku", args.where.merchantSku) : undefined);
+    if (!id) return null;
+    const item = await this.store.get(firestoreCollections.products, id);
+    return item ? hydrateProduct(this.store, item, args.include) : null;
+  }
+
+  async create(args: { data: AnyRecord }) {
+    const id = args.data.id ?? newId();
+    const created: AnyRecord = {
+      id,
+      active: true,
+      stock: 0,
+      dispatchTime: 2,
+      vatRate: 20,
+      ...args.data,
+      createdAt: args.data.createdAt ?? now(),
+      updatedAt: args.data.updatedAt ?? now()
+    };
+    await this.store.set(firestoreCollections.products, id, created);
+    await this.store.writeIndex("product.merchantSku", created.merchantSku, id);
+    if (created.barcode) await this.store.writeIndex("product.barcode", created.barcode, id);
+    return created;
+  }
+
+  async update(args: { where: { id: string }; data: AnyRecord }) {
+    const existing = await this.store.get(firestoreCollections.products, args.where.id);
+    if (!existing) throw new Error("Product not found.");
+    const updated = mergeData(existing, args.data);
+    await this.store.set(firestoreCollections.products, args.where.id, updated);
+    if (updated.merchantSku) await this.store.writeIndex("product.merchantSku", updated.merchantSku, args.where.id);
+    if (updated.barcode) await this.store.writeIndex("product.barcode", updated.barcode, args.where.id);
+    return updated;
+  }
+}
+
+class MarketplaceListingDelegate extends BaseDelegate {
+  async findMany(args: AnyRecord = {}) {
+    let items = await this.records(firestoreCollections.marketplaceListings, args);
+    items = await Promise.all(items.map((item) => hydrateMarketplaceListing(this.store, item, args.include)));
+    return items.map((item) => applySelect(item, args.select));
+  }
+
+  async findUnique(args: { where: { id?: string; provider_merchantSku?: { provider: string; merchantSku: string } }; include?: AnyRecord }) {
+    const id =
+      args.where.id ??
+      (args.where.provider_merchantSku
+        ? await this.store.findByIndex(
+            "marketplaceListing.providerMerchantSku",
+            `${args.where.provider_merchantSku.provider}:${args.where.provider_merchantSku.merchantSku}`
+          )
+        : undefined);
+    if (!id) return null;
+    const item = await this.store.get(firestoreCollections.marketplaceListings, id);
+    return item ? hydrateMarketplaceListing(this.store, item, args.include) : null;
+  }
+
+  async create(args: { data: AnyRecord }) {
+    const id = args.data.id ?? newId();
+    const created: AnyRecord = {
+      id,
+      stock: 0,
+      dispatchTime: 2,
+      ...args.data,
+      createdAt: args.data.createdAt ?? now(),
+      updatedAt: args.data.updatedAt ?? now()
+    };
+    await this.store.set(firestoreCollections.marketplaceListings, id, created);
+    await this.store.writeIndex("marketplaceListing.providerMerchantSku", `${created.provider}:${created.merchantSku}`, id);
+    return created;
+  }
+
+  async update(args: { where: { id: string }; data: AnyRecord }) {
+    const existing = await this.store.get(firestoreCollections.marketplaceListings, args.where.id);
+    if (!existing) throw new Error("Marketplace listing not found.");
+    const updated = mergeData(existing, args.data);
+    await this.store.set(firestoreCollections.marketplaceListings, args.where.id, updated);
+    await this.store.writeIndex("marketplaceListing.providerMerchantSku", `${updated.provider}:${updated.merchantSku}`, args.where.id);
+    return updated;
+  }
+
+  async upsert(args: { where: { provider_merchantSku: { provider: string; merchantSku: string } }; update: AnyRecord; create: AnyRecord }) {
+    const existing = await this.findUnique({ where: { provider_merchantSku: args.where.provider_merchantSku } });
+    if (existing) return this.update({ where: { id: existing.id }, data: args.update });
+    return this.create({ data: args.create });
+  }
+}
+
+class HepsiburadaOrderLineDelegate extends BaseDelegate {
+  async findMany(args: AnyRecord = {}) {
+    return this.records(firestoreCollections.hepsiburadaOrderLines, args);
+  }
+
+  async findUnique(args: { where: { id?: string; lineItemId?: string } }) {
+    const id = args.where.id ?? (args.where.lineItemId ? await this.store.findByIndex("hepsiburadaOrderLine.lineItemId", args.where.lineItemId) : undefined);
+    return id ? this.store.get(firestoreCollections.hepsiburadaOrderLines, id) : null;
+  }
+
+  async update(args: { where: { id: string }; data: AnyRecord }) {
+    const existing = await this.store.get(firestoreCollections.hepsiburadaOrderLines, args.where.id);
+    if (!existing) throw new Error("Hepsiburada order line not found.");
+    const updated = mergeData(existing, args.data);
+    await this.store.set(firestoreCollections.hepsiburadaOrderLines, args.where.id, updated);
+    return updated;
+  }
+
+  async upsert(args: { where: { lineItemId: string }; update: AnyRecord; create: AnyRecord }) {
+    const existing = await this.findUnique({ where: { lineItemId: args.where.lineItemId } });
+    if (existing) return this.update({ where: { id: existing.id }, data: { ...args.update, lineItemId: args.where.lineItemId } });
+    const id = args.create.id ?? newId();
+    const created: AnyRecord = {
+      id,
+      packageStatus: "OPEN",
+      ...args.create,
+      lineItemId: args.where.lineItemId,
+      createdAt: args.create.createdAt ?? now(),
+      updatedAt: args.create.updatedAt ?? now()
+    };
+    await this.store.set(firestoreCollections.hepsiburadaOrderLines, id, created);
+    await this.store.writeIndex("hepsiburadaOrderLine.lineItemId", args.where.lineItemId, id);
+    return created;
+  }
+}
+
+class PublicInvoiceTokenDelegate extends BaseDelegate {
+  async create(args: { data: AnyRecord }) {
+    const id = args.data.id ?? newId();
+    const created: AnyRecord = {
+      id,
+      ...args.data,
+      createdAt: args.data.createdAt ?? now()
+    };
+    await this.store.set(firestoreCollections.publicInvoiceTokens, id, created);
+    await this.store.writeIndex("publicInvoiceToken.tokenHash", created.tokenHash, id);
+    return created;
+  }
+
+  async findUnique(args: { where: { id?: string; tokenHash?: string }; include?: AnyRecord }) {
+    const id = args.where.id ?? (args.where.tokenHash ? await this.store.findByIndex("publicInvoiceToken.tokenHash", args.where.tokenHash) : undefined);
+    if (!id) return null;
+    const item = await this.store.get(firestoreCollections.publicInvoiceTokens, id);
+    if (!item || !args.include?.invoice) return item;
+    return { ...item, invoice: await this.store.get(firestoreCollections.invoices, item.invoiceId) };
   }
 }
 
@@ -535,6 +697,39 @@ async function hydrateOrdersBatch(store: FirestorePrismaAdapter, orders: AnyReco
 
     return order;
   });
+}
+
+async function hydrateProductsBatch(store: FirestorePrismaAdapter, products: AnyRecord[], include?: AnyRecord) {
+  if (!include?.marketplaceListings || products.length === 0) return products;
+  const productIds = new Set(products.map((product) => product.id));
+  const listings = (await store.all(firestoreCollections.marketplaceListings)).filter(
+    (listing) => productIds.has(listing.productId) && matchesWhere(listing, include.marketplaceListings.where)
+  );
+  const listingsByProductId = groupBy(listings, "productId");
+
+  return products.map((product) => ({
+    ...product,
+    marketplaceListings: takeOrdered(listingsByProductId.get(product.id) ?? [], include.marketplaceListings)
+  }));
+}
+
+async function hydrateProduct(store: FirestorePrismaAdapter, product: AnyRecord, include?: AnyRecord) {
+  if (!include?.marketplaceListings) return product;
+  const listings = (await store.all(firestoreCollections.marketplaceListings)).filter(
+    (listing) => listing.productId === product.id && matchesWhere(listing, include.marketplaceListings.where)
+  );
+  return {
+    ...product,
+    marketplaceListings: takeOrdered(listings, include.marketplaceListings)
+  };
+}
+
+async function hydrateMarketplaceListing(store: FirestorePrismaAdapter, listing: AnyRecord, include?: AnyRecord) {
+  if (!include?.product) return listing;
+  return {
+    ...listing,
+    product: await store.get(firestoreCollections.products, listing.productId)
+  };
 }
 
 async function hydrateDraftsBatch(store: FirestorePrismaAdapter, drafts: AnyRecord[], include?: AnyRecord) {

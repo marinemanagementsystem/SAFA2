@@ -86,6 +86,13 @@ export class InvoiceController {
     response.send(pdf);
   }
 
+  @Get("public/invoices/:token.pdf")
+  @Header("Content-Type", "application/pdf")
+  async getPublicInvoicePdf(@Param("token") token: string, @Res() response: Response) {
+    const pdf = await this.invoiceService.getPublicInvoicePdf(token);
+    response.send(pdf);
+  }
+
   @Post("invoices/:id/send-to-trendyol")
   sendToTrendyol(@Param("id") id: string) {
     return this.invoiceService.sendToTrendyol(id);

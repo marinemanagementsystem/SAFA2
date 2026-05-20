@@ -996,6 +996,20 @@ a {
   margin-top: 2px;
 }
 
+.inline-action {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.inline-action input {
+  min-width: 0;
+  height: 34px;
+  padding: 7px 9px;
+  font-size: 12px;
+}
+
 .connection-alert {
   margin: 0 14px 14px;
 }

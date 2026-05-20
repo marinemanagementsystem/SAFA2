@@ -17,6 +17,19 @@ const trendyolConnectionSchema = z.object({
   lookbackDays: z.coerce.number().int().min(1).max(90).default(14)
 });
 
+const hepsiburadaConnectionSchema = z.object({
+  merchantId: z.string().min(1),
+  username: z.string().min(1),
+  password: z.string().optional(),
+  userAgent: z.string().min(1).default("SAFA Hepsiburada integration"),
+  environment: z.enum(["test", "prod"]).default("test"),
+  productBaseUrl: z.string().url().optional().or(z.literal("")),
+  listingBaseUrl: z.string().url().optional().or(z.literal("")),
+  orderBaseUrl: z.string().url().optional().or(z.literal("")),
+  supplierBaseUrl: z.string().url().optional().or(z.literal("")),
+  lookbackDays: z.coerce.number().int().min(1).max(30).default(7)
+});
+
 const gibPortalConnectionSchema = z.object({
   username: z.string().min(1),
   password: z.string().optional(),
@@ -77,6 +90,18 @@ export class SettingsController {
   connectTrendyol(@Body() body: unknown) {
     const parsed = trendyolConnectionSchema.parse(body);
     return this.settingsService.connectTrendyol(parsed);
+  }
+
+  @Put("connections/hepsiburada")
+  saveHepsiburada(@Body() body: unknown) {
+    const parsed = hepsiburadaConnectionSchema.parse(body);
+    return this.settingsService.saveHepsiburadaConnection(parsed);
+  }
+
+  @Put("connections/hepsiburada/connect")
+  connectHepsiburada(@Body() body: unknown) {
+    const parsed = hepsiburadaConnectionSchema.parse(body);
+    return this.settingsService.connectHepsiburada(parsed);
   }
 
   @Put("connections/gib-portal")

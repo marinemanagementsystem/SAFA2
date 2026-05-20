@@ -27,11 +27,11 @@ export const integrationCatalog: IntegrationCatalogItem[] = [
     id: "hepsiburada",
     name: "Hepsiburada",
     category: "marketplace",
-    availability: "planned",
-    headline: "Adapter planlandi",
-    description: "Ayni siparis, fatura ve durum modeline baglanacak pazaryeri saglayicisi.",
+    availability: "active",
+    headline: "Katalog, stok/fiyat ve paketleme akisi",
+    description: "TrackingId, listing upload, test siparisi, paketleme ve fatura linki canli adaptere bagli.",
     accent: "amber",
-    capabilities: ["siparis sync", "fatura esleme", "durum takibi"]
+    capabilities: ["trackingId", "stok/fiyat", "paketleme"]
   },
   {
     id: "amazon",

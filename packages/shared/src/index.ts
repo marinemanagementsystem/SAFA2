@@ -13,6 +13,51 @@ export type JobStatus = "PENDING" | "PROCESSING" | "SUCCESS" | "FAILED";
 
 export type ExternalInvoiceSource = "GIB_PORTAL" | "TRENDYOL" | "MANUAL";
 
+export interface HepsiburadaProductListItem {
+  id: string;
+  name: string;
+  barcode?: string;
+  merchantSku: string;
+  brand: string;
+  categoryName: string;
+  vatRate: number;
+  priceCents: number;
+  stock: number;
+  dispatchTime: number;
+  description?: string;
+  active: boolean;
+  updatedAt: string;
+  hepsiburada: {
+    id: string;
+    hbSku?: string;
+    merchantSku: string;
+    priceCents: number;
+    stock: number;
+    dispatchTime: number;
+    lastStatus?: string;
+    lastTrackingId?: string;
+    lastJobId?: string;
+    lastUploadedAt?: string;
+  } | null;
+}
+
+export interface HepsiburadaOrderLineListItem {
+  id: string;
+  lineItemId: string;
+  orderNumber: string;
+  hbSku: string;
+  merchantSku?: string;
+  quantity: number;
+  packageNumber?: string;
+  packageStatus: string;
+  linkedOrderId?: string;
+  customerName?: string;
+  totalPayableCents?: number;
+  currency?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface ExternalInvoiceListItem {
   id: string;
   source: ExternalInvoiceSource;

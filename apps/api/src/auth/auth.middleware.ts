@@ -16,7 +16,12 @@ function isProtectedApiRequest(request: Request) {
 
 function isPublicApiRequest(request: Request) {
   const path = requestPath(request);
-  return path === "/api/auth/login" || path === "/api/auth/logout" || path === "/api/auth/session";
+  return (
+    path === "/api/auth/login" ||
+    path === "/api/auth/logout" ||
+    path === "/api/auth/session" ||
+    /^\/api\/public\/invoices\/[^/]+\.pdf$/.test(path)
+  );
 }
 
 export function apiAuthMiddleware(request: AuthenticatedRequest, response: Response, next: NextFunction) {

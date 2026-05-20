@@ -8,6 +8,21 @@ export interface TrendyolConnection {
   lookbackDays: number;
 }
 
+export type HepsiburadaEnvironment = "test" | "prod";
+
+export interface HepsiburadaConnection {
+  merchantId: string;
+  username: string;
+  password: string;
+  userAgent: string;
+  environment: HepsiburadaEnvironment;
+  productBaseUrl: string;
+  listingBaseUrl: string;
+  orderBaseUrl: string;
+  supplierBaseUrl: string;
+  lookbackDays: number;
+}
+
 export interface GibPortalConnection {
   username: string;
   password: string;

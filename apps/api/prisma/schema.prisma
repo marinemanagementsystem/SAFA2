@@ -36,14 +36,68 @@ enum ExternalInvoiceSource {
   MANUAL
 }
 
+enum MarketplaceProvider {
+  HEPSIBURADA
+}
+
+enum OrderSource {
+  TRENDYOL
+  HEPSIBURADA
+}
+
 model Setting {
   key       String   @id
   value     Json
   updatedAt DateTime @updatedAt
 }
 
+model Product {
+  id          String   @id @default(cuid())
+  name        String
+  barcode     String?  @unique
+  merchantSku String   @unique
+  brand       String
+  categoryName String
+  vatRate     Int      @default(20)
+  priceCents  Int
+  stock       Int      @default(0)
+  dispatchTime Int     @default(2)
+  description String?
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  marketplaceListings MarketplaceListing[]
+
+  @@index([active])
+  @@index([merchantSku])
+}
+
+model MarketplaceListing {
+  id             String              @id @default(cuid())
+  provider       MarketplaceProvider
+  productId      String
+  product        Product             @relation(fields: [productId], references: [id], onDelete: Cascade)
+  hbSku          String?
+  merchantSku    String
+  priceCents     Int
+  stock          Int                 @default(0)
+  dispatchTime   Int                 @default(2)
+  lastStatus     String?
+  lastUploadedAt DateTime?
+  lastTrackingId String?
+  lastJobId      String?
+  raw            Json?
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+
+  @@unique([provider, merchantSku])
+  @@index([hbSku])
+  @@index([lastTrackingId])
+}
+
 model Order {
   id                 String        @id @default(cuid())
+  source             OrderSource   @default(TRENDYOL)
   shipmentPackageId  String        @unique
   orderNumber        String
   status             String
@@ -61,10 +115,12 @@ model Order {
   updatedAt          DateTime      @updatedAt
   invoiceDraft       InvoiceDraft?
   externalInvoices   ExternalInvoice[]
+  hepsiburadaOrderLines HepsiburadaOrderLine[]
 
   @@index([status])
   @@index([orderNumber])
   @@index([lastModifiedAt])
+  @@index([source])
 }
 
 model InvoiceDraft {
@@ -107,9 +163,49 @@ model Invoice {
   error             String?
   createdAt         DateTime      @default(now())
   updatedAt         DateTime      @updatedAt
+  publicTokens      PublicInvoiceToken[]
 
   @@index([status])
   @@index([invoiceDate])
+}
+
+model HepsiburadaOrderLine {
+  id            String   @id @default(cuid())
+  lineItemId    String   @unique
+  orderNumber   String
+  hbSku         String
+  merchantSku   String?
+  quantity      Int
+  raw           Json
+  packageNumber String?
+  packageStatus String   @default("OPEN")
+  linkedOrderId String?
+  linkedOrder   Order?   @relation(fields: [linkedOrderId], references: [id], onDelete: SetNull)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([orderNumber])
+  @@index([hbSku])
+  @@index([merchantSku])
+  @@index([packageNumber])
+  @@index([packageStatus])
+  @@index([linkedOrderId])
+}
+
+model PublicInvoiceToken {
+  id            String   @id @default(cuid())
+  tokenHash     String   @unique
+  invoiceId     String
+  invoice       Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  provider      String
+  packageNumber String?
+  expiresAt     DateTime
+  usedAt        DateTime?
+  createdAt     DateTime @default(now())
+
+  @@index([invoiceId])
+  @@index([expiresAt])
+  @@index([provider])
 }
 
 model ExternalInvoice {

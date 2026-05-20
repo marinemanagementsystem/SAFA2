@@ -4,17 +4,20 @@ import axios from "axios";
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
 import fs from "node:fs/promises";
 import { envBool } from "../common/env";
+import { normalizeHepsiburadaBaseUrls } from "../hepsiburada/hepsiburada-endpoints";
 import { PrismaService } from "../prisma/prisma.service";
 import {
   GibDirectConnection,
   GibDirectEnvironment,
   GibDirectSignerMode,
   GibPortalConnection,
+  HepsiburadaConnection,
   StoredSecret,
   TrendyolConnection
 } from "./connection-types";
 
 const TRENDYOL_CONNECTION_KEY = "connection.trendyol";
+const HEPSIBURADA_CONNECTION_KEY = "connection.hepsiburada";
 const GIB_PORTAL_CONNECTION_KEY = "connection.gibPortal";
 const GIB_DIRECT_CONNECTION_KEY = "connection.gibDirect";
 const GIB_DIRECT_SEQUENCE_PREFIX = "sequence.gibDirect";
@@ -35,7 +38,7 @@ interface TrendyolStreamResponse {
 }
 
 interface ConnectionHealth {
-  provider: "trendyol" | "gib-portal" | "gib-direct";
+  provider: "trendyol" | "hepsiburada" | "gib-portal" | "gib-direct";
   connected: true;
   checkedAt: string;
   message: string;
@@ -76,6 +79,34 @@ function envTrendyolConnection(): TrendyolConnection | undefined {
     baseUrl: process.env.TRENDYOL_BASE_URL ?? "https://apigw.trendyol.com",
     storefrontCode: process.env.TRENDYOL_STOREFRONT_CODE ?? "TR",
     lookbackDays: Number(process.env.TRENDYOL_LOOKBACK_DAYS ?? 14)
+  };
+}
+
+function envHepsiburadaConnection(): HepsiburadaConnection | undefined {
+  const merchantId = process.env.HEPSIBURADA_MERCHANT_ID ?? "";
+  const username = process.env.HEPSIBURADA_USERNAME ?? "";
+  const password = process.env.HEPSIBURADA_PASSWORD ?? "";
+  if (!merchantId || !username || !password) return undefined;
+
+  const urls = normalizeHepsiburadaBaseUrls({
+    environment: process.env.HEPSIBURADA_ENV === "prod" ? "prod" : "test",
+    productBaseUrl: process.env.HEPSIBURADA_PRODUCT_BASE_URL,
+    listingBaseUrl: process.env.HEPSIBURADA_LISTING_BASE_URL,
+    orderBaseUrl: process.env.HEPSIBURADA_ORDER_BASE_URL,
+    supplierBaseUrl: process.env.HEPSIBURADA_SUPPLIER_BASE_URL
+  });
+
+  return {
+    merchantId,
+    username,
+    password,
+    userAgent: process.env.HEPSIBURADA_USER_AGENT ?? "SAFA Hepsiburada integration",
+    environment: urls.environment,
+    productBaseUrl: urls.productBaseUrl,
+    listingBaseUrl: urls.listingBaseUrl,
+    orderBaseUrl: urls.orderBaseUrl,
+    supplierBaseUrl: urls.supplierBaseUrl,
+    lookbackDays: Number(process.env.HEPSIBURADA_LOOKBACK_DAYS ?? 7)
   };
 }
 
@@ -238,6 +269,7 @@ export class SettingsService {
 
   async connections() {
     const trendyol = await this.getTrendyolConnection();
+    const hepsiburada = await this.getHepsiburadaConnection();
     const gibPortal = await this.getGibPortalConnection();
     const gibDirect = await this.getGibDirectConnection();
     const gibDirectSource = gibDirect ? (await this.hasStoredSecret(GIB_DIRECT_CONNECTION_KEY) ? "app" : "env") : "none";
@@ -254,6 +286,20 @@ export class SettingsService {
         baseUrl: trendyol?.baseUrl ?? "https://apigw.trendyol.com",
         storefrontCode: trendyol?.storefrontCode ?? "TR",
         lookbackDays: trendyol?.lookbackDays ?? 14
+      },
+      hepsiburada: {
+        configured: Boolean(hepsiburada?.merchantId && hepsiburada.username && hepsiburada.password),
+        source: hepsiburada ? (await this.hasStoredSecret(HEPSIBURADA_CONNECTION_KEY) ? "app" : "env") : "none",
+        merchantId: hepsiburada?.merchantId ?? "",
+        username: hepsiburada?.username ?? "",
+        passwordSaved: Boolean(hepsiburada?.password),
+        userAgent: hepsiburada?.userAgent ?? "SAFA Hepsiburada integration",
+        environment: hepsiburada?.environment ?? "test",
+        productBaseUrl: hepsiburada?.productBaseUrl ?? "https://mpop-sit.hepsiburada.com",
+        listingBaseUrl: hepsiburada?.listingBaseUrl ?? "https://listing-external-sit.hepsiburada.com",
+        orderBaseUrl: hepsiburada?.orderBaseUrl ?? "https://oms-external-sit.hepsiburada.com",
+        supplierBaseUrl: hepsiburada?.supplierBaseUrl ?? "https://supplier-api-external-sit.hepsiburada.com",
+        lookbackDays: hepsiburada?.lookbackDays ?? 7
       },
       gibPortal: {
         configured: Boolean(gibPortal?.username && gibPortal.password),
@@ -314,6 +360,25 @@ export class SettingsService {
     };
   }
 
+  async saveHepsiburadaConnection(input: Partial<HepsiburadaConnection>) {
+    const next = await this.normalizeHepsiburadaConnection(input);
+
+    await this.setEncryptedSetting(HEPSIBURADA_CONNECTION_KEY, next);
+    return this.connections();
+  }
+
+  async connectHepsiburada(input: Partial<HepsiburadaConnection>) {
+    const next = await this.normalizeHepsiburadaConnection(input);
+    const health = await this.testHepsiburadaConnection(next);
+
+    await this.setEncryptedSetting(HEPSIBURADA_CONNECTION_KEY, next);
+
+    return {
+      connections: await this.connections(),
+      health
+    };
+  }
+
   async saveGibPortalConnection(input: Partial<GibPortalConnection>) {
     const next = await this.normalizeGibPortalConnection(input);
 
@@ -354,6 +419,10 @@ export class SettingsService {
 
   async getTrendyolConnection(): Promise<TrendyolConnection | undefined> {
     return (await this.getStoredSecret<TrendyolConnection>(TRENDYOL_CONNECTION_KEY)) ?? envTrendyolConnection();
+  }
+
+  async getHepsiburadaConnection(): Promise<HepsiburadaConnection | undefined> {
+    return (await this.getStoredSecret<HepsiburadaConnection>(HEPSIBURADA_CONNECTION_KEY)) ?? envHepsiburadaConnection();
   }
 
   async getGibPortalConnection(): Promise<GibPortalConnection | undefined> {
@@ -402,6 +471,39 @@ export class SettingsService {
 
     if (!next.sellerId || !next.apiKey || !next.apiSecret) {
       throw new BadRequestException("Trendyol icin satici ID, API key ve API secret zorunlu.");
+    }
+
+    return next;
+  }
+
+  private async normalizeHepsiburadaConnection(input: Partial<HepsiburadaConnection>) {
+    const current = await this.getStoredSecret<HepsiburadaConnection>(HEPSIBURADA_CONNECTION_KEY);
+    const envCurrent = envHepsiburadaConnection();
+    const base = current ?? envCurrent;
+    const urls = normalizeHepsiburadaBaseUrls({
+      ...base,
+      ...input,
+      environment: input.environment ?? base?.environment ?? "test"
+    });
+    const next: HepsiburadaConnection = {
+      merchantId: String(input.merchantId ?? base?.merchantId ?? "").trim(),
+      username: String(input.username ?? base?.username ?? "").trim(),
+      password: String(input.password || base?.password || "").trim(),
+      userAgent: String(input.userAgent ?? base?.userAgent ?? "SAFA Hepsiburada integration").trim(),
+      environment: urls.environment,
+      productBaseUrl: urls.productBaseUrl,
+      listingBaseUrl: urls.listingBaseUrl,
+      orderBaseUrl: urls.orderBaseUrl,
+      supplierBaseUrl: urls.supplierBaseUrl,
+      lookbackDays: Number(input.lookbackDays ?? base?.lookbackDays ?? 7)
+    };
+
+    if (!next.merchantId || !next.username || !next.password) {
+      throw new BadRequestException("Hepsiburada icin merchantId, user ve password zorunlu.");
+    }
+
+    if (!Number.isFinite(next.lookbackDays) || next.lookbackDays < 1 || next.lookbackDays > 30) {
+      throw new BadRequestException("Hepsiburada siparis gun araligi 1-30 arasinda olmali.");
     }
 
     return next;
@@ -506,6 +608,45 @@ export class SettingsService {
         checkedPackageCount: response.data.content?.length ?? 0,
         hasMore: Boolean(response.data.hasMore),
         source: "orders/stream"
+      }
+    };
+  }
+
+  private async testHepsiburadaConnection(connection: HepsiburadaConnection): Promise<ConnectionHealth> {
+    const response = await axios.get(`${connection.orderBaseUrl}/orders/merchantid/${connection.merchantId}`, {
+      auth: { username: connection.username, password: connection.password },
+      headers: {
+        "User-Agent": connection.userAgent
+      },
+      params: {
+        limit: "1",
+        offset: "0"
+      },
+      timeout: 30_000,
+      validateStatus: () => true
+    });
+
+    if (response.status === 401 || response.status === 403) {
+      throw new BadRequestException("Hepsiburada baglantisi reddedildi. MerchantId, user veya password hatali olabilir.");
+    }
+
+    if (response.status === 404) {
+      throw new BadRequestException("Hepsiburada endpoint bulunamadi. Ortam veya base URL bilgisini kontrol edin.");
+    }
+
+    if (response.status < 200 || response.status >= 300) {
+      throw new ServiceUnavailableException(`Hepsiburada API HTTP ${response.status} dondu. Yetki, limit veya servis durumunu kontrol edin.`);
+    }
+
+    return {
+      provider: "hepsiburada",
+      connected: true,
+      checkedAt: new Date().toISOString(),
+      message: "Hepsiburada API baglantisi dogrulandi.",
+      details: {
+        environment: connection.environment,
+        source: "orders/merchantid",
+        checkedOrderCount: Array.isArray((response.data as any)?.items) ? (response.data as any).items.length : 0
       }
     };
   }

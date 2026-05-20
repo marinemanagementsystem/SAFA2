@@ -3,6 +3,8 @@
 import type {
   ExternalInvoiceListItem,
   ExternalInvoiceSource,
+  HepsiburadaOrderLineListItem,
+  HepsiburadaProductListItem,
   IntegrationJobListItem,
   InvoiceDraftListItem,
   InvoiceListItem,
@@ -15,6 +17,8 @@ import {
   api,
   API_AVAILABLE,
   ConnectionsSnapshot,
+  HepsiburadaConnectionInput,
+  HepsiburadaProductInput,
   GibDirectConnectionInput,
   GibPortalConnectionInput,
   TrendyolConnectionInput
@@ -27,6 +31,8 @@ export interface PlatformSnapshot {
   drafts: InvoiceDraftListItem[];
   invoices: InvoiceListItem[];
   externalInvoices: ExternalInvoiceListItem[];
+  hepsiburadaProducts: HepsiburadaProductListItem[];
+  hepsiburadaOrderLines: HepsiburadaOrderLineListItem[];
   jobs: IntegrationJobListItem[];
   settings: Record<string, unknown>;
   connections: ConnectionsSnapshot | null;
@@ -37,6 +43,8 @@ const emptySnapshot: PlatformSnapshot = {
   drafts: [],
   invoices: [],
   externalInvoices: [],
+  hepsiburadaProducts: [],
+  hepsiburadaOrderLines: [],
   jobs: [],
   settings: {},
   connections: null
@@ -50,6 +58,19 @@ const initialTrendyolForm: TrendyolConnectionInput = {
   baseUrl: "https://apigw.trendyol.com",
   storefrontCode: "TR",
   lookbackDays: 14
+};
+
+const initialHepsiburadaForm: HepsiburadaConnectionInput = {
+  merchantId: "",
+  username: "",
+  password: "",
+  userAgent: "SAFA Hepsiburada integration",
+  environment: "test",
+  productBaseUrl: "https://mpop-sit.hepsiburada.com",
+  listingBaseUrl: "https://listing-external-sit.hepsiburada.com",
+  orderBaseUrl: "https://oms-external-sit.hepsiburada.com",
+  supplierBaseUrl: "https://supplier-api-external-sit.hepsiburada.com",
+  lookbackDays: 7
 };
 
 const initialGibPortalForm: GibPortalConnectionInput = {
@@ -84,6 +105,7 @@ const initialGibDirectForm: GibDirectConnectionInput = {
 
 const apiOfflineMessage = "Canli API bagli degil. Frontend yayinda; backend URL tanimlaninca operasyon aksiyonlari aktif olacak.";
 const trendyolDraftStorageKey = "safa.trendyolConnectionDraft.v1";
+const hepsiburadaDraftStorageKey = "safa.hepsiburadaConnectionDraft.v1";
 const gibPortalDraftStorageKey = "safa.gibPortalConnectionDraft.v1";
 const gibDirectDraftStorageKey = "safa.gibDirectConnectionDraft.v1";
 
@@ -156,6 +178,10 @@ function hasGibPortalDraft(input: GibPortalConnectionInput) {
   );
 }
 
+function hasHepsiburadaDraft(input: HepsiburadaConnectionInput) {
+  return Boolean(input.merchantId.trim() || input.username.trim() || input.password?.trim());
+}
+
 function hasGibDirectDraft(input: GibDirectConnectionInput) {
   return Boolean(
     input.taxId.trim() ||
@@ -175,6 +201,7 @@ function maskValue(value?: string) {
 
 function localDraftConnections(
   trendyol: TrendyolConnectionInput,
+  hepsiburada: HepsiburadaConnectionInput,
   gibPortal: GibPortalConnectionInput,
   gibDirect: GibDirectConnectionInput
 ): ConnectionsSnapshot {
@@ -189,6 +216,20 @@ function localDraftConnections(
       baseUrl: trendyol.baseUrl,
       storefrontCode: trendyol.storefrontCode,
       lookbackDays: trendyol.lookbackDays
+    },
+    hepsiburada: {
+      configured: hasHepsiburadaDraft(hepsiburada),
+      source: "tarayici-taslak",
+      merchantId: hepsiburada.merchantId,
+      username: hepsiburada.username,
+      passwordSaved: Boolean(hepsiburada.password?.trim()),
+      userAgent: hepsiburada.userAgent,
+      environment: hepsiburada.environment,
+      productBaseUrl: hepsiburada.productBaseUrl,
+      listingBaseUrl: hepsiburada.listingBaseUrl,
+      orderBaseUrl: hepsiburada.orderBaseUrl,
+      supplierBaseUrl: hepsiburada.supplierBaseUrl,
+      lookbackDays: hepsiburada.lookbackDays
     },
     gibPortal: {
       configured: hasGibPortalDraft(gibPortal),
@@ -229,6 +270,20 @@ function localDraftConnections(
 function normalizeConnectionsSnapshot(connections: ConnectionsSnapshot): ConnectionsSnapshot {
   return {
     ...connections,
+    hepsiburada: connections.hepsiburada ?? {
+      configured: false,
+      source: "backend-eski",
+      merchantId: "",
+      username: "",
+      passwordSaved: false,
+      userAgent: "SAFA Hepsiburada integration",
+      environment: "test",
+      productBaseUrl: "https://mpop-sit.hepsiburada.com",
+      listingBaseUrl: "https://listing-external-sit.hepsiburada.com",
+      orderBaseUrl: "https://oms-external-sit.hepsiburada.com",
+      supplierBaseUrl: "https://supplier-api-external-sit.hepsiburada.com",
+      lookbackDays: 7
+    },
     gibDirect: connections.gibDirect ?? {
       configured: false,
       ready: false,
@@ -269,22 +324,25 @@ export function usePlatformData() {
       : apiOfflineMessage
   );
   const [trendyolForm, setTrendyolForm] = useState<TrendyolConnectionInput>(initialTrendyolForm);
+  const [hepsiburadaForm, setHepsiburadaForm] = useState<HepsiburadaConnectionInput>(initialHepsiburadaForm);
   const [gibPortalForm, setGibPortalForm] = useState<GibPortalConnectionInput>(initialGibPortalForm);
   const [gibDirectForm, setGibDirectForm] = useState<GibDirectConnectionInput>(initialGibDirectForm);
 
   const load = useCallback(async () => {
     if (!API_AVAILABLE) {
       const storedTrendyol = readStoredJson(trendyolDraftStorageKey, initialTrendyolForm);
+      const storedHepsiburada = readStoredJson(hepsiburadaDraftStorageKey, initialHepsiburadaForm);
       const storedGibPortal = readStoredJson(gibPortalDraftStorageKey, initialGibPortalForm);
       const storedGibDirect = readStoredJson(gibDirectDraftStorageKey, initialGibDirectForm);
 
       setTrendyolForm(storedTrendyol);
+      setHepsiburadaForm(storedHepsiburada);
       setGibPortalForm(storedGibPortal);
       setGibDirectForm(storedGibDirect);
       setSnapshot({
         ...emptySnapshot,
         settings: { localConnectionDrafts: true },
-        connections: localDraftConnections(storedTrendyol, storedGibPortal, storedGibDirect)
+        connections: localDraftConnections(storedTrendyol, storedHepsiburada, storedGibPortal, storedGibDirect)
       });
       setLoadState("idle");
       setMessage(apiOfflineMessage);
@@ -294,8 +352,10 @@ export function usePlatformData() {
     setLoadState("loading");
 
     try {
-      const [orders, drafts, invoices, externalInvoices, jobs, settings, connections] = await Promise.all([
+      const [orders, hepsiburadaProducts, hepsiburadaOrderLines, drafts, invoices, externalInvoices, jobs, settings, connections] = await Promise.all([
         api.orders(),
+        api.products(),
+        api.hepsiburadaOrderLines(),
         api.drafts(),
         api.invoices(),
         api.externalInvoices(),
@@ -308,6 +368,8 @@ export function usePlatformData() {
 
       setSnapshot({
         orders,
+        hepsiburadaProducts,
+        hepsiburadaOrderLines,
         drafts,
         invoices,
         externalInvoices,
@@ -323,6 +385,18 @@ export function usePlatformData() {
         baseUrl: normalizedConnections.trendyol.baseUrl,
         storefrontCode: normalizedConnections.trendyol.storefrontCode,
         lookbackDays: normalizedConnections.trendyol.lookbackDays
+      });
+      setHepsiburadaForm({
+        merchantId: normalizedConnections.hepsiburada.merchantId,
+        username: normalizedConnections.hepsiburada.username,
+        password: "",
+        userAgent: normalizedConnections.hepsiburada.userAgent,
+        environment: normalizedConnections.hepsiburada.environment,
+        productBaseUrl: normalizedConnections.hepsiburada.productBaseUrl,
+        listingBaseUrl: normalizedConnections.hepsiburada.listingBaseUrl,
+        orderBaseUrl: normalizedConnections.hepsiburada.orderBaseUrl,
+        supplierBaseUrl: normalizedConnections.hepsiburada.supplierBaseUrl,
+        lookbackDays: normalizedConnections.hepsiburada.lookbackDays
       });
       setGibPortalForm({
         username: normalizedConnections.gibPortal.username,
@@ -550,7 +624,7 @@ export function usePlatformData() {
       setSnapshot((current) => ({
         ...current,
         settings: { ...current.settings, localConnectionDrafts: true },
-        connections: localDraftConnections(trendyolForm, gibPortalForm, gibDirectForm)
+        connections: localDraftConnections(trendyolForm, hepsiburadaForm, gibPortalForm, gibDirectForm)
       }));
       setMessage("Trendyol API bilgileri bu tarayicida taslak olarak kaydedildi. Canli kullanim icin backend baglantisi gerekir.");
       return;
@@ -568,7 +642,33 @@ export function usePlatformData() {
     } finally {
       setBusyAction(null);
     }
-  }, [gibDirectForm, gibPortalForm, load, trendyolForm]);
+  }, [gibDirectForm, gibPortalForm, hepsiburadaForm, load, trendyolForm]);
+
+  const saveHepsiburada = useCallback(async () => {
+    if (!API_AVAILABLE) {
+      writeStoredJson(hepsiburadaDraftStorageKey, hepsiburadaForm);
+      setSnapshot((current) => ({
+        ...current,
+        settings: { ...current.settings, localConnectionDrafts: true },
+        connections: localDraftConnections(trendyolForm, hepsiburadaForm, gibPortalForm, gibDirectForm)
+      }));
+      setMessage("Hepsiburada API bilgileri bu tarayicida taslak olarak kaydedildi. Canli kullanim icin backend baglantisi gerekir.");
+      return;
+    }
+
+    setBusyAction("save-hepsiburada");
+
+    try {
+      const result = await api.connectHepsiburada(hepsiburadaForm);
+      setSnapshot((current) => ({ ...current, connections: normalizeConnectionsSnapshot(result.connections) }));
+      setMessage(`${result.health.message} Hepsiburada bilgileri sifreli olarak kaydedildi.`);
+      await load();
+    } catch (error) {
+      setMessage(errorMessage(error, "Hepsiburada baglantisi kaydedilemedi."));
+    } finally {
+      setBusyAction(null);
+    }
+  }, [gibDirectForm, gibPortalForm, hepsiburadaForm, load, trendyolForm]);
 
   const saveGibPortal = useCallback(async () => {
     if (!API_AVAILABLE) {
@@ -576,7 +676,7 @@ export function usePlatformData() {
       setSnapshot((current) => ({
         ...current,
         settings: { ...current.settings, localConnectionDrafts: true },
-        connections: localDraftConnections(trendyolForm, gibPortalForm, gibDirectForm)
+        connections: localDraftConnections(trendyolForm, hepsiburadaForm, gibPortalForm, gibDirectForm)
       }));
       setMessage("e-Arsiv portal bilgileri bu tarayicida taslak olarak kaydedildi. Canli kullanim icin backend baglantisi gerekir.");
       return;
@@ -594,7 +694,7 @@ export function usePlatformData() {
     } finally {
       setBusyAction(null);
     }
-  }, [gibDirectForm, gibPortalForm, load, trendyolForm]);
+  }, [gibDirectForm, gibPortalForm, hepsiburadaForm, load, trendyolForm]);
 
   const saveGibDirect = useCallback(async () => {
     if (!API_AVAILABLE) {
@@ -602,7 +702,7 @@ export function usePlatformData() {
       setSnapshot((current) => ({
         ...current,
         settings: { ...current.settings, localConnectionDrafts: true },
-        connections: localDraftConnections(trendyolForm, gibPortalForm, gibDirectForm)
+        connections: localDraftConnections(trendyolForm, hepsiburadaForm, gibPortalForm, gibDirectForm)
       }));
       setMessage("GIB direct bilgileri bu tarayicida taslak olarak kaydedildi. Canli kullanim icin backend baglantisi gerekir.");
       return;
@@ -620,7 +720,7 @@ export function usePlatformData() {
     } finally {
       setBusyAction(null);
     }
-  }, [gibDirectForm, gibPortalForm, load, trendyolForm]);
+  }, [gibDirectForm, gibPortalForm, hepsiburadaForm, load, trendyolForm]);
 
   const openGibPortal = useCallback(async () => {
     const portalTab = window.open("about:blank", "_blank");
@@ -900,6 +1000,189 @@ export function usePlatformData() {
     }
   }, []);
 
+  const saveHepsiburadaProduct = useCallback(
+    async (input: HepsiburadaProductInput, productId?: string) => {
+      if (!API_AVAILABLE) {
+        setMessage(apiOfflineMessage);
+        return;
+      }
+
+      setBusyAction("hepsiburada-product");
+
+      try {
+        const product = productId ? await api.updateProduct(productId, input) : await api.createProduct(input);
+        setMessage(`${product.merchantSku} Hepsiburada urun kaydi ${productId ? "guncellendi" : "olusturuldu"}.`);
+        await load();
+      } catch (error) {
+        setMessage(errorMessage(error, "Hepsiburada urun kaydi tamamlanamadi."));
+      } finally {
+        setBusyAction(null);
+      }
+    },
+    [load]
+  );
+
+  const uploadHepsiburadaCatalog = useCallback(async () => {
+    if (!API_AVAILABLE) {
+      setMessage(apiOfflineMessage);
+      return;
+    }
+
+    setBusyAction("hepsiburada-catalog");
+
+    try {
+      const result = await api.hepsiburadaCatalogUpload();
+      setMessage(`${result.productCount} urun Hepsiburada katalog test/canli servisine gonderildi. TrackingId: ${result.trackingId}`);
+      await load();
+    } catch (error) {
+      setMessage(errorMessage(error, "Hepsiburada katalog gonderimi basarisiz."));
+    } finally {
+      setBusyAction(null);
+    }
+  }, [load]);
+
+  const checkHepsiburadaCatalogStatus = useCallback(async (trackingId: string) => {
+    if (!API_AVAILABLE) {
+      setMessage(apiOfflineMessage);
+      return;
+    }
+
+    const trimmed = trackingId.trim();
+    if (!trimmed) {
+      setMessage("Katalog status sorgusu icin trackingId yazin.");
+      return;
+    }
+
+    setBusyAction("hepsiburada-catalog-status");
+
+    try {
+      await api.hepsiburadaCatalogStatus(trimmed);
+      setMessage(`${trimmed} trackingId durumu sorgulandi; detay backend log/audit kaydinda.`);
+      await load();
+    } catch (error) {
+      setMessage(errorMessage(error, "Hepsiburada katalog durumu sorgulanamadi."));
+    } finally {
+      setBusyAction(null);
+    }
+  }, [load]);
+
+  const syncHepsiburadaInventory = useCallback(async () => {
+    if (!API_AVAILABLE) {
+      setMessage(apiOfflineMessage);
+      return;
+    }
+
+    setBusyAction("hepsiburada-inventory");
+
+    try {
+      const result = await api.hepsiburadaListingSync();
+      setMessage(`${result.imported} Hepsiburada envanter kaydi okundu, ${result.upserted} listing guncellendi.`);
+      await load();
+    } catch (error) {
+      setMessage(errorMessage(error, "Hepsiburada envanter senkronizasyonu basarisiz."));
+    } finally {
+      setBusyAction(null);
+    }
+  }, [load]);
+
+  const uploadHepsiburadaPrices = useCallback(async () => {
+    if (!API_AVAILABLE) {
+      setMessage(apiOfflineMessage);
+      return;
+    }
+
+    setBusyAction("hepsiburada-price");
+
+    try {
+      const result = await api.hepsiburadaPriceUpload();
+      setMessage(`${result.listingCount} Hepsiburada fiyati gonderildi.${result.uploadId ? ` UploadId: ${result.uploadId}` : ""}`);
+      await load();
+    } catch (error) {
+      setMessage(errorMessage(error, "Hepsiburada fiyat gonderimi basarisiz."));
+    } finally {
+      setBusyAction(null);
+    }
+  }, [load]);
+
+  const uploadHepsiburadaStocks = useCallback(async () => {
+    if (!API_AVAILABLE) {
+      setMessage(apiOfflineMessage);
+      return;
+    }
+
+    setBusyAction("hepsiburada-stock");
+
+    try {
+      const result = await api.hepsiburadaStockUpload();
+      setMessage(`${result.listingCount} Hepsiburada stogu gonderildi.${result.uploadId ? ` UploadId: ${result.uploadId}` : ""}`);
+      await load();
+    } catch (error) {
+      setMessage(errorMessage(error, "Hepsiburada stok gonderimi basarisiz."));
+    } finally {
+      setBusyAction(null);
+    }
+  }, [load]);
+
+  const syncHepsiburadaOrders = useCallback(async () => {
+    if (!API_AVAILABLE) {
+      setMessage(apiOfflineMessage);
+      return;
+    }
+
+    setBusyAction("hepsiburada-orders");
+
+    try {
+      const result = await api.hepsiburadaOrdersSync();
+      setMessage(`${result.imported} Hepsiburada paketlenecek siparis kalemi senkronize edildi.`);
+      await load();
+    } catch (error) {
+      setMessage(errorMessage(error, "Hepsiburada siparis senkronizasyonu basarisiz."));
+    } finally {
+      setBusyAction(null);
+    }
+  }, [load]);
+
+  const createHepsiburadaTestOrder = useCallback(async () => {
+    if (!API_AVAILABLE) {
+      setMessage(apiOfflineMessage);
+      return;
+    }
+
+    setBusyAction("hepsiburada-test-order");
+
+    try {
+      const result = await api.hepsiburadaCreateTestOrder();
+      setMessage(`${result.orderNumber} Hepsiburada test siparisi olusturuldu.`);
+      await load();
+    } catch (error) {
+      setMessage(errorMessage(error, "Hepsiburada test siparisi olusturulamadi."));
+    } finally {
+      setBusyAction(null);
+    }
+  }, [load]);
+
+  const packageHepsiburadaOrderLine = useCallback(
+    async (id: string) => {
+      if (!API_AVAILABLE) {
+        setMessage(apiOfflineMessage);
+        return;
+      }
+
+      setBusyAction(`hepsiburada-package-${id}`);
+
+      try {
+        const result = await api.hepsiburadaPackageOrderLine(id);
+        setMessage(`${result.orderNumber} siparis kalemi paketlendi. Paket: ${result.packageNumber ?? "olustu"}`);
+        await load();
+      } catch (error) {
+        setMessage(errorMessage(error, "Hepsiburada paketleme basarisiz."));
+      } finally {
+        setBusyAction(null);
+      }
+    },
+    [load]
+  );
+
   return {
     snapshot,
     apiAvailable: API_AVAILABLE,
@@ -910,11 +1193,13 @@ export function usePlatformData() {
     selectedOrderId,
     selectedOrder,
     trendyolForm,
+    hepsiburadaForm,
     gibPortalForm,
     gibDirectForm,
     setMessage,
     setSelectedOrderId,
     setTrendyolForm,
+    setHepsiburadaForm,
     setGibPortalForm,
     setGibDirectForm,
     refresh,
@@ -923,6 +1208,7 @@ export function usePlatformData() {
     issueDrafts,
     uploadPortalDrafts,
     saveTrendyol,
+    saveHepsiburada,
     saveGibPortal,
     saveGibDirect,
     openGibPortal,
@@ -936,6 +1222,15 @@ export function usePlatformData() {
     promoteExternalInvoice,
     uploadExternalInvoicePdf,
     sendInvoiceToTrendyol,
-    createMonthlyInvoiceArchive
+    createMonthlyInvoiceArchive,
+    saveHepsiburadaProduct,
+    uploadHepsiburadaCatalog,
+    checkHepsiburadaCatalogStatus,
+    syncHepsiburadaInventory,
+    uploadHepsiburadaPrices,
+    uploadHepsiburadaStocks,
+    syncHepsiburadaOrders,
+    createHepsiburadaTestOrder,
+    packageHepsiburadaOrderLine
   };
 }

@@ -1,6 +1,8 @@
 import type {
   ExternalInvoiceListItem,
   ExternalInvoiceSource,
+  HepsiburadaOrderLineListItem,
+  HepsiburadaProductListItem,
   IntegrationJobListItem,
   InvoiceDraftListItem,
   InvoiceListItem,
@@ -34,6 +36,20 @@ export interface ConnectionsSnapshot {
     userAgent: string;
     baseUrl: string;
     storefrontCode: string;
+    lookbackDays: number;
+  };
+  hepsiburada: {
+    configured: boolean;
+    source: string;
+    merchantId: string;
+    username: string;
+    passwordSaved: boolean;
+    userAgent: string;
+    environment: "test" | "prod";
+    productBaseUrl: string;
+    listingBaseUrl: string;
+    orderBaseUrl: string;
+    supplierBaseUrl: string;
     lookbackDays: number;
   };
   gibPortal: {
@@ -79,6 +95,34 @@ export interface TrendyolConnectionInput {
   lookbackDays: number;
 }
 
+export interface HepsiburadaConnectionInput {
+  merchantId: string;
+  username: string;
+  password?: string;
+  userAgent: string;
+  environment: "test" | "prod";
+  productBaseUrl: string;
+  listingBaseUrl: string;
+  orderBaseUrl: string;
+  supplierBaseUrl: string;
+  lookbackDays: number;
+}
+
+export interface HepsiburadaProductInput {
+  name: string;
+  barcode?: string;
+  hbSku?: string;
+  merchantSku: string;
+  brand: string;
+  categoryName: string;
+  vatRate: number;
+  priceCents: number;
+  stock: number;
+  dispatchTime: number;
+  description?: string;
+  active: boolean;
+}
+
 export interface GibPortalConnectionInput {
   username: string;
   password?: string;
@@ -110,7 +154,7 @@ export interface GibDirectConnectionInput {
 }
 
 export interface ConnectionHealth {
-  provider: "trendyol" | "gib-portal" | "gib-direct";
+  provider: "trendyol" | "hepsiburada" | "gib-portal" | "gib-direct";
   connected: true;
   checkedAt: string;
   message: string;
@@ -381,6 +425,17 @@ export const api = {
       method: "POST"
     }),
   orders: () => request<OrderListItem[]>("/orders"),
+  products: () => request<HepsiburadaProductListItem[]>("/products"),
+  createProduct: (input: HepsiburadaProductInput) =>
+    request<HepsiburadaProductListItem>("/products", {
+      method: "POST",
+      body: JSON.stringify(input)
+    }),
+  updateProduct: (id: string, input: Partial<HepsiburadaProductInput>) =>
+    request<HepsiburadaProductListItem>(`/products/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(input)
+    }),
   order: (id: string) => request<OrderDetail>(`/orders/${id}`),
   drafts: () => request<InvoiceDraftListItem[]>("/invoice-drafts"),
   invoices: () => request<InvoiceListItem[]>("/invoices"),
@@ -395,6 +450,16 @@ export const api = {
     }),
   connectTrendyol: (input: TrendyolConnectionInput) =>
     request<ConnectionResult>("/settings/connections/trendyol/connect", {
+      method: "PUT",
+      body: JSON.stringify(input)
+    }),
+  saveHepsiburadaConnection: (input: HepsiburadaConnectionInput) =>
+    request<ConnectionsSnapshot>("/settings/connections/hepsiburada", {
+      method: "PUT",
+      body: JSON.stringify(input)
+    }),
+  connectHepsiburada: (input: HepsiburadaConnectionInput) =>
+    request<ConnectionResult>("/settings/connections/hepsiburada/connect", {
       method: "PUT",
       body: JSON.stringify(input)
     }),
@@ -449,6 +514,38 @@ export const api = {
     request<ExternalInvoiceSyncResult>("/external-invoices/sync/trendyol", {
       method: "POST"
     }),
+  hepsiburadaCatalogUpload: () =>
+    request<{ productCount: number; trackingId: string; response: unknown }>("/integrations/hepsiburada/catalog/upload", {
+      method: "POST"
+    }),
+  hepsiburadaCatalogStatus: (trackingId: string) =>
+    request<{ trackingId: string; response: unknown }>(`/integrations/hepsiburada/catalog/status/${encodeURIComponent(trackingId)}`),
+  hepsiburadaListingSync: () =>
+    request<{ imported: number; upserted: number; response: unknown }>("/integrations/hepsiburada/listings/sync", {
+      method: "POST"
+    }),
+  hepsiburadaPriceUpload: () =>
+    request<{ uploadId?: string; listingCount: number; response: unknown }>("/integrations/hepsiburada/listings/price-upload", {
+      method: "POST"
+    }),
+  hepsiburadaStockUpload: () =>
+    request<{ uploadId?: string; listingCount: number; response: unknown }>("/integrations/hepsiburada/listings/stock-upload", {
+      method: "POST"
+    }),
+  hepsiburadaOrdersSync: () =>
+    request<{ imported: number; response: unknown }>("/integrations/hepsiburada/orders/sync", {
+      method: "POST"
+    }),
+  hepsiburadaOrderLines: () => request<HepsiburadaOrderLineListItem[]>("/integrations/hepsiburada/order-lines"),
+  hepsiburadaCreateTestOrder: () =>
+    request<{ orderNumber: string; response: unknown }>("/integrations/hepsiburada/test-orders/create", {
+      method: "POST",
+      body: JSON.stringify({})
+    }),
+  hepsiburadaPackageOrderLine: (id: string) =>
+    request<HepsiburadaOrderLineListItem>(`/integrations/hepsiburada/order-lines/${id}/package`, {
+      method: "POST"
+    }),
   promoteExternalInvoice: (id: string) =>
     request<ExternalInvoiceSyncResult>(`/external-invoices/${id}/promote`, {
       method: "POST"
@@ -488,6 +585,14 @@ export const api = {
     request<InvoiceListItem>(`/invoices/${invoiceId}/send-to-trendyol`, {
       method: "POST"
     }),
+  sendInvoiceToHepsiburada: (invoiceId: string, packageNumber?: string) =>
+    request<{ invoiceId: string; invoiceNumber: string; packageNumber: string; invoiceLink: string; sent: true }>(
+      `/invoices/${invoiceId}/send-to-hepsiburada`,
+      {
+        method: "POST",
+        body: JSON.stringify(packageNumber ? { packageNumber } : {})
+      }
+    ),
   sync: () =>
     request<{
       packageCount: number;

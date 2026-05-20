@@ -5,10 +5,13 @@ import { ExternalLink, KeyRound, Loader2, LockKeyhole, LogIn, PlugZap, Send, Shi
 import { useEffect, useState } from "react";
 import {
   ConnectionsSnapshot,
+  HepsiburadaConnectionInput,
+  HepsiburadaProductInput,
   GibDirectConnectionInput,
   GibPortalConnectionInput,
   TrendyolConnectionInput
 } from "../../lib/api";
+import type { HepsiburadaOrderLineListItem, HepsiburadaProductListItem } from "@safa/shared";
 import {
   listRemoteVaults,
   loadRemoteVaultById,
@@ -16,7 +19,7 @@ import {
   saveRemoteVault,
   type RemoteVaultSummary
 } from "../../lib/firebase/vault-store";
-import { cx } from "../../lib/platform/format";
+import { cx, money } from "../../lib/platform/format";
 import { integrationCatalog } from "../../lib/platform/integration-catalog";
 import {
   defaultVaultName,
@@ -43,12 +46,26 @@ interface IntegrationsViewProps {
   busyAction: string | null;
   apiAvailable: boolean;
   trendyolForm: TrendyolConnectionInput;
+  hepsiburadaForm: HepsiburadaConnectionInput;
+  hepsiburadaProducts: HepsiburadaProductListItem[];
+  hepsiburadaOrderLines: HepsiburadaOrderLineListItem[];
   gibPortalForm: GibPortalConnectionInput;
   gibDirectForm: GibDirectConnectionInput;
   setTrendyolForm: Dispatch<SetStateAction<TrendyolConnectionInput>>;
+  setHepsiburadaForm: Dispatch<SetStateAction<HepsiburadaConnectionInput>>;
   setGibPortalForm: Dispatch<SetStateAction<GibPortalConnectionInput>>;
   setGibDirectForm: Dispatch<SetStateAction<GibDirectConnectionInput>>;
   onSaveTrendyol: () => void;
+  onSaveHepsiburada: () => void;
+  onSaveHepsiburadaProduct: (input: HepsiburadaProductInput, id?: string) => void;
+  onUploadHepsiburadaCatalog: () => void;
+  onCheckHepsiburadaCatalogStatus: (trackingId: string) => void;
+  onSyncHepsiburadaInventory: () => void;
+  onUploadHepsiburadaPrices: () => void;
+  onUploadHepsiburadaStocks: () => void;
+  onSyncHepsiburadaOrders: () => void;
+  onCreateHepsiburadaTestOrder: () => void;
+  onPackageHepsiburadaOrderLine: (id: string) => void;
   onSaveGibPortal: () => void;
   onSaveGibDirect: () => void;
   onOpenGibPortal: () => void;
@@ -65,12 +82,26 @@ export function IntegrationsView({
   busyAction,
   apiAvailable,
   trendyolForm,
+  hepsiburadaForm,
+  hepsiburadaProducts,
+  hepsiburadaOrderLines,
   gibPortalForm,
   gibDirectForm,
   setTrendyolForm,
+  setHepsiburadaForm,
   setGibPortalForm,
   setGibDirectForm,
   onSaveTrendyol,
+  onSaveHepsiburada,
+  onSaveHepsiburadaProduct,
+  onUploadHepsiburadaCatalog,
+  onCheckHepsiburadaCatalogStatus,
+  onSyncHepsiburadaInventory,
+  onUploadHepsiburadaPrices,
+  onUploadHepsiburadaStocks,
+  onSyncHepsiburadaOrders,
+  onCreateHepsiburadaTestOrder,
+  onPackageHepsiburadaOrderLine,
   onSaveGibPortal,
   onSaveGibDirect,
   onOpenGibPortal,
@@ -82,6 +113,7 @@ export function IntegrationsView({
   const invoices = integrationCatalog.filter((item) => item.category === "invoice");
   const cargo = integrationCatalog.filter((item) => item.category === "cargo");
   const trendyolSavedAsDraft = !apiAvailable && connections?.trendyol.configured;
+  const hepsiburadaSavedAsDraft = !apiAvailable && connections?.hepsiburada.configured;
   const gibSavedAsDraft = !apiAvailable && connections?.gibPortal.configured;
 
   return (
@@ -104,6 +136,27 @@ export function IntegrationsView({
         onSaveGibDirect={onSaveGibDirect}
         onOpenGibPortal={onOpenGibPortal}
         onCloseGibPortalSession={onCloseGibPortalSession}
+      />
+
+      <HepsiburadaPanel
+        apiAvailable={apiAvailable}
+        connections={connections}
+        busyAction={busyAction}
+        hepsiburadaForm={hepsiburadaForm}
+        hepsiburadaSavedAsDraft={Boolean(hepsiburadaSavedAsDraft)}
+        products={hepsiburadaProducts}
+        orderLines={hepsiburadaOrderLines}
+        setHepsiburadaForm={setHepsiburadaForm}
+        onSaveHepsiburada={onSaveHepsiburada}
+        onSaveProduct={onSaveHepsiburadaProduct}
+        onUploadCatalog={onUploadHepsiburadaCatalog}
+        onCheckCatalogStatus={onCheckHepsiburadaCatalogStatus}
+        onSyncInventory={onSyncHepsiburadaInventory}
+        onUploadPrices={onUploadHepsiburadaPrices}
+        onUploadStocks={onUploadHepsiburadaStocks}
+        onSyncOrders={onSyncHepsiburadaOrders}
+        onCreateTestOrder={onCreateHepsiburadaTestOrder}
+        onPackageOrderLine={onPackageHepsiburadaOrderLine}
       />
 
       <section className="content-grid integration-forms">
@@ -272,6 +325,407 @@ export function IntegrationsView({
       <ProviderSection title="Fatura saglayicilari" description={`Runtime saglayici: ${String(settings.invoiceProvider ?? "bekleniyor")}`} items={invoices} />
       <ProviderSection title="Kargo firmalari" description="Kargo takip ve SLA katmani icin planli adapter yuzeyi." items={cargo} />
     </div>
+  );
+}
+
+function HepsiburadaPanel({
+  apiAvailable,
+  connections,
+  busyAction,
+  hepsiburadaForm,
+  hepsiburadaSavedAsDraft,
+  products,
+  orderLines,
+  setHepsiburadaForm,
+  onSaveHepsiburada,
+  onSaveProduct,
+  onUploadCatalog,
+  onCheckCatalogStatus,
+  onSyncInventory,
+  onUploadPrices,
+  onUploadStocks,
+  onSyncOrders,
+  onCreateTestOrder,
+  onPackageOrderLine
+}: {
+  apiAvailable: boolean;
+  connections: ConnectionsSnapshot | null;
+  busyAction: string | null;
+  hepsiburadaForm: HepsiburadaConnectionInput;
+  hepsiburadaSavedAsDraft: boolean;
+  products: HepsiburadaProductListItem[];
+  orderLines: HepsiburadaOrderLineListItem[];
+  setHepsiburadaForm: Dispatch<SetStateAction<HepsiburadaConnectionInput>>;
+  onSaveHepsiburada: () => void;
+  onSaveProduct: (input: HepsiburadaProductInput, id?: string) => void;
+  onUploadCatalog: () => void;
+  onCheckCatalogStatus: (trackingId: string) => void;
+  onSyncInventory: () => void;
+  onUploadPrices: () => void;
+  onUploadStocks: () => void;
+  onSyncOrders: () => void;
+  onCreateTestOrder: () => void;
+  onPackageOrderLine: (id: string) => void;
+}) {
+  const connected = Boolean(apiAvailable && connections?.hepsiburada.configured);
+  const [trackingId, setTrackingId] = useState("");
+  const [editingId, setEditingId] = useState<string | undefined>();
+  const [productForm, setProductForm] = useState({
+    name: "",
+    barcode: "",
+    hbSku: "",
+    merchantSku: "",
+    brand: "SAFA",
+    categoryName: "Hepsiburada Envanter",
+    vatRate: 20,
+    price: "0",
+    stock: 0,
+    dispatchTime: 2,
+    description: "",
+    active: true
+  });
+
+  function fillProduct(product: HepsiburadaProductListItem) {
+    setEditingId(product.id);
+    setProductForm({
+      name: product.name,
+      barcode: product.barcode ?? "",
+      hbSku: product.hepsiburada?.hbSku ?? "",
+      merchantSku: product.merchantSku,
+      brand: product.brand,
+      categoryName: product.categoryName,
+      vatRate: product.vatRate,
+      price: String(product.priceCents / 100),
+      stock: product.stock,
+      dispatchTime: product.dispatchTime,
+      description: product.description ?? "",
+      active: product.active
+    });
+  }
+
+  function submitProduct(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const priceNumber = Number(productForm.price.replace(",", "."));
+    onSaveProduct(
+      {
+        name: productForm.name,
+        barcode: productForm.barcode || undefined,
+        hbSku: productForm.hbSku || undefined,
+        merchantSku: productForm.merchantSku,
+        brand: productForm.brand,
+        categoryName: productForm.categoryName,
+        vatRate: productForm.vatRate,
+        priceCents: Number.isFinite(priceNumber) ? Math.round(priceNumber * 100) : 0,
+        stock: productForm.stock,
+        dispatchTime: productForm.dispatchTime,
+        description: productForm.description || undefined,
+        active: productForm.active
+      },
+      editingId
+    );
+  }
+
+  return (
+    <section className="surface-panel">
+      <div className="section-head">
+        <div>
+          <span className="micro-label">Canli pazaryeri</span>
+          <h2>Hepsiburada</h2>
+          <p>Katalog trackingId, stok/fiyat upload, paketleme ve fatura linki akisi ayni panelden yonetilir.</p>
+        </div>
+        <span className={cx("status-pill", connected ? "success" : "warning")}>
+          {connected ? "Bagli" : hepsiburadaSavedAsDraft ? "Taslak kayitli" : "Bekliyor"}
+        </span>
+      </div>
+
+      <div className="content-grid integration-forms">
+        <form
+          className="settings-form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            onSaveHepsiburada();
+          }}
+        >
+          <div className="form-pair">
+            <label className="field">
+              <span>Merchant ID</span>
+              <input
+                value={hepsiburadaForm.merchantId}
+                onChange={(event) => setHepsiburadaForm((current) => ({ ...current, merchantId: event.target.value }))}
+                autoComplete="off"
+              />
+            </label>
+            <label className="field">
+              <span>Ortam</span>
+              <select
+                value={hepsiburadaForm.environment}
+                onChange={(event) =>
+                  setHepsiburadaForm((current) => ({
+                    ...current,
+                    environment: event.target.value === "prod" ? "prod" : "test"
+                  }))
+                }
+              >
+                <option value="test">Test</option>
+                <option value="prod">Canli</option>
+              </select>
+            </label>
+          </div>
+          <div className="form-pair">
+            <label className="field">
+              <span>User</span>
+              <input
+                value={hepsiburadaForm.username}
+                onChange={(event) => setHepsiburadaForm((current) => ({ ...current, username: event.target.value }))}
+                autoComplete="username"
+              />
+            </label>
+            <label className="field">
+              <span>Password</span>
+              <input
+                type="password"
+                value={hepsiburadaForm.password ?? ""}
+                placeholder={connections?.hepsiburada.passwordSaved ? "Kayitli" : ""}
+                onChange={(event) => setHepsiburadaForm((current) => ({ ...current, password: event.target.value }))}
+                autoComplete="new-password"
+              />
+            </label>
+          </div>
+          <label className="field">
+            <span>User-Agent</span>
+            <input
+              value={hepsiburadaForm.userAgent}
+              onChange={(event) => setHepsiburadaForm((current) => ({ ...current, userAgent: event.target.value }))}
+            />
+          </label>
+          <div className="form-pair">
+            <label className="field">
+              <span>Gun</span>
+              <input
+                type="number"
+                min={1}
+                max={30}
+                value={hepsiburadaForm.lookbackDays}
+                onChange={(event) => setHepsiburadaForm((current) => ({ ...current, lookbackDays: Number(event.target.value) }))}
+              />
+            </label>
+            <label className="field">
+              <span>OMS URL</span>
+              <input
+                value={hepsiburadaForm.orderBaseUrl}
+                onChange={(event) => setHepsiburadaForm((current) => ({ ...current, orderBaseUrl: event.target.value }))}
+              />
+            </label>
+          </div>
+          <div className="form-actions">
+            <button className="ui-button primary" type="submit" disabled={busyAction === "save-hepsiburada"}>
+              {busyAction === "save-hepsiburada" ? <Loader2 size={18} className="spin" /> : <LockKeyhole size={18} />}
+              Baglan
+            </button>
+          </div>
+        </form>
+
+        <form className="settings-form" onSubmit={submitProduct}>
+          <div className="form-pair">
+            <label className="field">
+              <span>Urun adi</span>
+              <input value={productForm.name} onChange={(event) => setProductForm((current) => ({ ...current, name: event.target.value }))} />
+            </label>
+            <label className="field">
+              <span>Merchant SKU</span>
+              <input
+                value={productForm.merchantSku}
+                onChange={(event) => setProductForm((current) => ({ ...current, merchantSku: event.target.value }))}
+              />
+            </label>
+          </div>
+          <div className="form-pair">
+            <label className="field">
+              <span>HB SKU</span>
+              <input value={productForm.hbSku} onChange={(event) => setProductForm((current) => ({ ...current, hbSku: event.target.value }))} />
+            </label>
+            <label className="field">
+              <span>Barkod</span>
+              <input
+                value={productForm.barcode}
+                onChange={(event) => setProductForm((current) => ({ ...current, barcode: event.target.value }))}
+              />
+            </label>
+          </div>
+          <div className="form-pair">
+            <label className="field">
+              <span>Fiyat</span>
+              <input value={productForm.price} onChange={(event) => setProductForm((current) => ({ ...current, price: event.target.value }))} />
+            </label>
+            <label className="field">
+              <span>Stok</span>
+              <input
+                type="number"
+                min={0}
+                value={productForm.stock}
+                onChange={(event) => setProductForm((current) => ({ ...current, stock: Number(event.target.value) }))}
+              />
+            </label>
+          </div>
+          <div className="form-pair">
+            <label className="field">
+              <span>Marka</span>
+              <input value={productForm.brand} onChange={(event) => setProductForm((current) => ({ ...current, brand: event.target.value }))} />
+            </label>
+            <label className="field">
+              <span>Kategori</span>
+              <input
+                value={productForm.categoryName}
+                onChange={(event) => setProductForm((current) => ({ ...current, categoryName: event.target.value }))}
+              />
+            </label>
+          </div>
+          <div className="form-actions">
+            <button className="ui-button primary" type="submit" disabled={busyAction === "hepsiburada-product"}>
+              {busyAction === "hepsiburada-product" ? <Loader2 size={18} className="spin" /> : <KeyRound size={18} />}
+              {editingId ? "Urunu guncelle" : "Urun ekle"}
+            </button>
+            {editingId ? (
+              <button className="ui-button ghost" type="button" onClick={() => setEditingId(undefined)}>
+                Yeni kayit
+              </button>
+            ) : null}
+          </div>
+        </form>
+      </div>
+
+      <div className="action-lanes connection-lanes">
+        <article className="action-lane">
+          <span>1</span>
+          <strong>Katalog</strong>
+          <small>{products.length} urun kayitli. TrackingId Hepsiburada test ticket kanitidir.</small>
+          <button className="ui-button primary compact" type="button" onClick={onUploadCatalog} disabled={busyAction === "hepsiburada-catalog"}>
+            {busyAction === "hepsiburada-catalog" ? <Loader2 size={17} className="spin" /> : <Send size={17} />}
+            Katalog gonder
+          </button>
+          <div className="inline-action">
+            <input value={trackingId} onChange={(event) => setTrackingId(event.target.value)} placeholder="trackingId" />
+            <button
+              className="ui-button ghost compact"
+              type="button"
+              onClick={() => onCheckCatalogStatus(trackingId)}
+              disabled={busyAction === "hepsiburada-catalog-status"}
+            >
+              Sorgula
+            </button>
+          </div>
+        </article>
+        <article className="action-lane">
+          <span>2</span>
+          <strong>Stok / fiyat</strong>
+          <small>HB envanteriyle eslesen merchantSku veya hbSku kayitlari gonderilir.</small>
+          <div className="form-actions">
+            <button className="ui-button ghost compact" type="button" onClick={onSyncInventory} disabled={busyAction === "hepsiburada-inventory"}>
+              Envanter
+            </button>
+            <button className="ui-button ghost compact" type="button" onClick={onUploadPrices} disabled={busyAction === "hepsiburada-price"}>
+              Fiyat
+            </button>
+            <button className="ui-button ghost compact" type="button" onClick={onUploadStocks} disabled={busyAction === "hepsiburada-stock"}>
+              Stok
+            </button>
+          </div>
+        </article>
+        <article className="action-lane">
+          <span>3</span>
+          <strong>Siparis</strong>
+          <small>{orderLines.length} Hepsiburada kalemi takipte. Paketleme operator onaylidir.</small>
+          <div className="form-actions">
+            <button className="ui-button ghost compact" type="button" onClick={onCreateTestOrder} disabled={busyAction === "hepsiburada-test-order"}>
+              Test siparis
+            </button>
+            <button className="ui-button primary compact" type="button" onClick={onSyncOrders} disabled={busyAction === "hepsiburada-orders"}>
+              Siparis cek
+            </button>
+          </div>
+        </article>
+      </div>
+
+      <div className="table-wrap">
+        <table className="data-table">
+          <thead>
+            <tr>
+              <th>Urun</th>
+              <th>SKU</th>
+              <th>Fiyat</th>
+              <th>Stok</th>
+              <th>Durum</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {products.slice(0, 8).map((product) => (
+              <tr key={product.id}>
+                <td>{product.name}</td>
+                <td>{product.hepsiburada?.hbSku ?? product.merchantSku}</td>
+                <td>{money(product.priceCents, "TRY")}</td>
+                <td>{product.stock}</td>
+                <td>{product.hepsiburada?.lastStatus ?? "Bekliyor"}</td>
+                <td>
+                  <button className="text-link" type="button" onClick={() => fillProduct(product)}>
+                    Duzenle
+                  </button>
+                </td>
+              </tr>
+            ))}
+            {products.length === 0 ? (
+              <tr>
+                <td colSpan={6}>Hepsiburada urun kaydi yok.</td>
+              </tr>
+            ) : null}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="table-wrap">
+        <table className="data-table">
+          <thead>
+            <tr>
+              <th>Siparis</th>
+              <th>Kalem</th>
+              <th>Musteri</th>
+              <th>Paket</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {orderLines.slice(0, 8).map((line) => (
+              <tr key={line.id}>
+                <td>{line.orderNumber}</td>
+                <td>
+                  {line.hbSku} / {line.quantity}
+                </td>
+                <td>{line.customerName ?? "-"}</td>
+                <td>{line.packageNumber ?? line.packageStatus}</td>
+                <td>
+                  {!line.packageNumber ? (
+                    <button
+                      className="ui-button primary compact"
+                      type="button"
+                      onClick={() => onPackageOrderLine(line.id)}
+                      disabled={busyAction === `hepsiburada-package-${line.id}`}
+                    >
+                      {busyAction === `hepsiburada-package-${line.id}` ? <Loader2 size={16} className="spin" /> : <Send size={16} />}
+                      Paketle
+                    </button>
+                  ) : null}
+                </td>
+              </tr>
+            ))}
+            {orderLines.length === 0 ? (
+              <tr>
+                <td colSpan={5}>Hepsiburada siparis kalemi yok.</td>
+              </tr>
+            ) : null}
+          </tbody>
+        </table>
+      </div>
+    </section>
   );
 }
 

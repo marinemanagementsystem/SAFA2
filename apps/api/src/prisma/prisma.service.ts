@@ -21,6 +21,10 @@ export class PrismaService implements OnModuleInit, OnModuleDestroy {
   readonly order: DataDelegate;
   readonly invoiceDraft: DataDelegate;
   readonly invoice: DataDelegate;
+  readonly product: DataDelegate;
+  readonly marketplaceListing: DataDelegate;
+  readonly hepsiburadaOrderLine: DataDelegate;
+  readonly publicInvoiceToken: DataDelegate;
   readonly externalInvoice: DataDelegate;
   readonly integrationJob: DataDelegate;
   readonly auditLog: DataDelegate;
@@ -32,6 +36,10 @@ export class PrismaService implements OnModuleInit, OnModuleDestroy {
       this.order = this.firestore.order as unknown as DataDelegate;
       this.invoiceDraft = this.firestore.invoiceDraft as unknown as DataDelegate;
       this.invoice = this.firestore.invoice as unknown as DataDelegate;
+      this.product = this.firestore.product as unknown as DataDelegate;
+      this.marketplaceListing = this.firestore.marketplaceListing as unknown as DataDelegate;
+      this.hepsiburadaOrderLine = this.firestore.hepsiburadaOrderLine as unknown as DataDelegate;
+      this.publicInvoiceToken = this.firestore.publicInvoiceToken as unknown as DataDelegate;
       this.externalInvoice = this.firestore.externalInvoice as unknown as DataDelegate;
       this.integrationJob = this.firestore.integrationJob as unknown as DataDelegate;
       this.auditLog = this.firestore.auditLog as unknown as DataDelegate;
@@ -43,6 +51,10 @@ export class PrismaService implements OnModuleInit, OnModuleDestroy {
     this.order = this.client.order as unknown as DataDelegate;
     this.invoiceDraft = this.client.invoiceDraft as unknown as DataDelegate;
     this.invoice = this.client.invoice as unknown as DataDelegate;
+    this.product = this.client.product as unknown as DataDelegate;
+    this.marketplaceListing = this.client.marketplaceListing as unknown as DataDelegate;
+    this.hepsiburadaOrderLine = this.client.hepsiburadaOrderLine as unknown as DataDelegate;
+    this.publicInvoiceToken = this.client.publicInvoiceToken as unknown as DataDelegate;
     this.externalInvoice = this.client.externalInvoice as unknown as DataDelegate;
     this.integrationJob = this.client.integrationJob as unknown as DataDelegate;
     this.auditLog = this.client.auditLog as unknown as DataDelegate;

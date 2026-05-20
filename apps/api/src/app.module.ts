@@ -10,6 +10,7 @@ import { JobsModule } from "./jobs/jobs.module";
 import { SettingsModule } from "./settings/settings.module";
 import { EarsivPortalModule } from "./earsiv-portal/earsiv-portal.module";
 import { ExternalInvoicesModule } from "./external-invoices/external-invoices.module";
+import { HepsiburadaModule } from "./hepsiburada/hepsiburada.module";
 
 @Module({
   imports: [
@@ -23,7 +24,8 @@ import { ExternalInvoicesModule } from "./external-invoices/external-invoices.mo
     JobsModule,
     SettingsModule,
     EarsivPortalModule,
-    ExternalInvoicesModule
+    ExternalInvoicesModule,
+    HepsiburadaModule
   ]
 })
 export class AppModule {}
