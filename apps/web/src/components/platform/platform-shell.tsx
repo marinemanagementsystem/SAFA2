@@ -44,8 +44,8 @@ const viewTitles: Record<PlatformView, { title: string; subtitle: string }> = {
     subtitle: "Teslim paketlerini filtrele, fatura durumunu gor ve detaya in."
   },
   invoices: {
-    title: "Faturalar",
-    subtitle: "Taslaklari onayla, portal imzasini takip et ve aylik arsivi indir."
+    title: "Fatura Operasyon Masasi",
+    subtitle: "PDF arsivi, GIB imzasi, harici e-Arsiv ve Trendyol gonderimini tek ekranda takip et."
   },
   integrations: {
     title: "Entegrasyonlar",
@@ -64,6 +64,14 @@ const viewTitles: Record<PlatformView, { title: string; subtitle: string }> = {
     subtitle: "Runtime, saglayici ve saklama durumunu kontrol et."
   }
 };
+
+const invoiceOpsNavItems: Array<{ view: PlatformView; href: string; label: string; description: string; mobileLabel: string }> = [
+  { view: "orders", href: "/orders", label: "Satislar", description: "Siparis ve paketler", mobileLabel: "Satis" },
+  { view: "invoices", href: "/invoices", label: "Faturalar", description: "Fatura operasyonu", mobileLabel: "Fatura" },
+  { view: "integrations", href: "/integrations", label: "Pazaryeri", description: "Kanal baglantilari", mobileLabel: "Pazar" },
+  { view: "operations", href: "/operations", label: "Raporlar", description: "Kuyruk ve durum", mobileLabel: "Rapor" },
+  { view: "settings", href: "/settings", label: "Ayarlar", description: "Runtime ayarlari", mobileLabel: "Ayar" }
+];
 
 interface PlatformShellProps {
   view: PlatformView;
@@ -103,20 +111,21 @@ export function PlatformShell({
   const title = viewTitles[view];
   const connected = connectionScore(snapshot);
   const isLiveMode = apiAvailable && snapshot.settings.liveIntegrationsOnly === true;
+  const navItems = view === "invoices" ? invoiceOpsNavItems : NAV_ITEMS;
 
   return (
-    <main className="platform-shell">
+    <main className={cx("platform-shell", `view-${view}`)}>
       <aside className="side-nav" aria-label="SAFA navigasyon">
         <Link className="brand-lockup" href="/" aria-label="SAFA overview">
           <span className="brand-mark">S</span>
           <span>
             <strong>SAFA</strong>
-            <small>Commerce OS</small>
+            <small>{view === "invoices" ? "Fatura Yonetimi" : "Commerce OS"}</small>
           </span>
         </Link>
 
         <nav className="nav-list" aria-label="Ana sayfalar">
-          {NAV_ITEMS.map((item) => {
+          {navItems.map((item) => {
             const Icon = navIcons[item.view];
             return (
               <Link className={cx("nav-item", item.view === view && "active")} href={item.href} key={item.view}>
@@ -132,8 +141,8 @@ export function PlatformShell({
 
         <div className="nav-health">
           <div>
-            <span className="micro-label">Baglanti skoru</span>
-            <strong>{apiAvailable ? `${connected}/2 canli` : "API bekliyor"}</strong>
+            <span className="micro-label">{view === "invoices" ? "Operasyon kilidi" : "Baglanti skoru"}</span>
+            <strong>{view === "invoices" ? "Bos arsiv yerine aksiyon" : apiAvailable ? `${connected}/2 canli` : "API bekliyor"}</strong>
           </div>
           <span className={cx("status-dot", apiAvailable && connected === 2 ? "success" : "warning")} aria-hidden="true" />
         </div>
@@ -188,7 +197,7 @@ export function PlatformShell({
         {children}
 
         <nav className="mobile-tabbar" aria-label="Mobil navigasyon">
-          {NAV_ITEMS.map((item) => {
+          {navItems.map((item) => {
             const Icon = navIcons[item.view];
             return (
               <Link className={cx("mobile-tab", item.view === view && "active")} href={item.href} key={item.view}>

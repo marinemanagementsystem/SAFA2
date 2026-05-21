@@ -75,6 +75,7 @@ export function PlatformApp({ view }: PlatformAppProps) {
               onUploadExternalInvoicePdf={(id, file) => void platform.uploadExternalInvoicePdf(id, file)}
               onSendInvoiceToTrendyol={(id) => void platform.sendInvoiceToTrendyol(id)}
               onCreateMonthlyArchive={platform.createMonthlyInvoiceArchive}
+              onRefresh={() => void platform.refresh()}
               onOpenGibPortal={() => void platform.openGibPortal()}
               onCloseGibPortalSession={() => void platform.logoutGibPortalSession()}
             />

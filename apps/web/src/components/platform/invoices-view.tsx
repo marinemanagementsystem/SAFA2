@@ -110,6 +110,7 @@ interface InvoicesViewProps {
   onUploadExternalInvoicePdf: (id: string, file: File) => void;
   onSendInvoiceToTrendyol: (id: string) => void;
   onCreateMonthlyArchive: (year: number, month: number) => Promise<MonthlyInvoiceArchiveResult | null>;
+  onRefresh: () => void;
   onOpenGibPortal: () => void;
   onCloseGibPortalSession: () => void;
 }
@@ -882,6 +883,7 @@ export function InvoicesView({
   onUploadExternalInvoicePdf,
   onSendInvoiceToTrendyol,
   onCreateMonthlyArchive,
+  onRefresh,
   onOpenGibPortal,
   onCloseGibPortalSession
 }: InvoicesViewProps) {
@@ -938,6 +940,10 @@ export function InvoicesView({
   const filteredOperationRows = useMemo(
     () => filterInvoiceOperationRows(operationRows, { query: operationQuery, queue: operationQueue }),
     [operationQuery, operationQueue, operationRows]
+  );
+  const visibleOperationSelectableDraftIds = useMemo(
+    () => Array.from(new Set(filteredOperationRows.flatMap((row) => (row.draft && isSelectableDraft(row.draft) ? [row.draft.id] : [])))),
+    [filteredOperationRows]
   );
   const selectedOperation =
     filteredOperationRows.find((row) => row.id === selectedOperationId) ??
@@ -1084,6 +1090,10 @@ export function InvoicesView({
   function selectVisibleDrafts() {
     const visibleIds = filteredSelectableDrafts.map((draft) => draft.id);
     setSelectedDrafts((current) => Array.from(new Set([...current, ...visibleIds])));
+  }
+
+  function selectVisibleOperationDrafts() {
+    setSelectedDrafts((current) => Array.from(new Set([...current, ...visibleOperationSelectableDraftIds])));
   }
 
   function resetDraftFilters() {
@@ -1283,6 +1293,11 @@ export function InvoicesView({
     onUploadExternalInvoicePdf(row.externalInvoice.id, file);
   }
 
+  function toggleOperationDraftSelection(row: InvoiceOperationRow, checked: boolean) {
+    if (!row.draft || !isSelectableDraft(row.draft)) return;
+    toggleDraft(row.draft.id, checked);
+  }
+
   return (
     <div className="view-stack">
       <InvoiceOperationsDashboard
@@ -1301,14 +1316,27 @@ export function InvoicesView({
         monthlyArchiveMonth={monthlyArchiveMonth}
         monthlyArchiveResult={monthlyArchiveResult}
         invoiceGroups={invoiceGroups}
+        selectedDraftIds={selectedDrafts}
+        selectedReadyCount={selectedReadyCount}
+        selectedRetryCount={selectedRetryCount}
+        selectedApprovedCount={selectedApprovedCount}
+        selectedNeedsApprovalCount={selectedNeedsApprovalCount}
+        selectionAdvice={selectionAdvice}
+        visibleSelectableDraftCount={visibleOperationSelectableDraftIds.length}
         signedUnarchivedPortalInvoices={signedUnarchivedPortalInvoices.length}
         pdfWaitingInvoices={pdfWaitingInvoices.length}
         onQueryChange={setOperationQuery}
         onQueueChange={setOperationQueue}
         onSelectRow={(row) => setSelectedOperationId(row.id)}
+        onToggleDraftSelection={toggleOperationDraftSelection}
+        onSelectVisibleDrafts={selectVisibleOperationDrafts}
+        onClearSelectedDrafts={() => setSelectedDrafts([])}
+        onApproveSelected={approveSelected}
+        onUploadPortalSelected={uploadPortalSelected}
         onResetOperationFilters={resetOperationFilters}
         onRunAction={runOperationAction}
         onUploadPdf={uploadOperationPdf}
+        onRefresh={onRefresh}
         onOpenGibPortal={onOpenGibPortal}
         onCloseGibPortalSession={onCloseGibPortalSession}
         onPreviewSignedPortalInvoices={previewSignedPortalInvoices}
@@ -1965,14 +1993,27 @@ function InvoiceOperationsDashboard({
   monthlyArchiveMonth,
   monthlyArchiveResult,
   invoiceGroups,
+  selectedDraftIds,
+  selectedReadyCount,
+  selectedRetryCount,
+  selectedApprovedCount,
+  selectedNeedsApprovalCount,
+  selectionAdvice,
+  visibleSelectableDraftCount,
   signedUnarchivedPortalInvoices,
   pdfWaitingInvoices,
   onQueryChange,
   onQueueChange,
   onSelectRow,
+  onToggleDraftSelection,
+  onSelectVisibleDrafts,
+  onClearSelectedDrafts,
+  onApproveSelected,
+  onUploadPortalSelected,
   onResetOperationFilters,
   onRunAction,
   onUploadPdf,
+  onRefresh,
   onOpenGibPortal,
   onCloseGibPortalSession,
   onPreviewSignedPortalInvoices,
@@ -2002,14 +2043,27 @@ function InvoiceOperationsDashboard({
   monthlyArchiveMonth: string;
   monthlyArchiveResult: MonthlyInvoiceArchiveResult | null;
   invoiceGroups: { newInvoices: InvoiceListItem[]; previousInvoices: InvoiceListItem[] };
+  selectedDraftIds: string[];
+  selectedReadyCount: number;
+  selectedRetryCount: number;
+  selectedApprovedCount: number;
+  selectedNeedsApprovalCount: number;
+  selectionAdvice: string;
+  visibleSelectableDraftCount: number;
   signedUnarchivedPortalInvoices: number;
   pdfWaitingInvoices: number;
   onQueryChange: (value: string) => void;
   onQueueChange: (value: InvoiceOperationQueueKey) => void;
   onSelectRow: (row: InvoiceOperationRow) => void;
+  onToggleDraftSelection: (row: InvoiceOperationRow, checked: boolean) => void;
+  onSelectVisibleDrafts: () => void;
+  onClearSelectedDrafts: () => void;
+  onApproveSelected: () => void;
+  onUploadPortalSelected: () => void;
   onResetOperationFilters: () => void;
   onRunAction: (row: InvoiceOperationRow) => void;
   onUploadPdf: (row: InvoiceOperationRow, file: File) => void;
+  onRefresh: () => void;
   onOpenGibPortal: () => void;
   onCloseGibPortalSession: () => void;
   onPreviewSignedPortalInvoices: () => Promise<void>;
@@ -2031,19 +2085,35 @@ function InvoiceOperationsDashboard({
     { key: "external-found", title: "Harici e-Arsiv eslesti", count: metrics.externalFoundCount, detail: "SAFA arsivine alinabilecek kayit", tone: "neutral" },
     { key: "marketplace", title: "Trendyol gonderimi", count: metrics.marketplaceCount, detail: "PDF hazir veya pazaryeri hatasi var", tone: "success" }
   ];
+  const workQueueCards = [queueCards[2], queueCards[1], queueCards[3], queueCards[4]];
+  const hasSelectableDrafts = visibleSelectableDraftCount > 0;
+  const showBulkActions = selectedDraftIds.length > 0 || hasSelectableDrafts;
+  const selectedDraftSummary =
+    selectedDraftIds.length > 0
+      ? [
+          selectedReadyCount > 0 ? `${selectedReadyCount} hazir` : "",
+          selectedApprovedCount > 0 ? `${selectedApprovedCount} onayli` : "",
+          selectedRetryCount > 0 ? `${selectedRetryCount} hatali` : ""
+        ]
+          .filter(Boolean)
+          .join(" · ") || `${selectedDraftIds.length} taslak secili`
+      : hasSelectableDrafts
+        ? `${visibleSelectableDraftCount} gorunur taslak secilebilir`
+        : "Secilebilir taslak yok. Filtreyi degistirin veya senkronizasyon calistirin.";
 
   return (
     <section className="invoice-ops-page" aria-label="Fatura operasyon masasi">
       <article className="invoice-ops-hero surface-panel">
         <div className="invoice-ops-title">
           <span className="micro-label">Fatura operasyon masasi</span>
-          <h2>PDF arsivi, GIB imzasi ve pazaryeri tek akista</h2>
-          <p>
-            Her siparis veya fatura kaydi Taslak, GIB, PDF ve Pazaryeri adimlariyla izlenir. Bos arsiv yerine eksik sebebi ve
-            sonraki islem gosterilir.
-          </p>
+          <h2>Fatura Operasyon Masasi</h2>
+          <p>PDF, GIB, harici fatura ve Trendyol tek ekranda.</p>
         </div>
         <div className="invoice-ops-hero-actions">
+          <button className="ui-button ghost" type="button" onClick={onRefresh} disabled={busyAction === "refresh"}>
+            {busyAction === "refresh" ? <Loader2 size={18} className="spin" /> : <RefreshCw size={18} />}
+            Yenile
+          </button>
           <button className="ui-button ghost" type="button" onClick={onOpenGibPortal} disabled={busyAction === "open-gib"}>
             {busyAction === "open-gib" ? <Loader2 size={18} className="spin" /> : <Link2 size={18} />}
             e-Arsiv ac
@@ -2063,13 +2133,14 @@ function InvoiceOperationsDashboard({
       <div className="invoice-ops-warning">
         <AlertTriangle size={20} />
         <div>
-          <strong>PDF arsivi bos gorunuyorsa kayit kaybolmus degil; resmi fatura veya PDF baglantisi henuz tamamlanmamistir.</strong>
+          <strong>PDF arsivi bos cunku resmi fatura henuz olusmadi.</strong>
           <span>
-            Bu ekran taslak, portal imza, harici e-Arsiv eslesmesi ve PDF durumunu tek satirda birlestirir; operator hangi
-            adimin bekledigini direkt gorur.
+            Taslak, GIB imzasi, harici e-Arsiv ve PDF eksigi ayni satirda izlenir.
           </span>
         </div>
-        <span className="mode-pill danger">{metrics.pdfMissingCount} PDF eksik</span>
+        <span className="mode-pill danger">
+          {metrics.portalSignatureCount} imza · {metrics.pdfMissingCount} PDF
+        </span>
       </div>
 
       <div className="invoice-ops-metrics">
@@ -2092,30 +2163,50 @@ function InvoiceOperationsDashboard({
           <div className="section-head">
             <div>
               <span className="micro-label">Is kuyrugu</span>
-              <h2>{filteredRows.length} kayit</h2>
-              <p>Oncelik sirasina gore operator aksiyonlari.</p>
+              <h2>Is kuyrugu</h2>
+              <p>Oncelik kulvarini secerek aksiyona goturur.</p>
             </div>
+            <span className="mode-pill">{filteredRows.length} kayit</span>
           </div>
-          <div className="invoice-ops-filter-stack">
+          <div className="invoice-ops-mock-fields">
+            <label className="field">
+              <span>
+                <CalendarDays size={17} />
+                Ay
+              </span>
+              <div className="invoice-ops-control">
+                <strong>{monthlyArchiveMonth ? monthLabel(monthlyArchiveMonth) : "Ay secilmedi"}</strong>
+                <CalendarDays size={15} />
+              </div>
+            </label>
+            <label className="field">
+              <span>
+                <ListFilter size={17} />
+                Durum
+              </span>
+              <button className="invoice-ops-control" type="button" onClick={() => onQueueChange("action")}>
+                <strong>Aksiyon bekleyenler</strong>
+                <span>Ac</span>
+              </button>
+            </label>
             <label className="field search-field">
               <span>
                 <Search size={17} />
                 Arama
               </span>
-              <input value={query} onChange={(event) => onQueryChange(event.target.value)} placeholder="Fatura, siparis, paket, alici" />
+              <input value={query} onChange={(event) => onQueryChange(event.target.value)} placeholder="Fatura, siparis, paket" />
             </label>
-            <button className="ui-button ghost compact" type="button" onClick={onResetOperationFilters}>
-              <X size={16} />
-              Filtre temizle
-            </button>
           </div>
+          {query || queue !== "all" ? (
+            <div className="invoice-ops-filter-stack">
+              <button className="ui-button ghost compact" type="button" onClick={onResetOperationFilters}>
+                <X size={16} />
+                Filtre temizle
+              </button>
+            </div>
+          ) : null}
           <div className="invoice-ops-queue-list">
-            <button className={cx("invoice-ops-queue-item", queue === "all" && "active")} type="button" onClick={() => onQueueChange("all")}>
-              <strong>Tum kayitlar</strong>
-              <span>{rows.length}</span>
-              <em>Fatura yasam dongusunun tamamini goster.</em>
-            </button>
-            {queueCards.slice(1).map((card) => (
+            {workQueueCards.map((card) => (
               <button
                 className={cx("invoice-ops-queue-item", card.tone, queue === card.key && "active")}
                 type="button"
@@ -2139,7 +2230,7 @@ function InvoiceOperationsDashboard({
             </div>
             <div className="section-actions">
               <button
-                className="ui-button ghost compact"
+                className="ui-button primary compact"
                 type="button"
                 onClick={() => void onApplySignedPortalInvoices()}
                 disabled={busyAction === "external-gib-apply"}
@@ -2147,15 +2238,78 @@ function InvoiceOperationsDashboard({
                 {busyAction === "external-gib-apply" ? <Loader2 size={16} className="spin" /> : <CheckCircle2 size={16} />}
                 Eslesenleri uygula
               </button>
-              <button className="ui-button ghost compact" type="button" onClick={onSyncTrendyolExternalInvoices} disabled={busyAction === "external-trendyol-sync"}>
-                {busyAction === "external-trendyol-sync" ? <Loader2 size={16} className="spin" /> : <RefreshCw size={16} />}
-                Trendyol izi ara
+            </div>
+          </div>
+
+          <div className="invoice-ops-table-toolbar">
+            <label className="field search-field">
+              <span>
+                <Search size={17} />
+                Arama
+              </span>
+              <input value={query} onChange={(event) => onQueryChange(event.target.value)} placeholder="Fatura no, siparis no, paket, musteri ara" />
+            </label>
+            <div className="invoice-ops-segmented" aria-label="Tablo durumu">
+              <button className={cx(queue === "all" && "active")} type="button" onClick={() => onQueueChange("all")}>
+                Tumu
               </button>
-              <button className="ui-button ghost compact" type="button" onClick={onReconcileExternalInvoices} disabled={busyAction === "external-reconcile"}>
-                {busyAction === "external-reconcile" ? <Loader2 size={16} className="spin" /> : <Check size={16} />}
-                Tekrar eslestir
+              <button className={cx(queue === "pdf-missing" && "active")} type="button" onClick={() => onQueueChange("pdf-missing")}>
+                Eksik
+              </button>
+              <button className={cx(queue === "marketplace" && "active")} type="button" onClick={() => onQueueChange("marketplace")}>
+                Tamam
               </button>
             </div>
+            <div className="invoice-ops-icon-actions">
+              <button className="icon-button" type="button" onClick={onSyncTrendyolExternalInvoices} disabled={busyAction === "external-trendyol-sync"} title="Trendyol izi ara">
+                {busyAction === "external-trendyol-sync" ? <Loader2 size={16} className="spin" /> : <RefreshCw size={16} />}
+              </button>
+              <button className="icon-button" type="button" onClick={onReconcileExternalInvoices} disabled={busyAction === "external-reconcile"} title="Tekrar eslestir">
+                {busyAction === "external-reconcile" ? <Loader2 size={16} className="spin" /> : <Check size={16} />}
+              </button>
+            </div>
+          </div>
+
+          <div className={cx("invoice-ops-bulkbar", selectedDraftIds.length > 0 && "active", !showBulkActions && "empty")} aria-label="Toplu taslak islemleri">
+            <div className="invoice-ops-bulkbar-copy">
+              <span className={cx("mode-pill", selectedDraftIds.length > 0 && "success")}>
+                {selectedDraftIds.length > 0 ? `${selectedDraftIds.length} secili` : showBulkActions ? "Secim yok" : "Taslak yok"}
+              </span>
+              <div>
+                <strong>{showBulkActions ? "Toplu taslak islemleri" : "Secilecek taslak yok"}</strong>
+                <small>{selectionAdvice || selectedDraftSummary}</small>
+              </div>
+            </div>
+            {showBulkActions ? (
+              <div className="invoice-ops-bulkbar-actions">
+                <button className="ui-button ghost compact" type="button" onClick={onSelectVisibleDrafts} disabled={visibleSelectableDraftCount === 0}>
+                  <Check size={16} />
+                  Gorunenleri sec
+                </button>
+                <button className="ui-button ghost compact" type="button" onClick={onClearSelectedDrafts} disabled={selectedDraftIds.length === 0}>
+                  <X size={16} />
+                  Secimi temizle
+                </button>
+                <button
+                  className="ui-button ghost compact"
+                  type="button"
+                  onClick={onApproveSelected}
+                  disabled={selectedDraftIds.length === 0 || selectedNeedsApprovalCount === 0 || busyAction === busyKeyForAction("approve")}
+                >
+                  {busyAction === busyKeyForAction("approve") ? <Loader2 size={16} className="spin" /> : <Check size={16} />}
+                  {selectedDraftIds.length > 0 && selectedNeedsApprovalCount === 0 ? "Zaten onayli" : "Seciliyi onayla"}
+                </button>
+                <button
+                  className="ui-button primary compact"
+                  type="button"
+                  onClick={onUploadPortalSelected}
+                  disabled={selectedDraftIds.length === 0 || busyAction === busyKeyForAction("portal")}
+                >
+                  {busyAction === busyKeyForAction("portal") ? <Loader2 size={16} className="spin" /> : <UploadCloud size={16} />}
+                  GIB taslagina yukle
+                </button>
+              </div>
+            ) : null}
           </div>
 
           <div className="invoice-ops-table-wrap">
@@ -2167,46 +2321,97 @@ function InvoiceOperationsDashboard({
                   <th>Akis</th>
                   <th>GIB / PDF</th>
                   <th>Pazaryeri</th>
-                  <th>Tutar</th>
-                  <th>Islem</th>
+                  <th style={{ textAlign: "right" }}>Tutar</th>
                 </tr>
               </thead>
               <tbody>
-                {filteredRows.map((row) => (
-                  <tr className={cx(selectedRow?.id === row.id && "selected")} key={row.id} onClick={() => onSelectRow(row)}>
-                    <td>
-                      <span className={cx("invoice-priority", row.statusTone)}>{row.priorityLabel}</span>
-                    </td>
-                    <td>
-                      <div className="invoice-op-record">
-                        <span className={cx("status-pill", row.statusTone)}>{row.statusLabel}</span>
-                        <strong>{row.orderNumber}</strong>
-                        <small>
-                          {row.customerName} · Paket {row.shipmentPackageId}
-                        </small>
-                        {row.invoice?.invoiceNumber ? <em>{row.invoice.invoiceNumber}</em> : row.externalInvoice?.invoiceNumber ? <em>{row.externalInvoice.invoiceNumber}</em> : null}
+                {filteredRows.length > 0 ? (
+                  filteredRows.map((row) => (
+                    <tr
+                      className={cx(selectedRow?.id === row.id && "selected", row.draft?.id && selectedDraftIds.includes(row.draft.id) && "bulk-selected")}
+                      key={row.id}
+                      onClick={() => onSelectRow(row)}
+                    >
+                      <td>
+                        <div className="invoice-op-priority-cell">
+                          <DraftSelectionControl
+                            row={row}
+                            checked={Boolean(row.draft?.id && selectedDraftIds.includes(row.draft.id))}
+                            onToggle={onToggleDraftSelection}
+                          />
+                          <span className={cx("invoice-priority", row.statusTone)}>{row.priorityLabel}</span>
+                        </div>
+                      </td>
+                      <td>
+                        <div className="invoice-op-record">
+                          <span className={cx("status-pill", row.statusTone)}>{row.statusLabel}</span>
+                          <strong>{row.orderNumber}</strong>
+                          <small>
+                            {row.customerName} · Paket {row.shipmentPackageId}
+                          </small>
+                          {row.invoice?.invoiceNumber ? <em>{row.invoice.invoiceNumber}</em> : row.externalInvoice?.invoiceNumber ? <em>{row.externalInvoice.invoiceNumber}</em> : null}
+                        </div>
+                      </td>
+                      <td>
+                        <InvoiceOperationStageRail row={row} />
+                      </td>
+                      <td>
+                        <div className="invoice-op-cell-stack">
+                          <span className={cx("status-pill", toneForOperationStage(row.stages.gib))}>{row.stages.gib.detail}</span>
+                          <span className={cx("status-pill", toneForOperationStage(row.stages.pdf))}>{row.stages.pdf.detail}</span>
+                        </div>
+                      </td>
+                      <td>
+                        <span className={cx("status-pill", toneForOperationStage(row.stages.marketplace))}>{row.stages.marketplace.detail}</span>
+                      </td>
+                      <td className="invoice-op-amount">{row.amountCents ? money(row.amountCents, row.currency) : "-"}</td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr className="invoice-op-empty-row">
+                    <td colSpan={6}>
+                      <div className="empty-state invoice-ops-empty">
+                        <FileText size={24} />
+                        <strong>{rows.length === 0 ? "Henuz fatura hareketi yok" : "Filtreyle eslesen kayit yok"}</strong>
+                        <p>{rows.length === 0 ? "Siparis veya e-Arsiv senkronizasyonu calistiginda akis burada gorunur." : "Arama/filtreyi temizleyip tekrar deneyin."}</p>
                       </div>
-                    </td>
-                    <td>
-                      <InvoiceOperationStageRail row={row} />
-                    </td>
-                    <td>
-                      <div className="invoice-op-cell-stack">
-                        <span className={cx("status-pill", toneForOperationStage(row.stages.gib))}>{row.stages.gib.detail}</span>
-                        <span className={cx("status-pill", toneForOperationStage(row.stages.pdf))}>{row.stages.pdf.detail}</span>
-                      </div>
-                    </td>
-                    <td>
-                      <span className={cx("status-pill", toneForOperationStage(row.stages.marketplace))}>{row.stages.marketplace.detail}</span>
-                    </td>
-                    <td className="invoice-op-amount">{row.amountCents ? money(row.amountCents, row.currency) : "-"}</td>
-                    <td>
-                      <InvoiceOperationAction row={row} busyAction={busyAction} onRunAction={onRunAction} onUploadPdf={onUploadPdf} compact />
                     </td>
                   </tr>
-                ))}
+                )}
               </tbody>
             </table>
+          </div>
+
+          <div className="invoice-ops-mobile-list">
+            {filteredRows.map((row) => (
+              <article
+                className={cx(
+                  "invoice-ops-mobile-card",
+                  selectedRow?.id === row.id && "selected",
+                  row.draft?.id && selectedDraftIds.includes(row.draft.id) && "bulk-selected"
+                )}
+                role="button"
+                tabIndex={0}
+                onClick={() => onSelectRow(row)}
+                onKeyDown={(event) => {
+                  if (event.key !== "Enter" && event.key !== " ") return;
+                  event.preventDefault();
+                  onSelectRow(row);
+                }}
+                key={row.id}
+              >
+                <div className="invoice-ops-mobile-card-head">
+                  <span className={cx("status-pill", row.statusTone)}>{row.statusLabel}</span>
+                  <DraftSelectionControl row={row} checked={Boolean(row.draft?.id && selectedDraftIds.includes(row.draft.id))} onToggle={onToggleDraftSelection} />
+                </div>
+                <strong>{row.orderNumber}</strong>
+                <small>
+                  {row.customerName} · Paket {row.shipmentPackageId} · {row.amountCents ? money(row.amountCents, row.currency) : "-"}
+                </small>
+                <InvoiceOperationStageRail row={row} />
+                <em>{row.nextAction.detail}</em>
+              </article>
+            ))}
             {filteredRows.length === 0 ? (
               <div className="empty-state invoice-ops-empty">
                 <FileText size={24} />
@@ -2214,25 +2419,6 @@ function InvoiceOperationsDashboard({
                 <p>Arama/filtreyi temizleyin veya siparis ve e-Arsiv senkronizasyonunu calistirin.</p>
               </div>
             ) : null}
-          </div>
-
-          <div className="invoice-ops-mobile-list">
-            {filteredRows.map((row) => (
-              <button
-                className={cx("invoice-ops-mobile-card", selectedRow?.id === row.id && "selected")}
-                type="button"
-                onClick={() => onSelectRow(row)}
-                key={row.id}
-              >
-                <span className={cx("status-pill", row.statusTone)}>{row.statusLabel}</span>
-                <strong>{row.orderNumber}</strong>
-                <small>
-                  {row.customerName} · Paket {row.shipmentPackageId} · {row.amountCents ? money(row.amountCents, row.currency) : "-"}
-                </small>
-                <InvoiceOperationStageRail row={row} />
-                <em>{row.nextAction.detail}</em>
-              </button>
-            ))}
           </div>
         </article>
 
@@ -2244,14 +2430,13 @@ function InvoiceOperationsDashboard({
           onOpenGibPortal={onOpenGibPortal}
           onCloseGibPortalSession={onCloseGibPortalSession}
         />
-      </div>
 
-      <article className="surface-panel invoice-archive-panel">
+        <article className="surface-panel invoice-archive-panel">
         <div className="section-head">
           <div>
-            <span className="micro-label">Aylik arsiv</span>
-            <h2>Excel ve ZIP islemleri korunuyor</h2>
-            <p>Operasyon masasindan sonra resmi PDF arsivi ikincil kontrol alani olarak durur.</p>
+            <span className="micro-label">Codex tasarim karari</span>
+            <h2>PDF arsivi tek basina bos ekran degil</h2>
+            <p>Operator once eksigi gorur; aylik Excel ve ZIP arsivi ikincil kontrol olarak korunur.</p>
           </div>
           <div className="section-actions">
             <FileText size={20} />
@@ -2259,6 +2444,20 @@ function InvoiceOperationsDashboard({
               <X size={16} />
               Temizle
             </button>
+          </div>
+        </div>
+        <div className="invoice-decision-grid" aria-label="Tasarim kararlari">
+          <div>
+            <strong>Bos durum yok</strong>
+            <span>Her bosluk sebep ve aksiyona baglanir.</span>
+          </div>
+          <div>
+            <strong>Tek gercek satir</strong>
+            <span>Taslak, GIB, PDF ve Trendyol ayni kayitta birlesir.</span>
+          </div>
+          <div>
+            <strong>Operator onceligi</strong>
+            <span>Bugun yapilacak isler otomatik uste tasinir.</span>
           </div>
         </div>
         <div className="archive-filter-bar" aria-label="PDF arsivi filtreleri">
@@ -2345,7 +2544,33 @@ function InvoiceOperationsDashboard({
           />
         </div>
       </article>
+      </div>
     </section>
+  );
+}
+
+function DraftSelectionControl({
+  row,
+  checked,
+  onToggle
+}: {
+  row: InvoiceOperationRow;
+  checked: boolean;
+  onToggle: (row: InvoiceOperationRow, checked: boolean) => void;
+}) {
+  const selectable = Boolean(row.draft && isSelectableDraft(row.draft));
+
+  return (
+    <label className={cx("invoice-op-select", !selectable && "disabled")} onClick={(event) => event.stopPropagation()}>
+      <input
+        type="checkbox"
+        checked={checked}
+        disabled={!selectable}
+        onChange={(event) => onToggle(row, event.target.checked)}
+        aria-label={`${row.orderNumber} taslagini sec`}
+      />
+      <span aria-hidden="true">{checked ? <Check size={12} /> : null}</span>
+    </label>
   );
 }
 
@@ -2378,15 +2603,7 @@ function InvoiceOperationDetailPanel({
   onCloseGibPortalSession: () => void;
 }) {
   if (!row) {
-    return (
-      <aside className="surface-panel invoice-ops-detail">
-        <div className="empty-state invoice-ops-empty">
-          <FileText size={24} />
-          <strong>Henuz fatura hareketi yok</strong>
-          <p>Siparis/e-Arsiv senkronizasyonu sonrasi detay burada gorunur.</p>
-        </div>
-      </aside>
-    );
+    return <InvoiceOperationEmptyDetailPanel />;
   }
 
   return (
@@ -2448,7 +2665,42 @@ function InvoiceOperationDetailPanel({
           <strong>{row.amountCents ? money(row.amountCents, row.currency) : "-"}</strong>
         </div>
       </div>
+      <InvoiceOperationPdfPreview row={row} />
     </aside>
+  );
+}
+
+function InvoiceOperationEmptyDetailPanel() {
+  return (
+    <aside className="surface-panel invoice-ops-detail empty">
+      <div className="empty-state invoice-ops-empty-detail">
+        <FileText size={26} />
+        <strong>Secilecek fatura yok</strong>
+        <p>Gercek fatura hareketi geldikce timeline, sebep ve belge aksiyonlari burada acilir.</p>
+      </div>
+    </aside>
+  );
+}
+
+function InvoiceOperationPdfPreview({ row }: { row?: InvoiceOperationRow }) {
+  return (
+    <div className="invoice-ops-doc-preview" aria-label="PDF onizleme">
+      <div>
+        <strong>PDF onizleme yeri</strong>
+        <span>{row?.invoice?.pdfAvailable ? "Resmi PDF arsivde goruntulenebilir." : "PDF hazir olunca kucuk onizleme ve belge aksiyonlari burada gorunur."}</span>
+      </div>
+      <div className="invoice-ops-doc-paper">
+        <span className="skeleton-line wide" />
+        <span className="skeleton-line medium" />
+        <span className="skeleton-line wide" />
+        <span className="skeleton-line short" />
+        <span className="skeleton-line medium" />
+      </div>
+      <div className="invoice-ops-doc-total">
+        <span>Odenecek</span>
+        <strong>{row?.amountCents ? money(row.amountCents, row.currency) : "-"}</strong>
+      </div>
+    </div>
   );
 }
 
@@ -2549,6 +2801,12 @@ function toneForOperationStage(stageItem: InvoiceOperationStage): NoticeTone {
   if (stageItem.state === "failed" || stageItem.state === "missing") return "danger";
   if (stageItem.state === "waiting") return "warning";
   return "neutral";
+}
+
+function monthLabel(value: string) {
+  const parsed = parseMonthValue(value);
+  if (!parsed) return value;
+  return new Intl.DateTimeFormat("tr-TR", { month: "long", year: "numeric" }).format(new Date(parsed.year, parsed.month - 1, 1));
 }
 
 function ExternalInvoiceRow({

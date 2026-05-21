@@ -265,7 +265,7 @@ function logApiResponse(
   durationMs: number,
   responseBody: unknown
 ) {
-  const level = response.ok ? "info" : "error";
+  const level = response.ok ? "info" : "warn";
   console[level](`[SAFA API] <- ${response.status} ${method} ${path} (${durationMs}ms)`, {
     method,
     path,
@@ -279,7 +279,7 @@ function logApiResponse(
 }
 
 function logApiFailure(method: string, path: string, url: string, durationMs: number, error: unknown) {
-  console.error(`[SAFA API] !! ${method} ${path} failed before response (${durationMs}ms)`, {
+  console.warn(`[SAFA API] !! ${method} ${path} failed before response (${durationMs}ms)`, {
     method,
     path,
     url,

@@ -6,6 +6,7 @@ const isFirebaseStaticExport = process.env.FIREBASE_STATIC_EXPORT === "true";
 const publicApiBase = process.env.NEXT_PUBLIC_API_BASE_URL ?? (isFirebaseStaticExport ? "/api" : undefined);
 
 const nextConfig: NextConfig = {
+  devIndicators: false,
   env: {
     NEXT_PUBLIC_STATIC_EXPORT: isFirebaseStaticExport ? "true" : process.env.NEXT_PUBLIC_STATIC_EXPORT ?? "false",
     ...(publicApiBase ? { NEXT_PUBLIC_API_BASE_URL: publicApiBase } : {})
