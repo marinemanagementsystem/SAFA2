@@ -7,7 +7,7 @@ import { api } from "../../lib/api";
 
 interface StoredAuthSession {
   username: string;
-  source: "api";
+  source: "api" | "offline";
 }
 
 interface AuthGateSession extends StoredAuthSession {
@@ -38,6 +38,9 @@ export function AuthGate({ children }: { children: (session: AuthGateSession) =>
       })
       .catch((error) => {
         if (!cancelled) {
+          if (process.env.NODE_ENV !== "production") {
+            setSession({ username: "offline-dev", source: "offline" });
+          }
           setError(loginErrorMessage(error));
         }
       })

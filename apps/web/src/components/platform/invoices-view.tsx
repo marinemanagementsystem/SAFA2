@@ -36,6 +36,14 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { api } from "../../lib/api";
 import { cx, dateMatches, formatDateTime, money, numberValue, startOfToday, statusLabel, statusTone, stringValue } from "../../lib/platform/format";
+import {
+  buildInvoiceOperationMetrics,
+  buildInvoiceOperationRows,
+  filterInvoiceOperationRows,
+  type InvoiceOperationQueueKey,
+  type InvoiceOperationRow,
+  type InvoiceOperationStage
+} from "./invoice-operation-model";
 import { InvoiceProcessBar, latestInvoiceJob, visibleInvoiceJob } from "./invoice-process";
 
 type DraftDeskFilter = "actionable" | "all" | "ready" | "approved" | "failed" | "issuing" | "portal" | "external" | "issued";
@@ -879,6 +887,9 @@ export function InvoicesView({
 }: InvoicesViewProps) {
   const initialDeskQuery = initialInvoiceDeskQuery();
   const [selectedDrafts, setSelectedDrafts] = useState<string[]>([]);
+  const [operationQuery, setOperationQuery] = useState(initialDeskQuery);
+  const [operationQueue, setOperationQueue] = useState<InvoiceOperationQueueKey>("all");
+  const [selectedOperationId, setSelectedOperationId] = useState("");
   const [draftQuery, setDraftQuery] = useState(initialDeskQuery);
   const [draftDeskFilter, setDraftDeskFilter] = useState<DraftDeskFilter>(initialDeskQuery ? "all" : "actionable");
   const [draftExternalFilter, setDraftExternalFilter] = useState<DraftExternalFilter>("all");
@@ -919,6 +930,20 @@ export function InvoicesView({
   const selectedNeedsApprovalCount = selectedReadyCount + selectedRetryCount;
   const archiveStatuses = useMemo(() => Array.from(new Set(invoices.map((invoice) => invoice.status))).sort(), [invoices]);
   const selectedArchiveMonth = parseMonthValue(monthlyArchiveMonth);
+  const operationRows = useMemo(
+    () => buildInvoiceOperationRows({ drafts, invoices, externalInvoices, jobs }),
+    [drafts, externalInvoices, invoices, jobs]
+  );
+  const operationMetrics = useMemo(() => buildInvoiceOperationMetrics(operationRows), [operationRows]);
+  const filteredOperationRows = useMemo(
+    () => filterInvoiceOperationRows(operationRows, { query: operationQuery, queue: operationQueue }),
+    [operationQuery, operationQueue, operationRows]
+  );
+  const selectedOperation =
+    filteredOperationRows.find((row) => row.id === selectedOperationId) ??
+    operationRows.find((row) => row.id === selectedOperationId) ??
+    filteredOperationRows[0] ??
+    operationRows[0];
   const selectionAdvice =
     selectedDrafts.length === 0
       ? ""
@@ -1069,6 +1094,11 @@ export function InvoicesView({
     setShowSelectedOnly(false);
   }
 
+  function resetOperationFilters() {
+    setOperationQuery("");
+    setOperationQueue("all");
+  }
+
   function resetArchiveFilters() {
     setArchiveQuery("");
     setArchiveStatusFilter("all");
@@ -1207,9 +1237,93 @@ export function InvoicesView({
     }
   }
 
+  function runOperationAction(row: InvoiceOperationRow) {
+    const draftId = row.draft?.id;
+    const externalInvoiceId = row.externalInvoice?.id;
+    const invoiceId = row.invoice?.id;
+
+    if (row.nextAction.kind === "approve" && draftId) {
+      void runDraftOperation("approve", [draftId], onApprove);
+      return;
+    }
+
+    if (row.nextAction.kind === "portal" && draftId) {
+      void runDraftOperation("portal", [draftId], onUploadPortalDrafts);
+      return;
+    }
+
+    if (row.nextAction.kind === "retry" && draftId) {
+      void runDraftOperation("retry", [draftId], onIssue);
+      return;
+    }
+
+    if (row.nextAction.kind === "preview-signed") {
+      void previewSignedPortalInvoices();
+      return;
+    }
+
+    if ((row.nextAction.kind === "apply-external" || row.nextAction.kind === "promote-external") && externalInvoiceId) {
+      onPromoteExternalInvoice(externalInvoiceId, false);
+      return;
+    }
+
+    if (row.nextAction.kind === "send-trendyol") {
+      if (invoiceId) onSendInvoiceToTrendyol(invoiceId);
+      else if (externalInvoiceId) onPromoteExternalInvoice(externalInvoiceId, true);
+      return;
+    }
+
+    if (row.nextAction.kind === "open-portal") {
+      onOpenGibPortal();
+    }
+  }
+
+  function uploadOperationPdf(row: InvoiceOperationRow, file: File) {
+    if (!row.externalInvoice?.id) return;
+    onUploadExternalInvoicePdf(row.externalInvoice.id, file);
+  }
+
   return (
     <div className="view-stack">
-      <section className="content-grid invoice-grid">
+      <InvoiceOperationsDashboard
+        rows={operationRows}
+        filteredRows={filteredOperationRows}
+        selectedRow={selectedOperation}
+        metrics={operationMetrics}
+        query={operationQuery}
+        queue={operationQueue}
+        busyAction={busyAction}
+        archiveQuery={archiveQuery}
+        archiveStatusFilter={archiveStatusFilter}
+        archiveDateFilter={archiveDateFilter}
+        archiveStatuses={archiveStatuses}
+        selectedArchiveMonth={selectedArchiveMonth}
+        monthlyArchiveMonth={monthlyArchiveMonth}
+        monthlyArchiveResult={monthlyArchiveResult}
+        invoiceGroups={invoiceGroups}
+        signedUnarchivedPortalInvoices={signedUnarchivedPortalInvoices.length}
+        pdfWaitingInvoices={pdfWaitingInvoices.length}
+        onQueryChange={setOperationQuery}
+        onQueueChange={setOperationQueue}
+        onSelectRow={(row) => setSelectedOperationId(row.id)}
+        onResetOperationFilters={resetOperationFilters}
+        onRunAction={runOperationAction}
+        onUploadPdf={uploadOperationPdf}
+        onOpenGibPortal={onOpenGibPortal}
+        onCloseGibPortalSession={onCloseGibPortalSession}
+        onPreviewSignedPortalInvoices={previewSignedPortalInvoices}
+        onApplySignedPortalInvoices={applySignedPortalInvoices}
+        onSyncTrendyolExternalInvoices={onSyncTrendyolExternalInvoices}
+        onReconcileExternalInvoices={onReconcileExternalInvoices}
+        onArchiveMonthChange={setMonthlyArchiveMonth}
+        onArchiveQueryChange={setArchiveQuery}
+        onArchiveStatusChange={setArchiveStatusFilter}
+        onArchiveDateChange={setArchiveDateFilter}
+        onResetArchiveFilters={resetArchiveFilters}
+        onCreateMonthlyArchive={createMonthlyArchive}
+        onSendInvoiceToTrendyol={onSendInvoiceToTrendyol}
+      />
+      <section className="content-grid invoice-grid legacy-invoice-grid" aria-hidden="true">
         <article className="surface-panel">
           <div className="section-head">
             <div>
@@ -1833,6 +1947,608 @@ export function InvoicesView({
       </section>
     </div>
   );
+}
+
+function InvoiceOperationsDashboard({
+  rows,
+  filteredRows,
+  selectedRow,
+  metrics,
+  query,
+  queue,
+  busyAction,
+  archiveQuery,
+  archiveStatusFilter,
+  archiveDateFilter,
+  archiveStatuses,
+  selectedArchiveMonth,
+  monthlyArchiveMonth,
+  monthlyArchiveResult,
+  invoiceGroups,
+  signedUnarchivedPortalInvoices,
+  pdfWaitingInvoices,
+  onQueryChange,
+  onQueueChange,
+  onSelectRow,
+  onResetOperationFilters,
+  onRunAction,
+  onUploadPdf,
+  onOpenGibPortal,
+  onCloseGibPortalSession,
+  onPreviewSignedPortalInvoices,
+  onApplySignedPortalInvoices,
+  onSyncTrendyolExternalInvoices,
+  onReconcileExternalInvoices,
+  onArchiveMonthChange,
+  onArchiveQueryChange,
+  onArchiveStatusChange,
+  onArchiveDateChange,
+  onResetArchiveFilters,
+  onCreateMonthlyArchive,
+  onSendInvoiceToTrendyol
+}: {
+  rows: InvoiceOperationRow[];
+  filteredRows: InvoiceOperationRow[];
+  selectedRow?: InvoiceOperationRow;
+  metrics: ReturnType<typeof buildInvoiceOperationMetrics>;
+  query: string;
+  queue: InvoiceOperationQueueKey;
+  busyAction: string | null;
+  archiveQuery: string;
+  archiveStatusFilter: ArchiveStatusFilter;
+  archiveDateFilter: DateFilter;
+  archiveStatuses: InvoiceStatus[];
+  selectedArchiveMonth: { year: number; month: number } | null;
+  monthlyArchiveMonth: string;
+  monthlyArchiveResult: MonthlyInvoiceArchiveResult | null;
+  invoiceGroups: { newInvoices: InvoiceListItem[]; previousInvoices: InvoiceListItem[] };
+  signedUnarchivedPortalInvoices: number;
+  pdfWaitingInvoices: number;
+  onQueryChange: (value: string) => void;
+  onQueueChange: (value: InvoiceOperationQueueKey) => void;
+  onSelectRow: (row: InvoiceOperationRow) => void;
+  onResetOperationFilters: () => void;
+  onRunAction: (row: InvoiceOperationRow) => void;
+  onUploadPdf: (row: InvoiceOperationRow, file: File) => void;
+  onOpenGibPortal: () => void;
+  onCloseGibPortalSession: () => void;
+  onPreviewSignedPortalInvoices: () => Promise<void>;
+  onApplySignedPortalInvoices: () => Promise<void>;
+  onSyncTrendyolExternalInvoices: () => void;
+  onReconcileExternalInvoices: () => void;
+  onArchiveMonthChange: (value: string) => void;
+  onArchiveQueryChange: (value: string) => void;
+  onArchiveStatusChange: (value: ArchiveStatusFilter) => void;
+  onArchiveDateChange: (value: DateFilter) => void;
+  onResetArchiveFilters: () => void;
+  onCreateMonthlyArchive: () => Promise<void>;
+  onSendInvoiceToTrendyol: (id: string) => void;
+}) {
+  const queueCards: Array<{ key: InvoiceOperationQueueKey; title: string; count: number; detail: string; tone: NoticeTone }> = [
+    { key: "action", title: "Bugun oncelik", count: metrics.actionCount, detail: "Operator aksiyonu bekleyen kayit", tone: "danger" },
+    { key: "portal-signature", title: "Portal imza bekliyor", count: metrics.portalSignatureCount, detail: "GIB sorgusu veya portal imzasi gerekli", tone: "warning" },
+    { key: "pdf-missing", title: "PDF arsivi bos", count: metrics.pdfMissingCount, detail: "Arsive dusmeyen resmi PDF eksikleri", tone: "danger" },
+    { key: "external-found", title: "Harici e-Arsiv eslesti", count: metrics.externalFoundCount, detail: "SAFA arsivine alinabilecek kayit", tone: "neutral" },
+    { key: "marketplace", title: "Trendyol gonderimi", count: metrics.marketplaceCount, detail: "PDF hazir veya pazaryeri hatasi var", tone: "success" }
+  ];
+
+  return (
+    <section className="invoice-ops-page" aria-label="Fatura operasyon masasi">
+      <article className="invoice-ops-hero surface-panel">
+        <div className="invoice-ops-title">
+          <span className="micro-label">Fatura operasyon masasi</span>
+          <h2>PDF arsivi, GIB imzasi ve pazaryeri tek akista</h2>
+          <p>
+            Her siparis veya fatura kaydi Taslak, GIB, PDF ve Pazaryeri adimlariyla izlenir. Bos arsiv yerine eksik sebebi ve
+            sonraki islem gosterilir.
+          </p>
+        </div>
+        <div className="invoice-ops-hero-actions">
+          <button className="ui-button ghost" type="button" onClick={onOpenGibPortal} disabled={busyAction === "open-gib"}>
+            {busyAction === "open-gib" ? <Loader2 size={18} className="spin" /> : <Link2 size={18} />}
+            e-Arsiv ac
+          </button>
+          <button
+            className="ui-button primary"
+            type="button"
+            onClick={() => void onPreviewSignedPortalInvoices()}
+            disabled={busyAction === "external-gib-preview"}
+          >
+            {busyAction === "external-gib-preview" ? <Loader2 size={18} className="spin" /> : <FileSearch size={18} />}
+            Imzalilari sorgula
+          </button>
+        </div>
+      </article>
+
+      <div className="invoice-ops-warning">
+        <AlertTriangle size={20} />
+        <div>
+          <strong>PDF arsivi bos gorunuyorsa kayit kaybolmus degil; resmi fatura veya PDF baglantisi henuz tamamlanmamistir.</strong>
+          <span>
+            Bu ekran taslak, portal imza, harici e-Arsiv eslesmesi ve PDF durumunu tek satirda birlestirir; operator hangi
+            adimin bekledigini direkt gorur.
+          </span>
+        </div>
+        <span className="mode-pill danger">{metrics.pdfMissingCount} PDF eksik</span>
+      </div>
+
+      <div className="invoice-ops-metrics">
+        {queueCards.map((card) => (
+          <button
+            className={cx("invoice-ops-metric", card.tone, queue === card.key && "active")}
+            type="button"
+            onClick={() => onQueueChange(queue === card.key ? "all" : card.key)}
+            key={card.key}
+          >
+            <span>{card.title}</span>
+            <strong>{card.count}</strong>
+            <em>{card.detail}</em>
+          </button>
+        ))}
+      </div>
+
+      <div className="invoice-ops-workspace">
+        <aside className="surface-panel invoice-ops-queue">
+          <div className="section-head">
+            <div>
+              <span className="micro-label">Is kuyrugu</span>
+              <h2>{filteredRows.length} kayit</h2>
+              <p>Oncelik sirasina gore operator aksiyonlari.</p>
+            </div>
+          </div>
+          <div className="invoice-ops-filter-stack">
+            <label className="field search-field">
+              <span>
+                <Search size={17} />
+                Arama
+              </span>
+              <input value={query} onChange={(event) => onQueryChange(event.target.value)} placeholder="Fatura, siparis, paket, alici" />
+            </label>
+            <button className="ui-button ghost compact" type="button" onClick={onResetOperationFilters}>
+              <X size={16} />
+              Filtre temizle
+            </button>
+          </div>
+          <div className="invoice-ops-queue-list">
+            <button className={cx("invoice-ops-queue-item", queue === "all" && "active")} type="button" onClick={() => onQueueChange("all")}>
+              <strong>Tum kayitlar</strong>
+              <span>{rows.length}</span>
+              <em>Fatura yasam dongusunun tamamini goster.</em>
+            </button>
+            {queueCards.slice(1).map((card) => (
+              <button
+                className={cx("invoice-ops-queue-item", card.tone, queue === card.key && "active")}
+                type="button"
+                onClick={() => onQueueChange(card.key)}
+                key={card.key}
+              >
+                <strong>{card.title}</strong>
+                <span>{card.count}</span>
+                <em>{card.detail}</em>
+              </button>
+            ))}
+          </div>
+        </aside>
+
+        <article className="surface-panel invoice-ops-table-panel">
+          <div className="section-head">
+            <div>
+              <span className="micro-label">Birlesik fatura takibi</span>
+              <h2>Taslak {">"} GIB {">"} PDF {">"} Pazaryeri</h2>
+              <p>Tek satirda resmi fatura, harici kayit ve pazaryeri durumu.</p>
+            </div>
+            <div className="section-actions">
+              <button
+                className="ui-button ghost compact"
+                type="button"
+                onClick={() => void onApplySignedPortalInvoices()}
+                disabled={busyAction === "external-gib-apply"}
+              >
+                {busyAction === "external-gib-apply" ? <Loader2 size={16} className="spin" /> : <CheckCircle2 size={16} />}
+                Eslesenleri uygula
+              </button>
+              <button className="ui-button ghost compact" type="button" onClick={onSyncTrendyolExternalInvoices} disabled={busyAction === "external-trendyol-sync"}>
+                {busyAction === "external-trendyol-sync" ? <Loader2 size={16} className="spin" /> : <RefreshCw size={16} />}
+                Trendyol izi ara
+              </button>
+              <button className="ui-button ghost compact" type="button" onClick={onReconcileExternalInvoices} disabled={busyAction === "external-reconcile"}>
+                {busyAction === "external-reconcile" ? <Loader2 size={16} className="spin" /> : <Check size={16} />}
+                Tekrar eslestir
+              </button>
+            </div>
+          </div>
+
+          <div className="invoice-ops-table-wrap">
+            <table className="invoice-ops-table">
+              <thead>
+                <tr>
+                  <th>Oncelik</th>
+                  <th>Kayit</th>
+                  <th>Akis</th>
+                  <th>GIB / PDF</th>
+                  <th>Pazaryeri</th>
+                  <th>Tutar</th>
+                  <th>Islem</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredRows.map((row) => (
+                  <tr className={cx(selectedRow?.id === row.id && "selected")} key={row.id} onClick={() => onSelectRow(row)}>
+                    <td>
+                      <span className={cx("invoice-priority", row.statusTone)}>{row.priorityLabel}</span>
+                    </td>
+                    <td>
+                      <div className="invoice-op-record">
+                        <span className={cx("status-pill", row.statusTone)}>{row.statusLabel}</span>
+                        <strong>{row.orderNumber}</strong>
+                        <small>
+                          {row.customerName} · Paket {row.shipmentPackageId}
+                        </small>
+                        {row.invoice?.invoiceNumber ? <em>{row.invoice.invoiceNumber}</em> : row.externalInvoice?.invoiceNumber ? <em>{row.externalInvoice.invoiceNumber}</em> : null}
+                      </div>
+                    </td>
+                    <td>
+                      <InvoiceOperationStageRail row={row} />
+                    </td>
+                    <td>
+                      <div className="invoice-op-cell-stack">
+                        <span className={cx("status-pill", toneForOperationStage(row.stages.gib))}>{row.stages.gib.detail}</span>
+                        <span className={cx("status-pill", toneForOperationStage(row.stages.pdf))}>{row.stages.pdf.detail}</span>
+                      </div>
+                    </td>
+                    <td>
+                      <span className={cx("status-pill", toneForOperationStage(row.stages.marketplace))}>{row.stages.marketplace.detail}</span>
+                    </td>
+                    <td className="invoice-op-amount">{row.amountCents ? money(row.amountCents, row.currency) : "-"}</td>
+                    <td>
+                      <InvoiceOperationAction row={row} busyAction={busyAction} onRunAction={onRunAction} onUploadPdf={onUploadPdf} compact />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {filteredRows.length === 0 ? (
+              <div className="empty-state invoice-ops-empty">
+                <FileText size={24} />
+                <strong>Henuz fatura hareketi yok</strong>
+                <p>Arama/filtreyi temizleyin veya siparis ve e-Arsiv senkronizasyonunu calistirin.</p>
+              </div>
+            ) : null}
+          </div>
+
+          <div className="invoice-ops-mobile-list">
+            {filteredRows.map((row) => (
+              <button
+                className={cx("invoice-ops-mobile-card", selectedRow?.id === row.id && "selected")}
+                type="button"
+                onClick={() => onSelectRow(row)}
+                key={row.id}
+              >
+                <span className={cx("status-pill", row.statusTone)}>{row.statusLabel}</span>
+                <strong>{row.orderNumber}</strong>
+                <small>
+                  {row.customerName} · Paket {row.shipmentPackageId} · {row.amountCents ? money(row.amountCents, row.currency) : "-"}
+                </small>
+                <InvoiceOperationStageRail row={row} />
+                <em>{row.nextAction.detail}</em>
+              </button>
+            ))}
+          </div>
+        </article>
+
+        <InvoiceOperationDetailPanel
+          row={selectedRow}
+          busyAction={busyAction}
+          onRunAction={onRunAction}
+          onUploadPdf={onUploadPdf}
+          onOpenGibPortal={onOpenGibPortal}
+          onCloseGibPortalSession={onCloseGibPortalSession}
+        />
+      </div>
+
+      <article className="surface-panel invoice-archive-panel">
+        <div className="section-head">
+          <div>
+            <span className="micro-label">Aylik arsiv</span>
+            <h2>Excel ve ZIP islemleri korunuyor</h2>
+            <p>Operasyon masasindan sonra resmi PDF arsivi ikincil kontrol alani olarak durur.</p>
+          </div>
+          <div className="section-actions">
+            <FileText size={20} />
+            <button className="ui-button ghost compact" type="button" onClick={onResetArchiveFilters}>
+              <X size={16} />
+              Temizle
+            </button>
+          </div>
+        </div>
+        <div className="archive-filter-bar" aria-label="PDF arsivi filtreleri">
+          <label className="field">
+            <span>
+              <CalendarDays size={17} />
+              Aylik arsiv
+            </span>
+            <input type="month" value={monthlyArchiveMonth} onChange={(event) => onArchiveMonthChange(event.target.value)} />
+          </label>
+          <a
+            className="ui-button ghost"
+            aria-disabled={selectedArchiveMonth ? undefined : true}
+            href={selectedArchiveMonth ? api.monthlyInvoiceExcelUrl(selectedArchiveMonth.year, selectedArchiveMonth.month) : "#"}
+            onClick={(event) => {
+              if (!selectedArchiveMonth) event.preventDefault();
+            }}
+          >
+            <Download size={17} />
+            Aylik Excel indir
+          </a>
+          <button
+            className="ui-button primary"
+            type="button"
+            onClick={() => void onCreateMonthlyArchive()}
+            disabled={!selectedArchiveMonth || busyAction === "monthly-archive"}
+          >
+            {busyAction === "monthly-archive" ? <Loader2 size={17} className="spin" /> : <Archive size={17} />}
+            ZIP olustur/indir
+          </button>
+          <label className="field search-field">
+            <span>
+              <Search size={17} />
+              Arama
+            </span>
+            <input value={archiveQuery} onChange={(event) => onArchiveQueryChange(event.target.value)} placeholder="Fatura no, siparis, paket" />
+          </label>
+          <label className="field">
+            <span>
+              <ListFilter size={17} />
+              Durum
+            </span>
+            <select value={archiveStatusFilter} onChange={(event) => onArchiveStatusChange(event.target.value as ArchiveStatusFilter)}>
+              <option value="all">Tum faturalar</option>
+              {archiveStatuses.map((status) => (
+                <option value={status} key={status}>
+                  {statusLabel(status)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="field">
+            <span>
+              <ListFilter size={17} />
+              Tarih
+            </span>
+            <select value={archiveDateFilter} onChange={(event) => onArchiveDateChange(event.target.value as DateFilter)}>
+              <option value="all">Tum zamanlar</option>
+              <option value="today">Bugun kesilen</option>
+              <option value="last7">Son 7 gun</option>
+              <option value="last30">Son 30 gun</option>
+            </select>
+          </label>
+        </div>
+        {monthlyArchiveResult ? (
+          <div className="form-alert table-note">
+            Aylik arsiv hazir: {monthlyArchiveResult.invoiceCount} resmi fatura. Eksik PDF: {monthlyArchiveResult.missingPdfCount}; eksik resmi XML:{" "}
+            {monthlyArchiveResult.missingXmlCount}. Dosya: {monthlyArchiveResult.archiveFileName}
+          </div>
+        ) : null}
+        {signedUnarchivedPortalInvoices > 0 || pdfWaitingInvoices > 0 ? (
+          <div className="form-alert table-note invoice-archive-warning">
+            {signedUnarchivedPortalInvoices > 0 ? <span>{signedUnarchivedPortalInvoices} portalda imzali ama SAFA arsivine alinmamis kayit var.</span> : null}
+            {pdfWaitingInvoices > 0 ? <span>{pdfWaitingInvoices} arsiv kaydi PDF bekliyor; PDF gelmeden Trendyol'a dosya gonderilmez.</span> : null}
+          </div>
+        ) : null}
+        <div className="invoice-archive-grid">
+          <InvoiceArchiveSection title="Bugun kesilenler" invoices={invoiceGroups.newInvoices} busyAction={busyAction} onSendInvoiceToTrendyol={onSendInvoiceToTrendyol} />
+          <InvoiceArchiveSection
+            title="Onceki faturalar"
+            invoices={invoiceGroups.previousInvoices.slice(0, 12)}
+            busyAction={busyAction}
+            onSendInvoiceToTrendyol={onSendInvoiceToTrendyol}
+          />
+        </div>
+      </article>
+    </section>
+  );
+}
+
+function InvoiceOperationStageRail({ row }: { row: InvoiceOperationRow }) {
+  const stages = [row.stages.draft, row.stages.gib, row.stages.pdf, row.stages.marketplace];
+  return (
+    <div className="invoice-op-stage-rail" aria-label={`${row.orderNumber} fatura akisi`}>
+      {stages.map((stageItem) => (
+        <span className={cx("invoice-op-stage", stageItem.state)} title={stageItem.detail} key={stageItem.key}>
+          {stageItem.label}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function InvoiceOperationDetailPanel({
+  row,
+  busyAction,
+  onRunAction,
+  onUploadPdf,
+  onOpenGibPortal,
+  onCloseGibPortalSession
+}: {
+  row?: InvoiceOperationRow;
+  busyAction: string | null;
+  onRunAction: (row: InvoiceOperationRow) => void;
+  onUploadPdf: (row: InvoiceOperationRow, file: File) => void;
+  onOpenGibPortal: () => void;
+  onCloseGibPortalSession: () => void;
+}) {
+  if (!row) {
+    return (
+      <aside className="surface-panel invoice-ops-detail">
+        <div className="empty-state invoice-ops-empty">
+          <FileText size={24} />
+          <strong>Henuz fatura hareketi yok</strong>
+          <p>Siparis/e-Arsiv senkronizasyonu sonrasi detay burada gorunur.</p>
+        </div>
+      </aside>
+    );
+  }
+
+  return (
+    <aside className="surface-panel invoice-ops-detail">
+      <div className="invoice-ops-detail-head">
+        <div>
+          <span className={cx("status-pill", row.statusTone)}>{row.statusLabel}</span>
+          <h2>{row.orderNumber}</h2>
+          <p>
+            Paket {row.shipmentPackageId} · {row.customerName}
+          </p>
+        </div>
+        <span className={cx("invoice-priority", row.statusTone)}>{row.priorityLabel}</span>
+      </div>
+      <div className="invoice-ops-detail-timeline">
+        {row.detailEvents.map((event) => (
+          <div className={cx("invoice-ops-timeline-item", event.tone)} key={event.key}>
+            <span />
+            <div>
+              <strong>{event.title}</strong>
+              <p>{event.detail}</p>
+              {event.at ? <small>{formatDateTime(event.at)}</small> : null}
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="invoice-ops-reason">
+        <strong>Bu kayit neden boyle gorunuyor?</strong>
+        <p>{row.nextAction.detail}</p>
+      </div>
+      <div className="invoice-ops-detail-actions">
+        <InvoiceOperationAction row={row} busyAction={busyAction} onRunAction={onRunAction} onUploadPdf={onUploadPdf} />
+        <button className="ui-button ghost compact" type="button" onClick={onOpenGibPortal} disabled={busyAction === "open-gib"}>
+          {busyAction === "open-gib" ? <Loader2 size={16} className="spin" /> : <Link2 size={16} />}
+          Portalda ac
+        </button>
+        <button className="ui-button ghost compact" type="button" onClick={onCloseGibPortalSession} disabled={busyAction === "logout-gib"}>
+          {busyAction === "logout-gib" ? <Loader2 size={16} className="spin" /> : <ShieldOff size={16} />}
+          Guvenli cikis
+        </button>
+        {row.orderNumber !== "-" ? (
+          <Link className="ui-button ghost compact" href={orderDeskHref(row.orderNumber)}>
+            <Link2 size={16} />
+            Siparise git
+          </Link>
+        ) : null}
+      </div>
+      <div className="invoice-ops-audit">
+        <div>
+          <span>Kaynak</span>
+          <strong>{row.sourceKind === "external" ? "Harici fatura" : row.sourceKind === "invoice" ? "Resmi fatura" : "Taslak"}</strong>
+        </div>
+        <div>
+          <span>Fatura no</span>
+          <strong>{row.invoice?.invoiceNumber ?? row.externalInvoice?.invoiceNumber ?? row.draft?.portalDraftNumber ?? "-"}</strong>
+        </div>
+        <div>
+          <span>Tutar</span>
+          <strong>{row.amountCents ? money(row.amountCents, row.currency) : "-"}</strong>
+        </div>
+      </div>
+    </aside>
+  );
+}
+
+function InvoiceOperationAction({
+  row,
+  busyAction,
+  onRunAction,
+  onUploadPdf,
+  compact = false
+}: {
+  row: InvoiceOperationRow;
+  busyAction: string | null;
+  onRunAction: (row: InvoiceOperationRow) => void;
+  onUploadPdf: (row: InvoiceOperationRow, file: File) => void;
+  compact?: boolean;
+}) {
+  const busy = isOperationBusy(row, busyAction);
+  const className = cx("ui-button", row.nextAction.tone === "danger" || row.nextAction.tone === "warning" ? "primary" : "ghost", compact && "compact");
+
+  if (row.nextAction.kind === "view-order" && row.orderNumber !== "-") {
+    return (
+      <Link className={className} href={orderDeskHref(row.orderNumber)} onClick={(event) => event.stopPropagation()}>
+        <Link2 size={compact ? 15 : 17} />
+        {row.nextAction.label}
+      </Link>
+    );
+  }
+
+  if (row.nextAction.kind === "upload-pdf" && row.externalInvoice?.id) {
+    return (
+      <label className={cx(className, "file-action")} onClick={(event) => event.stopPropagation()}>
+        {busy ? <Loader2 size={compact ? 15 : 17} className="spin" /> : <UploadCloud size={compact ? 15 : 17} />}
+        {row.nextAction.label}
+        <input
+          type="file"
+          accept="application/pdf"
+          disabled={busy}
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            if (file) onUploadPdf(row, file);
+            event.currentTarget.value = "";
+          }}
+        />
+      </label>
+    );
+  }
+
+  if (row.nextAction.kind === "none") {
+    return (
+      <button className="ui-button ghost compact" type="button" disabled>
+        <CheckCircle2 size={compact ? 15 : 17} />
+        Tamam
+      </button>
+    );
+  }
+
+  return (
+    <button
+      className={className}
+      type="button"
+      onClick={(event) => {
+        event.stopPropagation();
+        onRunAction(row);
+      }}
+      disabled={busy}
+    >
+      {busy ? <Loader2 size={compact ? 15 : 17} className="spin" /> : actionIcon(row.nextAction.kind, compact ? 15 : 17)}
+      {busy ? "Isleniyor" : row.nextAction.label}
+    </button>
+  );
+}
+
+function actionIcon(kind: InvoiceOperationRow["nextAction"]["kind"], size: number) {
+  if (kind === "approve") return <Check size={size} />;
+  if (kind === "portal" || kind === "upload-pdf") return <UploadCloud size={size} />;
+  if (kind === "retry") return <RotateCcw size={size} />;
+  if (kind === "preview-signed") return <FileSearch size={size} />;
+  if (kind === "send-trendyol") return <UploadCloud size={size} />;
+  if (kind === "open-portal" || kind === "view-order") return <Link2 size={size} />;
+  return <CheckCircle2 size={size} />;
+}
+
+function isOperationBusy(row: InvoiceOperationRow, busyAction: string | null) {
+  if (!busyAction) return false;
+  if (row.nextAction.kind === "approve") return busyAction === "approve";
+  if (row.nextAction.kind === "portal") return busyAction === "portal-draft-upload";
+  if (row.nextAction.kind === "retry") return busyAction === "issue";
+  if (row.nextAction.kind === "preview-signed") return busyAction === "external-gib-preview";
+  if (row.nextAction.kind === "promote-external" || row.nextAction.kind === "apply-external") return busyAction === `external-promote-${row.externalInvoice?.id}`;
+  if (row.nextAction.kind === "upload-pdf") return busyAction === `external-pdf-${row.externalInvoice?.id}`;
+  if (row.nextAction.kind === "send-trendyol") return busyAction === `invoice-send-${row.invoice?.id}` || busyAction === `external-promote-${row.externalInvoice?.id}`;
+  if (row.nextAction.kind === "open-portal") return busyAction === "open-gib";
+  return false;
+}
+
+function toneForOperationStage(stageItem: InvoiceOperationStage): NoticeTone {
+  if (stageItem.state === "done") return "success";
+  if (stageItem.state === "failed" || stageItem.state === "missing") return "danger";
+  if (stageItem.state === "waiting") return "warning";
+  return "neutral";
 }
 
 function ExternalInvoiceRow({

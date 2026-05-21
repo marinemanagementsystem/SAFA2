@@ -8,7 +8,7 @@
     "build:firebase": "FIREBASE_STATIC_EXPORT=true NEXT_PUBLIC_API_BASE_URL=/api next build",
     "start": "next start -p ${PORT:-3000}",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "echo \"web: no tests\""
+    "test": "vitest run"
   },
   "dependencies": {
     "@safa/shared": "workspace:*",
@@ -22,6 +22,7 @@
     "@types/node": "^24.10.1",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.5"
   }
 }
