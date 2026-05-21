@@ -1156,22 +1156,22 @@ a {
 
 .invoice-ops-table th:nth-child(2),
 .invoice-ops-table td:nth-child(2) {
-  width: 154px;
+  width: 160px;
 }
 
 .invoice-ops-table th:nth-child(3),
 .invoice-ops-table td:nth-child(3) {
-  width: 138px;
+  width: 126px;
 }
 
 .invoice-ops-table th:nth-child(4),
 .invoice-ops-table td:nth-child(4) {
-  width: 100px;
+  width: 164px;
 }
 
 .invoice-ops-table th:nth-child(5),
 .invoice-ops-table td:nth-child(5) {
-  width: 80px;
+  width: 112px;
 }
 
 .invoice-ops-table th:nth-child(6),
@@ -1339,7 +1339,12 @@ a {
 
 .invoice-op-cell-stack .status-pill,
 .invoice-ops-table td:nth-child(5) .status-pill {
-  max-width: 92px;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  display: block;
+  min-height: 26px;
+  padding: 5px 8px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
