@@ -82,7 +82,7 @@ export function resolveInvoiceProcess(
       percent: 82,
       tone: "warning",
       title: "Portal imzasi bekliyor",
-      helper: "Taslak GIB portalina yuklendi. Duzenlenen Belgeler ekraninda toplu imza atin, sonra e-Arsiv sorgula.",
+      helper: "Taslak GIB portalina yuklendi. Duzenlenen Belgeler ekraninda toplu imza atin, sonra Imzalananlari kontrol et.",
       currentStep: 3
     };
   }

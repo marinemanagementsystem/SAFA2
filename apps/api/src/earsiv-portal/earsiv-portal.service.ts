@@ -396,6 +396,23 @@ function portalRecordPriority(record: Record<string, unknown>) {
   return 1;
 }
 
+function portalRecordRawStatus(record: Record<string, unknown>) {
+  for (const key of ["durum", "status", "belgeDurumu", "onayDurumu", "onayDurumuAciklama", "faturaDurumu"]) {
+    const value = record[key];
+    if (value !== undefined && value !== null && String(value).trim()) return String(value).trim();
+  }
+  return "";
+}
+
+function portalRecordNormalizedStatus(record: Record<string, unknown>, command: string) {
+  const statusText = normalizedPortalText(portalRecordRawStatus(record));
+  if (/iptal|silindi|hata|reddedildi/.test(statusText)) return "cancelled";
+  if (/taslak|onaylanmadi|onay bekliyor|imza bekliyor/.test(statusText)) return "signature_pending";
+  if (/onaylandi|imzalandi|imzali|kesildi|duzenlendi|basarili/.test(statusText)) return "signed";
+  if (/ADIMA_KESILEN|KESILEN|ONAYLI/i.test(command)) return "signed";
+  return "unknown";
+}
+
 function dedupePortalRecords(records: Record<string, unknown>[]) {
   const byKey = new Map<string, Record<string, unknown>>();
   const keys: string[] = [];
@@ -638,10 +655,16 @@ export class EarsivPortalService {
       records.push(
         ...rows.map((row) => ({
           ...row,
+          gibRawStatus: portalRecordRawStatus(row),
+          gibNormalizedStatus: portalRecordNormalizedStatus(row, candidate.cmd),
           sorguBaslangic: start,
           sorguBitis: end,
           kaynakKomut: candidate.cmd,
-          kaynakSayfa: candidate.pageName
+          kaynakSayfa: candidate.pageName,
+          sourceCommand: candidate.cmd,
+          sourcePage: candidate.pageName,
+          queryStartDate: start,
+          queryEndDate: end
         }))
       );
     }

@@ -18,6 +18,8 @@ export function OperationsView({ jobs, orders, drafts, invoices, onRetryInvoice 
   const processing = jobs.filter((job) => job.status === "PROCESSING" || job.status === "PENDING");
   const reviewDrafts = drafts.filter((draft) => draft.status === "NEEDS_REVIEW" || draft.errors.length > 0);
   const ordersWithoutKnownInvoice = orders.filter((order) => !order.invoiceId && order.externalInvoiceCount === 0);
+  const portalFollowupDrafts = drafts.filter((draft) => draft.status === "PORTAL_DRAFTED" || draft.externalInvoiceSources.includes("GIB_PORTAL"));
+  const pdfWaitingInvoices = invoices.filter((invoice) => !invoice.pdfAvailable || invoice.error?.toLocaleLowerCase("tr-TR").includes("pdf bekliyor"));
   const draftById = new Map(drafts.map((draft) => [draft.id, draft]));
   const invoiceByDraftId = new Map(invoices.map((invoice) => [invoice.draftId, invoice]));
 
@@ -43,6 +45,11 @@ export function OperationsView({ jobs, orders, drafts, invoices, onRetryInvoice 
           <span className="micro-label">Bilinen faturasi yok</span>
           <strong>{ordersWithoutKnownInvoice.length}</strong>
           <small>SAFA veya harici eslesmesi olmayan paket</small>
+        </article>
+        <article className="metric-card">
+          <span className="micro-label">Portal takip</span>
+          <strong>{portalFollowupDrafts.length}</strong>
+          <small>GIB imza/PDF/Trendyol takibi gereken kayit</small>
         </article>
       </section>
 
@@ -117,6 +124,12 @@ export function OperationsView({ jobs, orders, drafts, invoices, onRetryInvoice 
               title="Bilinen faturasi yok"
               value={ordersWithoutKnownInvoice.length}
               tone={ordersWithoutKnownInvoice.length > 0 ? "warning" : "success"}
+            />
+            <SignalCard
+              icon={<Clock3 size={20} />}
+              title="PDF bekleyen"
+              value={pdfWaitingInvoices.length}
+              tone={pdfWaitingInvoices.length > 0 ? "warning" : "success"}
             />
           </div>
 

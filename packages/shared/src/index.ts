@@ -13,6 +13,18 @@ export type JobStatus = "PENDING" | "PROCESSING" | "SUCCESS" | "FAILED";
 
 export type ExternalInvoiceSource = "GIB_PORTAL" | "TRENDYOL" | "MANUAL";
 
+export type GibPortalFollowupStatus =
+  | "portal_uploaded"
+  | "signature_pending"
+  | "signed_found"
+  | "pdf_missing"
+  | "archived"
+  | "trendyol_sent"
+  | "trendyol_failed"
+  | "needs_manual_match";
+
+export type GibPortalFollowupSeverity = "info" | "success" | "warning" | "danger";
+
 export interface HepsiburadaProductListItem {
   id: string;
   name: string;
@@ -77,12 +89,71 @@ export interface ExternalInvoiceListItem {
   matchedShipmentPackageId?: string;
   matchScore: number;
   matchReason?: string;
+  suggestedOrderNumber?: string;
+  suggestedShipmentPackageId?: string;
+  suggestedMatchScore?: number;
+  suggestedMatchReason?: string;
   promotedInvoiceId?: string;
   promotedInvoiceNumber?: string;
   promotedInvoiceStatus?: InvoiceStatus;
   requiresPdfUpload?: boolean;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface GibPortalTimelineEvent {
+  type: GibPortalFollowupStatus;
+  severity: GibPortalFollowupSeverity;
+  message: string;
+  at: string;
+  externalInvoiceId?: string;
+  invoiceNumber?: string;
+  orderNumber?: string;
+  shipmentPackageId?: string;
+  draftId?: string;
+  nextAction?: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface GibPortalUnmatchedReason {
+  externalInvoiceId?: string;
+  invoiceNumber?: string;
+  externalKey?: string;
+  reason: string;
+  candidateOrderNumber?: string;
+  candidateShipmentPackageId?: string;
+  score?: number;
+}
+
+export interface GibPortalFollowupSummary {
+  checkedCount: number;
+  signedFound: number;
+  promoted: number;
+  pdfMissing: number;
+  trendyolSent: number;
+  trendyolAlreadySent: number;
+  trendyolFailed: number;
+  needsManualMatch: number;
+  unmatchedReasons: GibPortalUnmatchedReason[];
+  timelineEvents: GibPortalTimelineEvent[];
+}
+
+export interface ExternalInvoiceSyncResult {
+  imported: number;
+  matched: number;
+  unmatched: number;
+  checkedCount?: number;
+  signedFound?: number;
+  promoted?: number;
+  trendyolSent?: number;
+  trendyolAlreadySent?: number;
+  trendyolFailed?: number;
+  pdfMissing?: number;
+  unmatchedReasons?: GibPortalUnmatchedReason[];
+  timelineEvents?: GibPortalTimelineEvent[];
+  followup?: GibPortalFollowupSummary;
+  message?: string;
+  invoices: ExternalInvoiceListItem[];
 }
 
 export interface OrderListItem {
@@ -257,6 +328,8 @@ export interface IntegrationJobListItem {
   status: JobStatus;
   attempts: number;
   lastError?: string;
+  payload?: Record<string, unknown>;
+  response?: Record<string, unknown>;
   createdAt: string;
   updatedAt: string;
 }

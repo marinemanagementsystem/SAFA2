@@ -3,6 +3,8 @@
 import type {
   ExternalInvoiceListItem,
   ExternalInvoiceSource,
+  ExternalInvoiceSyncResult,
+  GibPortalTimelineEvent,
   IntegrationJobListItem,
   InvoiceDraftListItem,
   InvoiceListItem,
@@ -17,7 +19,6 @@ import {
   Check,
   CheckCircle2,
   Clock3,
-  CircleDollarSign,
   Download,
   FileSearch,
   FileText,
@@ -88,7 +89,12 @@ interface InvoicesViewProps {
   onIssue: (ids: string[]) => Promise<string>;
   onUploadPortalDrafts: (ids: string[]) => Promise<string>;
   onImportExternalInvoices: (source: ExternalInvoiceSource, records: Array<Record<string, unknown>>) => void;
-  onSyncGibExternalInvoices: (days: number) => void;
+  onPreviewGibExternalInvoices: (
+    input: number | { days?: number; startDate?: string; endDate?: string; repairMissingDrafts?: boolean; repairOrderNumber?: string }
+  ) => Promise<ExternalInvoiceSyncResult | null>;
+  onApplyGibExternalInvoices: (
+    input: number | { days?: number; startDate?: string; endDate?: string; repairMissingDrafts?: boolean; repairOrderNumber?: string }
+  ) => Promise<ExternalInvoiceSyncResult | null>;
   onSyncTrendyolExternalInvoices: () => void;
   onReconcileExternalInvoices: () => void;
   onMatchExternalInvoice: (id: string, target: string) => void;
@@ -105,6 +111,13 @@ function initialInvoiceDeskQuery() {
   const params = new URLSearchParams(window.location.search);
   return params.get("draft") ?? params.get("order") ?? params.get("package") ?? "";
 }
+
+const may20RepairRequest = {
+  days: 1,
+  startDate: "2026-05-20T00:00:00+03:00",
+  endDate: "2026-05-20T23:59:59+03:00",
+  repairMissingDrafts: true
+};
 
 function dateTimeValue(value?: string) {
   if (!value) return 0;
@@ -319,7 +332,7 @@ function nextActionFor(action: DraftActionKind, tone: NoticeTone, pending: boole
 
   if (tone === "warning") return "Kismi veya kontrol gerektiren sonuc var. Basarisiz kartlari filtreleyip tek tek tekrar deneyin.";
   if (action === "portal") return "Taslak GIB portalina gitti. Resmi fatura sayilmasi icin GIB portalinda Duzenlenen Belgeler ekranindan imzalayin.";
-  if (action === "approve") return "Taslak onaylandi ve Onayli filtresine tasindi. Simdi GIB taslagina yukleyebilir veya SAFA uzerinden fatura kesimini baslatabilirsiniz.";
+  if (action === "approve") return "Taslak onaylandi ve Onayli filtresine tasindi. Normal akis icin GIB taslagina yukleyin; imza ve Trendyol aktarimi portal takip akisiyle izlenir.";
   return "Islem baslatildi. Son resmi sonucu karttaki surec cubugundan ve PDF arsivinden takip edin.";
 }
 
@@ -374,7 +387,7 @@ function resolveVisibleDeskNotice(
     tone: "warning",
     title: "Son deneme basarisiz, taslak hala islenebilir",
     detail: `${processableDrafts.length} taslak SAFA'da ${processableStatusSummary(processableDrafts)} olarak duruyor. Son hata: ${notice.detail}`,
-    nextAction: "Karttaki gercek duruma gore devam edin; hazirsa onaylayin, onayliysa GIB taslagina yukleyin veya fatura kesimini yeniden baslatin."
+    nextAction: "Karttaki gercek duruma gore devam edin; hazirsa onaylayin, onayliysa GIB taslagina yukleyin."
   };
 }
 
@@ -458,7 +471,7 @@ function resolveRealStatusCheck(
       safa: invoice?.invoiceNumber
         ? `SAFA fatura kaydi var: ${invoice.invoiceNumber} (${statusLabel(invoice.status)}).`
         : "SAFA resmi fatura kaydi olustu.",
-      gib: "PDF arsivinde resmi fatura kaydi var. Harici e-Arsiv eslesmesi gerekiyorsa e-Arsiv sorgula ile kontrol edilir.",
+      gib: "PDF arsivinde resmi fatura kaydi var. Harici e-Arsiv eslesmesi gerekiyorsa Imzalananlari kontrol et ile kontrol edilir.",
       nextAction: "PDF arsivinden belgeyi acin; Trendyol bildirimi gerekiyorsa arsiv durumunu takip edin.",
       source: "Kontrol: SAFA fatura arsivi + taslak durumu."
     };
@@ -477,7 +490,7 @@ function resolveRealStatusCheck(
         : "SAFA bu siparisi tekrar fatura kesimine kapatti; cift fatura riski engellendi.",
       gib: externalInvoiceSummary(draft),
       nextAction: hasPortalDraft && hasGibExternal
-        ? "e-Arsiv sorgula tamamlandiginda kayit PDF arsivi ve aylik Excel'de resmi fatura olarak gorunmeli."
+        ? "Imzalananlari kontrol et tamamlandiginda kayit PDF arsivi ve aylik Excel'de resmi fatura olarak gorunmeli."
         : hasPortalDraft
         ? "GIB portalinda bu taslagi tekrar imzalamayin. Harici fatura eslesmesini kontrol edin."
         : "Bu sipariste yeniden fatura kesmeyin. Gerekirse harici fatura listesinden eslesmeyi kontrol edin.",
@@ -491,7 +504,7 @@ function resolveRealStatusCheck(
       actual: "Portal imza bekliyor",
       safa: "SAFA resmi fatura kesildi saymiyor; taslak GIB portalina imza bekleyen belge olarak tasindi.",
       gib: portalDraftSummary(draft),
-      nextAction: "GIB portalinda Duzenlenen Belgeler ekranindan toplu imza atin, sonra e-Arsiv sorgula ile belgeyi eslestirin.",
+      nextAction: "GIB portalinda Duzenlenen Belgeler ekranindan toplu imza atin, sonra Imzalananlari kontrol et ile belgeyi eslestirin.",
       source: "Kontrol: SAFA portal taslak kaydi."
     };
   }
@@ -535,7 +548,7 @@ function resolveRealStatusCheck(
       actual: "Kuyruk basarili, arsiv bekleniyor",
       safa: "Son kuyruk isi basarili gorunuyor; ancak bu kart icin PDF arsivinde fatura kaydi henuz gorunmuyor.",
       gib: "GIB/e-Arsiv kaydi SAFA listesinden dogrulanmadi.",
-      nextAction: "Yenile'ye basin; kayit gelmezse e-Arsiv sorgula ile harici kaydi eslestirin.",
+      nextAction: "Yenile'ye basin; kayit gelmezse Imzalananlari kontrol et ile harici kaydi eslestirin.",
       source: "Kontrol: SAFA son kuyruk sonucu."
     };
   }
@@ -553,8 +566,8 @@ function resolveRealStatusCheck(
         ? "Son GIB portal yukleme denemesi basarisiz oldu; portalda imza bekleyen belge olusmadi."
         : "Bu kart icin henuz portal taslagi, harici e-Arsiv eslesmesi veya SAFA resmi fatura kaydi yok.",
       nextAction: lastPortalUploadFailed
-        ? "Ayar/hata sebebi giderildiyse GIB taslagina yukle ile tekrar deneyin; SAFA'da resmi kesim istiyorsaniz Onayla ve fatura kes."
-        : "Portal imzasi istiyorsaniz GIB taslagina yukle; SAFA'da resmi kesim istiyorsaniz Onayla ve fatura kes.",
+        ? "Ayar/hata sebebi giderildiyse GIB taslagina yukle ile tekrar deneyin."
+        : "Normal akis icin GIB taslagina yukleyin; imza GIB portalinda tamamlanacak.",
       source: lastPortalUploadFailed ? "Kontrol: SAFA taslak durumu + son portal sonucu." : "Kontrol: SAFA taslak durumu."
     };
   }
@@ -571,7 +584,7 @@ function resolveRealStatusCheck(
         : "Bu kart icin GIB/e-Arsiv kaydi yok; bu normal, henuz gonderim baslatilmadi.",
       nextAction: lastPortalUploadFailed
         ? "Ayar/hata sebebi giderildiyse tekrar GIB taslagina yukleyin veya once onay adimini calistirin."
-        : "Fatura kesmek icin Seciliyi onayla ya da Onayla ve fatura kes ile onay + kesim akisini baslatin.",
+        : "Normal akis icin once seciliyi onaylayin, sonra GIB taslagina yukleyin.",
       source: lastPortalUploadFailed ? "Kontrol: SAFA taslak durumu + son portal sonucu." : "Kontrol: SAFA taslak durumu."
     };
   }
@@ -611,6 +624,193 @@ function RealStatusCheckPanel({ check }: { check: RealStatusCheck }) {
         </div>
       </div>
       <small>{check.source}</small>
+    </div>
+  );
+}
+
+function isSignedPortalExternal(invoice: ExternalInvoiceListItem) {
+  if (invoice.source !== "GIB_PORTAL") return false;
+  const normalized = stringValue(invoice.status)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/ı/g, "i");
+  return /onaylandi|imzalandi|imzali|kesildi|duzenlendi|basarili/.test(normalized);
+}
+
+function followupEventsForOrder(result: ExternalInvoiceSyncResult | null, orderNumber: string, shipmentPackageId: string) {
+  const events = result?.followup?.timelineEvents ?? result?.timelineEvents ?? [];
+  return events.filter(
+    (event) =>
+      event.orderNumber === orderNumber ||
+      event.shipmentPackageId === shipmentPackageId ||
+      stringValue(event.message).includes(stringValue(orderNumber)) ||
+      stringValue(event.message).includes(stringValue(shipmentPackageId))
+  );
+}
+
+function followupTone(severity: GibPortalTimelineEvent["severity"]): NoticeTone {
+  if (severity === "danger") return "danger";
+  if (severity === "warning") return "warning";
+  if (severity === "success") return "success";
+  return "neutral";
+}
+
+function nextFollowupCheckLabel(result: ExternalInvoiceSyncResult | null) {
+  const events = result?.followup?.timelineEvents ?? result?.timelineEvents ?? [];
+  const latest = events
+    .map((event) => new Date(event.at).getTime())
+    .filter(Number.isFinite)
+    .sort((left, right) => right - left)[0];
+  if (!latest) return "Otomatik takip aciksa backend 10 dakikada bir kontrol eder.";
+  return `Son kontrol: ${formatDateTime(new Date(latest).toISOString())}. Otomatik takip aciksa sonraki kontrol yaklasik 10 dakika icinde.`;
+}
+
+function GibFollowupPanel({ result }: { result: ExternalInvoiceSyncResult | null }) {
+  if (!result) return null;
+  const followup = result.followup;
+  const events = followup?.timelineEvents ?? result.timelineEvents ?? [];
+  const unmatched = followup?.unmatchedReasons ?? result.unmatchedReasons ?? [];
+
+  return (
+    <div className="form-alert table-note">
+      <strong>Portal imza takip raporu</strong>
+      <span>
+        {result.checkedCount ?? followup?.checkedCount ?? 0} kayit kontrol edildi · {result.signedFound ?? followup?.signedFound ?? 0} imzali bulundu ·{" "}
+        {result.promoted ?? followup?.promoted ?? 0} arsive alindi · {result.pdfMissing ?? followup?.pdfMissing ?? 0} PDF bekliyor ·{" "}
+        {result.trendyolSent ?? followup?.trendyolSent ?? 0} Trendyol'a gonderildi · {result.trendyolFailed ?? followup?.trendyolFailed ?? 0} Trendyol hatasi
+      </span>
+      <span>{nextFollowupCheckLabel(result)}</span>
+      {unmatched.length > 0 ? (
+        <div className="portal-draft-finder-list">
+          {unmatched.slice(0, 6).map((item, index) => (
+            <div key={`${item.externalInvoiceId ?? item.invoiceNumber ?? index}`}>
+              <strong>{item.invoiceNumber ?? item.externalKey ?? "Fatura"}</strong>
+              <span>
+                {item.reason}
+                {item.candidateOrderNumber ? ` · Aday siparis: ${item.candidateOrderNumber}` : ""}
+                {item.candidateShipmentPackageId ? ` · Paket: ${item.candidateShipmentPackageId}` : ""}
+              </span>
+            </div>
+          ))}
+        </div>
+      ) : null}
+      {events.length > 0 ? (
+        <div className="draft-action-trace neutral history" role="status">
+          <Clock3 size={18} />
+          <div>
+            <strong>Son olaylar</strong>
+            {events.slice(0, 5).map((event, index) => (
+              <span key={`${event.type}-${event.at}-${index}`}>
+                {event.message} {event.nextAction ? `· ${event.nextAction}` : ""}
+              </span>
+            ))}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function longJobTitle(job: IntegrationJobListItem) {
+  if (job.type === "trendyol.sync") return "Trendyol yenileme ve fatura izi";
+  if (job.type === "gib-portal.apply") return "e-Arsiv guvenli uygulama";
+  return job.type;
+}
+
+function longJobTone(job: IntegrationJobListItem): NoticeTone {
+  if (job.status === "FAILED") return "danger";
+  if (job.status === "SUCCESS") return "success";
+  if (job.status === "PROCESSING" || job.status === "PENDING") return "warning";
+  return "neutral";
+}
+
+function longJobMessage(job: IntegrationJobListItem) {
+  const message = typeof job.response?.message === "string" ? job.response.message : "";
+  if (message) return message;
+  if (job.status === "SUCCESS") return "Islem tamamlandi; liste canli veriden yenilendi.";
+  if (job.status === "FAILED") return job.lastError ?? "Islem tamamlanamadi.";
+  return "Islem parca parca suruyor; proxy 502 gelse bile fatura basarisiz sayilmaz.";
+}
+
+function LongJobPanel({ jobs }: { jobs: IntegrationJobListItem[] }) {
+  const visibleJobs = jobs.filter((job) => job.type === "trendyol.sync" || job.type === "gib-portal.apply").slice(0, 3);
+  if (visibleJobs.length === 0) return null;
+
+  return (
+    <div className="form-alert table-note">
+      <strong>Uzun islem takibi</strong>
+      <span>GIB/Trendyol islemleri arka plan job mantigiyla parca parca izleniyor; proxy 502 fatura hatasi sayilmaz.</span>
+      <div className="portal-draft-finder-list">
+        {visibleJobs.map((job) => (
+          <div key={job.id}>
+            <strong>
+              {job.status === "SUCCESS" ? <CheckCircle2 size={14} /> : job.status === "FAILED" ? <AlertTriangle size={14} /> : <Loader2 size={14} className="spin" />}
+              {longJobTitle(job)} · {statusLabel(job.status)}
+            </strong>
+            <span>
+              {longJobMessage(job)} · Son guncelleme {formatDateTime(job.updatedAt)}
+            </span>
+            <span className={cx("status-pill", longJobTone(job))}>{job.attempts} parca</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function DraftFollowupTimeline({
+  draft,
+  invoice,
+  events
+}: {
+  draft: InvoiceDraftListItem;
+  invoice?: InvoiceListItem;
+  events: GibPortalTimelineEvent[];
+}) {
+  const signedFound = draft.externalInvoiceSources.includes("GIB_PORTAL") || events.some((event) => event.type === "signed_found");
+  const pdfWaiting = Boolean(invoice && !invoice.pdfAvailable) || events.some((event) => event.type === "pdf_missing");
+  const trendyolSent = invoice?.trendyolStatus === "SENT" || invoice?.trendyolStatus === "ALREADY_SENT" || events.some((event) => event.type === "trendyol_sent");
+  const trendyolFailed = invoice?.trendyolStatus === "SEND_FAILED" || events.some((event) => event.type === "trendyol_failed");
+  const lastEvent = events[0];
+
+  const steps = [
+    draft.portalDraftUploadedAt
+      ? { label: "GIB taslagi yuklendi", detail: `Portal yukleme zamani: ${formatDateTime(draft.portalDraftUploadedAt)}`, tone: "success" as NoticeTone }
+      : undefined,
+    draft.status === "PORTAL_DRAFTED" && !signedFound
+      ? { label: "Imza bekliyor", detail: draft.portalDraftStatus ?? "Portalda manuel imza bekleniyor.", tone: "warning" as NoticeTone }
+      : undefined,
+    lastEvent ? { label: "Son kontrol", detail: `${formatDateTime(lastEvent.at)} · ${lastEvent.message}`, tone: followupTone(lastEvent.severity) } : undefined,
+    signedFound ? { label: "Imzali fatura bulundu", detail: draft.externalInvoiceNumber ?? invoice?.invoiceNumber ?? "GIB portal kaydi bulundu.", tone: "success" as NoticeTone } : undefined,
+    invoice
+      ? {
+          label: invoice.pdfAvailable ? "PDF alindi" : invoice.sourceLabel?.includes("e-Arsiv") ? "Portal imzali / PDF bekliyor" : "PDF bekliyor",
+          detail: invoice.pdfAvailable ? "Resmi PDF arsivde." : invoice.error ?? "Resmi PDF bekleniyor; Trendyol'a gonderilmedi.",
+          tone: invoice.pdfAvailable ? ("success" as NoticeTone) : ("warning" as NoticeTone)
+        }
+      : pdfWaiting
+        ? { label: "Portal imzali / PDF bekliyor", detail: "Imzali kayit bulundu ama resmi PDF henuz yok.", tone: "warning" as NoticeTone }
+        : undefined,
+    trendyolFailed
+      ? { label: "Trendyol hata", detail: invoice?.error ?? "Trendyol dosya gonderimi basarisiz.", tone: "danger" as NoticeTone }
+      : trendyolSent
+        ? { label: "Trendyol'a gonderildi", detail: invoice?.trendyolStatus === "ALREADY_SENT" ? "Trendyol'da zaten vardi." : "PDF Trendyol'a gonderildi.", tone: "success" as NoticeTone }
+        : undefined
+  ].filter((step): step is { label: string; detail: string; tone: NoticeTone } => Boolean(step));
+
+  if (steps.length === 0) return null;
+
+  return (
+    <div className="draft-action-trace neutral history" role="status">
+      <Clock3 size={18} />
+      <div>
+        <span>Portal takip timeline</span>
+        {steps.map((step) => (
+          <em key={step.label}>
+            {step.label}: {step.detail}
+          </em>
+        ))}
+      </div>
     </div>
   );
 }
@@ -665,7 +865,8 @@ export function InvoicesView({
   onIssue,
   onUploadPortalDrafts,
   onImportExternalInvoices,
-  onSyncGibExternalInvoices,
+  onPreviewGibExternalInvoices,
+  onApplyGibExternalInvoices,
   onSyncTrendyolExternalInvoices,
   onReconcileExternalInvoices,
   onMatchExternalInvoice,
@@ -697,6 +898,7 @@ export function InvoicesView({
   const [externalText, setExternalText] = useState("");
   const [externalDays, setExternalDays] = useState(30);
   const [externalError, setExternalError] = useState("");
+  const [gibFollowupResult, setGibFollowupResult] = useState<ExternalInvoiceSyncResult | null>(null);
   const externallyInvoicedDrafts = drafts.filter(
     (draft) => (draft.status === "READY" || draft.status === "APPROVED") && draft.externalInvoiceCount > 0
   );
@@ -704,6 +906,10 @@ export function InvoicesView({
   const portalDraftedDrafts = drafts.filter((draft) => draft.status === "PORTAL_DRAFTED" && draft.externalInvoiceCount === 0);
   const portalDraftsWithExternalInvoices = drafts.filter((draft) => draft.status === "PORTAL_DRAFTED" && draft.externalInvoiceCount > 0);
   const matchedExternalInvoices = externalInvoices.filter((invoice) => invoice.matchedOrderId).length;
+  const signedUnarchivedPortalInvoices = externalInvoices.filter(
+    (invoice) => isSignedPortalExternal(invoice) && !invoice.promotedInvoiceId
+  );
+  const pdfWaitingInvoices = invoices.filter((invoice) => !invoice.pdfAvailable || stringValue(invoice.error).includes("pdf bekliyor"));
   const draftById = useMemo(() => new Map(drafts.map((draft) => [draft.id, draft])), [drafts]);
   const invoiceByDraftId = useMemo(() => new Map(invoices.map((invoice) => [invoice.draftId, invoice])), [invoices]);
   const selectedDraftItems = selectedDrafts.map((id) => draftById.get(id)).filter((draft): draft is InvoiceDraftListItem => Boolean(draft));
@@ -719,9 +925,9 @@ export function InvoicesView({
       : selectedRetryCount > 0
         ? "Basarisiz taslak secili. Karttaki kirmizi hata sebebini okuyun; sonra Tekrar dene veya uygun ana islemi yeniden calistirin."
         : selectedApprovedCount === selectedDrafts.length
-          ? "Bu taslak onayli. Portalda imzalayacaksaniz GIB taslagina yukle; SAFA'da resmi kesim kuyrugu istiyorsaniz Onayla ve fatura kes."
+          ? "Bu taslak onayli. Normal akis: GIB taslagina yukle, imzayi portalda at, sonra imzalananlari kontrol et."
           : selectedReadyCount > 0
-            ? "Hazir taslak secili. Fatura kes derseniz SAFA once onaylar, sonra kuyruga alir; portal secerseniz imza GIB portalinda kalir."
+            ? "Hazir taslak secili. Once onaylayin; sonra GIB taslagina yukleyip portal imzasini takip edin."
             : "Secili taslaklar icin kartlardaki durum ve uyariyi kontrol edin.";
   const visibleDeskNotice = useMemo(
     () => (deskNotice ? resolveVisibleDeskNotice(deskNotice, draftById, invoiceByDraftId) : null),
@@ -963,12 +1169,28 @@ export function InvoicesView({
     void runDraftOperation("approve", ids, onApprove);
   }
 
-  function issueSelected() {
-    void runDraftOperation("issue", [...selectedDrafts], onIssue);
-  }
-
   function uploadPortalSelected() {
     void runDraftOperation("portal", [...selectedDrafts], onUploadPortalDrafts);
+  }
+
+  async function previewSignedPortalInvoices() {
+    const result = await onPreviewGibExternalInvoices(externalDays);
+    if (result) setGibFollowupResult(result);
+  }
+
+  async function applySignedPortalInvoices() {
+    const result = await onApplyGibExternalInvoices(externalDays);
+    if (result) setGibFollowupResult(result);
+  }
+
+  async function previewMay20Repair() {
+    const result = await onPreviewGibExternalInvoices(may20RepairRequest);
+    if (result) setGibFollowupResult(result);
+  }
+
+  async function applyMay20Repair() {
+    const result = await onApplyGibExternalInvoices(may20RepairRequest);
+    if (result) setGibFollowupResult(result);
   }
 
   function retryDraft(id: string) {
@@ -1092,8 +1314,8 @@ export function InvoicesView({
             <div className="form-alert table-note invoice-selection-note">
               <strong>{selectedDrafts.length} taslak secildi.</strong>
               <span>
-                {selectedReadyCount > 0 ? `${selectedReadyCount} hazir taslak fatura keserken otomatik onaylanacak. ` : ""}
-                {selectedApprovedCount > 0 ? `${selectedApprovedCount} taslak dogrudan kuyruga alinabilir. ` : ""}
+                {selectedReadyCount > 0 ? `${selectedReadyCount} hazir taslak once onaylanmali. ` : ""}
+                {selectedApprovedCount > 0 ? `${selectedApprovedCount} taslak GIB taslagina yuklenebilir. ` : ""}
                 {selectedRetryCount > 0 ? `${selectedRetryCount} basarisiz taslak tekrar denenecek. ` : ""}
                 Sonucu her karttaki surec cubugundan takip edebilirsiniz.
               </span>
@@ -1129,7 +1351,7 @@ export function InvoicesView({
                         ? "Zaten onayli"
                         : "Seciliyi onayla"
                   }
-                  helper={selectedDrafts.length > 0 && selectedNeedsApprovalCount === 0 ? "Sonraki adimi sec" : "Kesim icin hazirlar"}
+                  helper={selectedDrafts.length > 0 && selectedNeedsApprovalCount === 0 ? "Sonraki adimi sec" : "Portal yukleme icin hazirlar"}
                 />
               </button>
               <button
@@ -1141,17 +1363,6 @@ export function InvoicesView({
                 <ActionButtonCopy
                   title={busyAction === busyKeyForAction("portal") ? "Yukleniyor" : "GIB taslagina yukle"}
                   helper="Portal imzaya tasir"
-                />
-              </button>
-              <button
-                className="ui-button action-button issue-action"
-                onClick={issueSelected}
-                disabled={selectedDrafts.length === 0 || busyAction === busyKeyForAction("issue")}
-              >
-                {busyAction === busyKeyForAction("issue") ? <Loader2 size={20} className="spin" /> : <CircleDollarSign size={20} />}
-                <ActionButtonCopy
-                  title={busyAction === busyKeyForAction("issue") ? "Kuyruga aliniyor" : "Onayla ve fatura kes"}
-                  helper="Onay + resmi kesim"
                 />
               </button>
             </div>
@@ -1173,9 +1384,13 @@ export function InvoicesView({
                     {busyAction === "logout-gib" ? <Loader2 size={16} className="spin" /> : <ShieldOff size={16} />}
                     Guvenli cikis
                   </button>
-                  <button className="ui-button primary compact" type="button" onClick={() => onSyncGibExternalInvoices(externalDays)} disabled={busyAction === "external-gib-sync"}>
-                    {busyAction === "external-gib-sync" ? <Loader2 size={16} className="spin" /> : <FileSearch size={16} />}
-                    Sorgula ve Trendyol'a gonder
+                  <button className="ui-button primary compact" type="button" onClick={() => void previewSignedPortalInvoices()} disabled={busyAction === "external-gib-preview"}>
+                    {busyAction === "external-gib-preview" ? <Loader2 size={16} className="spin" /> : <FileSearch size={16} />}
+                    Imzalananlari kontrol et
+                  </button>
+                  <button className="ui-button ghost compact" type="button" onClick={() => void applySignedPortalInvoices()} disabled={busyAction === "external-gib-apply"}>
+                    {busyAction === "external-gib-apply" ? <Loader2 size={16} className="spin" /> : <CheckCircle2 size={16} />}
+                    Guvenli olanlari uygula
                   </button>
                 </div>
                 <div className="portal-draft-finder-list">
@@ -1184,8 +1399,8 @@ export function InvoicesView({
                       <strong>{draft.orderNumber}</strong>
                       <span>
                         {draft.customerName} · {money(draft.totalPayableCents, draft.currency)} · Paket {draft.shipmentPackageId}
-                        {draft.deliveredAt ? ` · Teslim ${formatDateTime(draft.deliveredAt)}` : ""}
-                        {draft.portalDraftUploadedAt ? ` · ${formatDateTime(draft.portalDraftUploadedAt)}` : ""}
+                        {draft.deliveredAt ? ` · Teslim tarihi: ${formatDateTime(draft.deliveredAt)}` : ""}
+                        {draft.portalDraftUploadedAt ? ` · Portal yukleme zamani: ${formatDateTime(draft.portalDraftUploadedAt)}` : ""}
                       </span>
                     </div>
                   ))}
@@ -1195,7 +1410,7 @@ export function InvoicesView({
             {portalDraftsWithExternalInvoices.length > 0 ? (
               <div className="form-alert table-note portal-draft-finder">
                 <strong>{portalDraftsWithExternalInvoices.length} portal taslaginda resmi/harici fatura kaydi bulundu.</strong>
-                <span>Bu kayitlar tekrar imza bekliyor gibi islenmeyecek; e-Arsiv sorgula/promote akisi arsiv ve Excel durumunu onarir.</span>
+                <span>Bu kayitlar tekrar imza bekliyor gibi islenmeyecek; imza takip/apply akisi arsiv ve Excel durumunu onarir.</span>
                 <div className="portal-draft-finder-list">
                   {portalDraftsWithExternalInvoices.slice(0, 5).map((draft) => (
                     <div key={draft.id}>
@@ -1210,6 +1425,8 @@ export function InvoicesView({
                 </div>
               </div>
             ) : null}
+            <LongJobPanel jobs={jobs} />
+            <GibFollowupPanel result={gibFollowupResult} />
             {filteredDrafts.map((draft) => {
               const latestJob = latestInvoiceJob(jobs, draft.id);
               const visibleJob = visibleInvoiceJob(draft, latestJob);
@@ -1220,6 +1437,7 @@ export function InvoicesView({
               const realStatusCheck = resolveRealStatusCheck(draft, invoice, visibleJob);
               const actionTrace = resolveVisibleDraftActionTrace(draft, draftActionTraces[draft.id], realStatusCheck, invoice);
               const draftStatus = draftStatusView(draft);
+              const followupEvents = followupEventsForOrder(gibFollowupResult, draft.orderNumber, draft.shipmentPackageId);
 
               return (
               <div className={cx("draft-card", selected && "selected", failed && "needs-action", !selectable && "locked")} key={draft.id}>
@@ -1267,6 +1485,7 @@ export function InvoicesView({
                     </div>
                   ) : null}
                   <RealStatusCheckPanel check={realStatusCheck} />
+                  <DraftFollowupTimeline draft={draft} invoice={invoice} events={followupEvents} />
                   {actionTrace ? (
                     <div className={cx("draft-action-trace", actionTrace.tone, actionTrace.history && "history")} role="status">
                       {noticeIcon(actionTrace.tone, false)}
@@ -1417,6 +1636,17 @@ export function InvoicesView({
             </div>
           ) : null}
 
+          {signedUnarchivedPortalInvoices.length > 0 || pdfWaitingInvoices.length > 0 ? (
+            <div className="form-alert table-note">
+              {signedUnarchivedPortalInvoices.length > 0 ? (
+                <span>{signedUnarchivedPortalInvoices.length} portalda imzali ama SAFA arsivine alinmamis kayit var. Guvenli olanlari uygula ile onarilir.</span>
+              ) : null}
+              {pdfWaitingInvoices.length > 0 ? (
+                <span>{pdfWaitingInvoices.length} arsiv kaydi portal imzali / PDF bekliyor; PDF gelmeden Trendyol'a dosya gonderilmez.</span>
+              ) : null}
+            </div>
+          ) : null}
+
           <InvoiceArchiveSection
             title="Bugun kesilenler"
             invoices={invoiceGroups.newInvoices}
@@ -1466,11 +1696,37 @@ export function InvoicesView({
           </label>
           <button
             className="ui-button primary"
-            onClick={() => onSyncGibExternalInvoices(externalDays)}
-            disabled={busyAction === "external-gib-sync"}
+            onClick={() => void previewSignedPortalInvoices()}
+            disabled={busyAction === "external-gib-preview"}
           >
-            {busyAction === "external-gib-sync" ? <Loader2 size={18} className="spin" /> : <FileSearch size={18} />}
-            e-Arsiv sorgula
+            {busyAction === "external-gib-preview" ? <Loader2 size={18} className="spin" /> : <FileSearch size={18} />}
+            Imzalananlari kontrol et
+          </button>
+          <button
+            className="ui-button ghost"
+            onClick={() => void applySignedPortalInvoices()}
+            disabled={busyAction === "external-gib-apply"}
+          >
+            {busyAction === "external-gib-apply" ? <Loader2 size={18} className="spin" /> : <CheckCircle2 size={18} />}
+            Guvenli olanlari uygula
+          </button>
+          <button
+            className="ui-button ghost"
+            onClick={() => void previewMay20Repair()}
+            disabled={busyAction === "external-gib-preview"}
+            title="Sadece 20.05.2026 icin eksik SAFA taslagi, portal imza ve PDF/Trendyol durumunu raporlar."
+          >
+            {busyAction === "external-gib-preview" ? <Loader2 size={18} className="spin" /> : <FileSearch size={18} />}
+            20 Mayis raporu
+          </button>
+          <button
+            className="ui-button ghost"
+            onClick={() => void applyMay20Repair()}
+            disabled={busyAction === "external-gib-apply"}
+            title="Sadece 20.05.2026 icin guvenli eksik taslaklari olusturup GIB portalina yuklemeyi dener."
+          >
+            {busyAction === "external-gib-apply" ? <Loader2 size={18} className="spin" /> : <CheckCircle2 size={18} />}
+            20 Mayis onar
           </button>
           <button
             className="ui-button ghost"
@@ -1611,7 +1867,14 @@ function ExternalInvoiceRow({
         {promoted ? (
           <em>
             SAFA arsivi: {invoice.promotedInvoiceNumber}
-            {invoice.requiresPdfUpload ? " · resmi PDF bekliyor" : ""}
+            {invoice.requiresPdfUpload ? " · portal imzali / PDF bekliyor" : ""}
+          </em>
+        ) : null}
+        {!invoice.matchedOrderId && invoice.matchReason ? (
+          <em>
+            Neden acik: {invoice.matchReason}
+            {invoice.suggestedOrderNumber ? ` · Aday siparis: ${invoice.suggestedOrderNumber}` : ""}
+            {invoice.suggestedShipmentPackageId ? ` · Paket: ${invoice.suggestedShipmentPackageId}` : ""}
           </em>
         ) : null}
         {!invoice.matchedOrderId ? (
@@ -1695,7 +1958,7 @@ function InvoiceArchiveSection({
                   PDF
                 </a>
               ) : (
-                <span className="muted">PDF bekliyor</span>
+                <span className="muted">{invoice.sourceLabel?.includes("e-Arsiv") ? "portal imzali / PDF bekliyor" : "PDF bekliyor"}</span>
               )}
               {invoice.pdfAvailable && invoice.trendyolStatus !== "SENT" && invoice.trendyolStatus !== "ALREADY_SENT" ? (
                 <button

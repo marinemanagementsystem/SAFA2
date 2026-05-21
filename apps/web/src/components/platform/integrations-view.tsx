@@ -1,7 +1,8 @@
 "use client";
 
-import type { Dispatch, FormEvent, SetStateAction } from "react";
-import { ExternalLink, KeyRound, Loader2, LockKeyhole, LogIn, PlugZap, Send, ShieldOff } from "lucide-react";
+import type { Dispatch, FormEvent, ReactNode, SetStateAction } from "react";
+import type { LucideIcon } from "lucide-react";
+import { ExternalLink, KeyRound, Loader2, LockKeyhole, LogIn, PlugZap, Send, ShieldOff, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import {
   ConnectionsSnapshot,
@@ -38,11 +39,23 @@ import {
 } from "../../lib/platform/saved-information-store";
 import { decryptVaultPayload, encryptVaultPayload, type EncryptedVault } from "../../lib/platform/secure-vault";
 
+type ActiveIntegration = "trendyol" | "hepsiburada" | "gibPortal" | "gibDirect";
+type IntegrationStatusTone = "success" | "warning";
+
+interface IntegrationControl {
+  id: ActiveIntegration;
+  title: string;
+  eyebrow: string;
+  description: string;
+  icon: LucideIcon;
+  status: string;
+  tone: IntegrationStatusTone;
+}
+
 interface IntegrationsViewProps {
   ownerUsername: string;
   connections: ConnectionsSnapshot | null;
   settings: Record<string, unknown>;
-  draftCount: number;
   busyAction: string | null;
   apiAvailable: boolean;
   trendyolForm: TrendyolConnectionInput;
@@ -78,7 +91,6 @@ export function IntegrationsView({
   ownerUsername,
   connections,
   settings,
-  draftCount,
   busyAction,
   apiAvailable,
   trendyolForm,
@@ -115,6 +127,49 @@ export function IntegrationsView({
   const trendyolSavedAsDraft = !apiAvailable && connections?.trendyol.configured;
   const hepsiburadaSavedAsDraft = !apiAvailable && connections?.hepsiburada.configured;
   const gibSavedAsDraft = !apiAvailable && connections?.gibPortal.configured;
+  const plannedMarketplaces = marketplaces.filter((item) => item.id !== "trendyol" && item.id !== "hepsiburada");
+  const plannedInvoices = invoices.filter((item) => item.id !== "gib-earsiv");
+  const [activeIntegration, setActiveIntegration] = useState<ActiveIntegration | null>(null);
+
+  const integrationControls: IntegrationControl[] = [
+    {
+      id: "trendyol",
+      title: "Trendyol",
+      eyebrow: "Pazaryeri",
+      description: "Satici bilgileri ve partner aksiyonu.",
+      icon: KeyRound,
+      status: apiAvailable && connections?.trendyol.configured ? "Bagli" : trendyolSavedAsDraft ? "Taslak kayitli" : "Bekliyor",
+      tone: apiAvailable && connections?.trendyol.configured ? "success" : "warning"
+    },
+    {
+      id: "hepsiburada",
+      title: "Hepsiburada",
+      eyebrow: "Pazaryeri",
+      description: "Katalog, stok/fiyat, siparis ve paketleme.",
+      icon: Send,
+      status: apiAvailable && connections?.hepsiburada.configured ? "Bagli" : hepsiburadaSavedAsDraft ? "Taslak kayitli" : "Bekliyor",
+      tone: apiAvailable && connections?.hepsiburada.configured ? "success" : "warning"
+    },
+    {
+      id: "gibPortal",
+      title: "e-Arsiv Portal",
+      eyebrow: "Fatura",
+      description: "Portal girisi, oturum ve baglanti.",
+      icon: LogIn,
+      status: apiAvailable && connections?.gibPortal.configured ? "Bagli" : gibSavedAsDraft ? "Taslak kayitli" : "Bekliyor",
+      tone: apiAvailable && connections?.gibPortal.configured ? "success" : "warning"
+    },
+    {
+      id: "gibDirect",
+      title: "GIB Direct",
+      eyebrow: "Fatura",
+      description: "Servis, imza ve yetki ayarlari.",
+      icon: LockKeyhole,
+      status: apiAvailable && connections?.gibDirect?.ready ? "Bagli" : "Eksik ayar",
+      tone: apiAvailable && connections?.gibDirect?.ready ? "success" : "warning"
+    }
+  ];
+  const activeControl = integrationControls.find((item) => item.id === activeIntegration) ?? null;
 
   return (
     <div className="view-stack">
@@ -126,214 +181,329 @@ export function IntegrationsView({
         setMessage={setMessage}
       />
 
-      <ConnectionWorkflow
-        apiAvailable={apiAvailable}
-        connections={connections}
-        draftCount={draftCount}
-        busyAction={busyAction}
-        onSaveTrendyol={onSaveTrendyol}
-        onSaveGibPortal={onSaveGibPortal}
-        onSaveGibDirect={onSaveGibDirect}
-        onOpenGibPortal={onOpenGibPortal}
-        onCloseGibPortalSession={onCloseGibPortalSession}
-      />
-
-      <HepsiburadaPanel
-        apiAvailable={apiAvailable}
-        connections={connections}
-        busyAction={busyAction}
-        hepsiburadaForm={hepsiburadaForm}
-        hepsiburadaSavedAsDraft={Boolean(hepsiburadaSavedAsDraft)}
-        products={hepsiburadaProducts}
-        orderLines={hepsiburadaOrderLines}
-        setHepsiburadaForm={setHepsiburadaForm}
-        onSaveHepsiburada={onSaveHepsiburada}
-        onSaveProduct={onSaveHepsiburadaProduct}
-        onUploadCatalog={onUploadHepsiburadaCatalog}
-        onCheckCatalogStatus={onCheckHepsiburadaCatalogStatus}
-        onSyncInventory={onSyncHepsiburadaInventory}
-        onUploadPrices={onUploadHepsiburadaPrices}
-        onUploadStocks={onUploadHepsiburadaStocks}
-        onSyncOrders={onSyncHepsiburadaOrders}
-        onCreateTestOrder={onCreateHepsiburadaTestOrder}
-        onPackageOrderLine={onPackageHepsiburadaOrderLine}
-      />
-
-      <section className="content-grid integration-forms">
-        <article className="surface-panel">
-          <div className="section-head">
-            <div>
-              <span className="micro-label">Canli pazaryeri</span>
-              <h2>Trendyol Partner</h2>
-            </div>
-            <span className={cx("status-pill", apiAvailable && connections?.trendyol.configured ? "success" : "warning")}>
-              {apiAvailable && connections?.trendyol.configured
-                ? "Bagli"
-                : trendyolSavedAsDraft
-                  ? "Taslak kayitli"
-                  : "Bekliyor"}
-            </span>
+      <section className="surface-panel">
+        <div className="section-head">
+          <div>
+            <span className="micro-label">Entegrasyonlar</span>
+            <h2>Baglanti kartlari</h2>
+            <p>Kartlardan birini acarak ilgili alanlari ve operasyon butonlarini sayfa ici modalda yonetin.</p>
           </div>
+          <PlugZap size={20} />
+        </div>
 
-          <form
-            className="settings-form"
-            onSubmit={(event) => {
-              event.preventDefault();
-              onSaveTrendyol();
-            }}
-          >
-            <label className="field">
-              <span>Satici ID</span>
-              <input
-                value={trendyolForm.sellerId}
-                onChange={(event) => setTrendyolForm((current) => ({ ...current, sellerId: event.target.value }))}
-                autoComplete="off"
-              />
-            </label>
-            <label className="field">
-              <span>API Key</span>
-              <input
-                value={trendyolForm.apiKey ?? ""}
-                onChange={(event) => setTrendyolForm((current) => ({ ...current, apiKey: event.target.value }))}
-                placeholder={connections?.trendyol.apiKeyMasked ?? ""}
-                autoComplete="off"
-              />
-            </label>
-            <label className="field">
-              <span>API Secret</span>
-              <input
-                type="password"
-                value={trendyolForm.apiSecret ?? ""}
-                onChange={(event) => setTrendyolForm((current) => ({ ...current, apiSecret: event.target.value }))}
-                placeholder={connections?.trendyol.apiSecretSaved ? "Kayitli" : ""}
-                autoComplete="new-password"
-              />
-            </label>
-            <div className="form-pair">
-              <label className="field">
-                <span>Storefront</span>
-                <input
-                  value={trendyolForm.storefrontCode}
-                  onChange={(event) => setTrendyolForm((current) => ({ ...current, storefrontCode: event.target.value }))}
-                />
-              </label>
-              <label className="field">
-                <span>Gun</span>
-                <input
-                  type="number"
-                  min={1}
-                  max={90}
-                  value={trendyolForm.lookbackDays}
-                  onChange={(event) => setTrendyolForm((current) => ({ ...current, lookbackDays: Number(event.target.value) }))}
-                />
-              </label>
-            </div>
-            <label className="field">
-              <span>User-Agent</span>
-              <input
-                value={trendyolForm.userAgent}
-                onChange={(event) => setTrendyolForm((current) => ({ ...current, userAgent: event.target.value }))}
-              />
-            </label>
-            <div className="form-actions">
-              <button className="ui-button ghost" type="button" onClick={onOpenTrendyolPartner}>
-                <KeyRound size={18} />
-                Partner ac
-              </button>
-              <button className="ui-button primary" type="submit" disabled={busyAction === "save-trendyol"}>
-                {busyAction === "save-trendyol" ? <Loader2 size={18} className="spin" /> : <LockKeyhole size={18} />}
-                Baglan
-              </button>
-            </div>
-          </form>
-        </article>
-
-        <article className="surface-panel">
-          <div className="section-head">
-            <div>
-              <span className="micro-label">Fatura saglayici</span>
-              <h2>e-Arsiv Portal</h2>
-            </div>
-            <span className={cx("status-pill", apiAvailable && connections?.gibPortal.configured ? "success" : "warning")}>
-              {apiAvailable && connections?.gibPortal.configured
-                ? "Bagli"
-                : gibSavedAsDraft
-                  ? "Taslak kayitli"
-                  : "Bekliyor"}
-            </span>
-          </div>
-
-          <form
-            className="settings-form"
-            onSubmit={(event) => {
-              event.preventDefault();
-              onSaveGibPortal();
-            }}
-          >
-            <label className="field">
-              <span>Kullanici</span>
-              <input
-                value={gibPortalForm.username}
-                onChange={(event) => setGibPortalForm((current) => ({ ...current, username: event.target.value }))}
-                autoComplete="username"
-              />
-            </label>
-            <label className="field">
-              <span>Sifre</span>
-              <input
-                type="password"
-                value={gibPortalForm.password ?? ""}
-                onChange={(event) => setGibPortalForm((current) => ({ ...current, password: event.target.value }))}
-                placeholder={connections?.gibPortal.passwordSaved ? "Kayitli" : ""}
-                autoComplete="current-password"
-              />
-            </label>
-            <label className="field">
-              <span>Portal URL</span>
-              <input
-                value={gibPortalForm.portalUrl}
-                onChange={(event) => setGibPortalForm((current) => ({ ...current, portalUrl: event.target.value }))}
-              />
-            </label>
-            <div className="form-actions">
-              <button className="ui-button ghost" type="button" onClick={onOpenGibPortal} disabled={busyAction === "open-gib"}>
-                {busyAction === "open-gib" ? <Loader2 size={18} className="spin" /> : <LogIn size={18} />}
-                Portal ac
-              </button>
-              <button className="ui-button ghost" type="button" onClick={onCloseGibPortalSession} disabled={busyAction === "logout-gib"}>
-                {busyAction === "logout-gib" ? <Loader2 size={18} className="spin" /> : <ShieldOff size={18} />}
-                Guvenli cikis
-              </button>
-              <button className="ui-button primary" type="submit" disabled={busyAction === "save-gib"}>
-                {busyAction === "save-gib" ? <Loader2 size={18} className="spin" /> : <LockKeyhole size={18} />}
-                Baglan
-              </button>
-            </div>
-          </form>
-        </article>
+        <div className="integration-control-grid">
+          {integrationControls.map((control) => (
+            <IntegrationControlCard
+              control={control}
+              isActive={activeIntegration === control.id}
+              key={control.id}
+              onOpen={setActiveIntegration}
+            />
+          ))}
+        </div>
       </section>
 
-      <GibDirectPanel
-        connections={connections}
-        busyAction={busyAction}
-        gibDirectForm={gibDirectForm}
-        setGibDirectForm={setGibDirectForm}
-        onSaveGibDirect={onSaveGibDirect}
-      />
+      <IntegrationModal control={activeControl} onClose={() => setActiveIntegration(null)}>
+        {activeIntegration === "trendyol" ? (
+          <TrendyolPanel
+            connections={connections}
+            busyAction={busyAction}
+            trendyolForm={trendyolForm}
+            setTrendyolForm={setTrendyolForm}
+            onOpenTrendyolPartner={onOpenTrendyolPartner}
+            onSaveTrendyol={onSaveTrendyol}
+          />
+        ) : null}
+        {activeIntegration === "hepsiburada" ? (
+          <HepsiburadaPanel
+            connections={connections}
+            busyAction={busyAction}
+            hepsiburadaForm={hepsiburadaForm}
+            products={hepsiburadaProducts}
+            orderLines={hepsiburadaOrderLines}
+            setHepsiburadaForm={setHepsiburadaForm}
+            onSaveHepsiburada={onSaveHepsiburada}
+            onSaveProduct={onSaveHepsiburadaProduct}
+            onUploadCatalog={onUploadHepsiburadaCatalog}
+            onCheckCatalogStatus={onCheckHepsiburadaCatalogStatus}
+            onSyncInventory={onSyncHepsiburadaInventory}
+            onUploadPrices={onUploadHepsiburadaPrices}
+            onUploadStocks={onUploadHepsiburadaStocks}
+            onSyncOrders={onSyncHepsiburadaOrders}
+            onCreateTestOrder={onCreateHepsiburadaTestOrder}
+            onPackageOrderLine={onPackageHepsiburadaOrderLine}
+          />
+        ) : null}
+        {activeIntegration === "gibPortal" ? (
+          <GibPortalPanel
+            connections={connections}
+            busyAction={busyAction}
+            gibPortalForm={gibPortalForm}
+            setGibPortalForm={setGibPortalForm}
+            onOpenGibPortal={onOpenGibPortal}
+            onCloseGibPortalSession={onCloseGibPortalSession}
+            onSaveGibPortal={onSaveGibPortal}
+          />
+        ) : null}
+        {activeIntegration === "gibDirect" ? (
+          <GibDirectPanel
+            connections={connections}
+            busyAction={busyAction}
+            gibDirectForm={gibDirectForm}
+            setGibDirectForm={setGibDirectForm}
+            onSaveGibDirect={onSaveGibDirect}
+          />
+        ) : null}
+      </IntegrationModal>
 
-      <ProviderSection title="Pazaryeri adaptorlari" description="Trendyol canli, diger kanallar ortak modele hazir." items={marketplaces} />
-      <ProviderSection title="Fatura saglayicilari" description={`Runtime saglayici: ${String(settings.invoiceProvider ?? "bekleniyor")}`} items={invoices} />
+      <ProviderSection title="Pazaryeri adaptorlari" description="Planli pazaryeri kanallari ortak modele hazir." items={plannedMarketplaces} />
+      <ProviderSection title="Fatura saglayicilari" description={`Runtime saglayici: ${String(settings.invoiceProvider ?? "bekleniyor")}`} items={plannedInvoices} />
       <ProviderSection title="Kargo firmalari" description="Kargo takip ve SLA katmani icin planli adapter yuzeyi." items={cargo} />
     </div>
   );
 }
 
+function IntegrationControlCard({
+  control,
+  isActive,
+  onOpen
+}: {
+  control: IntegrationControl;
+  isActive: boolean;
+  onOpen: (id: ActiveIntegration) => void;
+}) {
+  const Icon = control.icon;
+
+  return (
+    <button
+      aria-controls={isActive ? "integration-detail-modal" : undefined}
+      aria-haspopup="dialog"
+      className={cx("integration-control-card", control.tone === "success" ? "connected" : "pending")}
+      type="button"
+      onClick={() => onOpen(control.id)}
+    >
+      <span className="integration-control-icon">
+        <Icon size={19} />
+      </span>
+      <span className="integration-control-main">
+        <span className="micro-label">{control.eyebrow}</span>
+        <span className="integration-control-title">
+          <strong>{control.title}</strong>
+          <span className={cx("status-pill", control.tone)}>{control.status}</span>
+        </span>
+        <span className="integration-control-description">{control.description}</span>
+      </span>
+    </button>
+  );
+}
+
+function IntegrationModal({
+  control,
+  onClose,
+  children
+}: {
+  control: IntegrationControl | null;
+  onClose: () => void;
+  children: ReactNode;
+}) {
+  useEffect(() => {
+    if (!control) return;
+
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") onClose();
+    }
+
+    document.addEventListener("keydown", closeOnEscape);
+    return () => document.removeEventListener("keydown", closeOnEscape);
+  }, [control, onClose]);
+
+  if (!control) return null;
+
+  return (
+    <div className="integration-modal-backdrop" role="presentation" onMouseDown={onClose}>
+      <section
+        aria-labelledby="integration-modal-title"
+        aria-modal="true"
+        className="integration-modal"
+        id="integration-detail-modal"
+        role="dialog"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <div className="integration-modal-head">
+          <div>
+            <span className="micro-label">{control.eyebrow}</span>
+            <h2 id="integration-modal-title">{control.title}</h2>
+            <p>{control.description}</p>
+          </div>
+          <div className="integration-modal-actions">
+            <span className={cx("status-pill", control.tone)}>{control.status}</span>
+            <button className="icon-button" type="button" onClick={onClose} aria-label={`${control.title} modalini kapat`}>
+              <X size={18} />
+            </button>
+          </div>
+        </div>
+        <div className="integration-modal-body">{children}</div>
+      </section>
+    </div>
+  );
+}
+
+function TrendyolPanel({
+  connections,
+  busyAction,
+  trendyolForm,
+  setTrendyolForm,
+  onOpenTrendyolPartner,
+  onSaveTrendyol
+}: {
+  connections: ConnectionsSnapshot | null;
+  busyAction: string | null;
+  trendyolForm: TrendyolConnectionInput;
+  setTrendyolForm: Dispatch<SetStateAction<TrendyolConnectionInput>>;
+  onOpenTrendyolPartner: () => void;
+  onSaveTrendyol: () => void;
+}) {
+  return (
+    <form
+      className="settings-form"
+      onSubmit={(event) => {
+        event.preventDefault();
+        onSaveTrendyol();
+      }}
+    >
+      <label className="field">
+        <span>Satici ID</span>
+        <input
+          value={trendyolForm.sellerId}
+          onChange={(event) => setTrendyolForm((current) => ({ ...current, sellerId: event.target.value }))}
+          autoComplete="off"
+        />
+      </label>
+      <label className="field">
+        <span>API Key</span>
+        <input
+          value={trendyolForm.apiKey ?? ""}
+          onChange={(event) => setTrendyolForm((current) => ({ ...current, apiKey: event.target.value }))}
+          placeholder={connections?.trendyol.apiKeyMasked ?? ""}
+          autoComplete="off"
+        />
+      </label>
+      <label className="field">
+        <span>API Secret</span>
+        <input
+          type="password"
+          value={trendyolForm.apiSecret ?? ""}
+          onChange={(event) => setTrendyolForm((current) => ({ ...current, apiSecret: event.target.value }))}
+          placeholder={connections?.trendyol.apiSecretSaved ? "Kayitli" : ""}
+          autoComplete="new-password"
+        />
+      </label>
+      <div className="form-pair">
+        <label className="field">
+          <span>Storefront</span>
+          <input
+            value={trendyolForm.storefrontCode}
+            onChange={(event) => setTrendyolForm((current) => ({ ...current, storefrontCode: event.target.value }))}
+          />
+        </label>
+        <label className="field">
+          <span>Gun</span>
+          <input
+            type="number"
+            min={1}
+            max={90}
+            value={trendyolForm.lookbackDays}
+            onChange={(event) => setTrendyolForm((current) => ({ ...current, lookbackDays: Number(event.target.value) }))}
+          />
+        </label>
+      </div>
+      <label className="field">
+        <span>User-Agent</span>
+        <input value={trendyolForm.userAgent} onChange={(event) => setTrendyolForm((current) => ({ ...current, userAgent: event.target.value }))} />
+      </label>
+      <div className="form-actions">
+        <button className="ui-button ghost" type="button" onClick={onOpenTrendyolPartner}>
+          <KeyRound size={18} />
+          Partner ac
+        </button>
+        <button className="ui-button primary" type="submit" disabled={busyAction === "save-trendyol"}>
+          {busyAction === "save-trendyol" ? <Loader2 size={18} className="spin" /> : <LockKeyhole size={18} />}
+          Baglan
+        </button>
+      </div>
+    </form>
+  );
+}
+
+function GibPortalPanel({
+  connections,
+  busyAction,
+  gibPortalForm,
+  setGibPortalForm,
+  onOpenGibPortal,
+  onCloseGibPortalSession,
+  onSaveGibPortal
+}: {
+  connections: ConnectionsSnapshot | null;
+  busyAction: string | null;
+  gibPortalForm: GibPortalConnectionInput;
+  setGibPortalForm: Dispatch<SetStateAction<GibPortalConnectionInput>>;
+  onOpenGibPortal: () => void;
+  onCloseGibPortalSession: () => void;
+  onSaveGibPortal: () => void;
+}) {
+  return (
+    <form
+      className="settings-form"
+      onSubmit={(event) => {
+        event.preventDefault();
+        onSaveGibPortal();
+      }}
+    >
+      <label className="field">
+        <span>Kullanici</span>
+        <input
+          value={gibPortalForm.username}
+          onChange={(event) => setGibPortalForm((current) => ({ ...current, username: event.target.value }))}
+          autoComplete="username"
+        />
+      </label>
+      <label className="field">
+        <span>Sifre</span>
+        <input
+          type="password"
+          value={gibPortalForm.password ?? ""}
+          onChange={(event) => setGibPortalForm((current) => ({ ...current, password: event.target.value }))}
+          placeholder={connections?.gibPortal.passwordSaved ? "Kayitli" : ""}
+          autoComplete="current-password"
+        />
+      </label>
+      <label className="field">
+        <span>Portal URL</span>
+        <input value={gibPortalForm.portalUrl} onChange={(event) => setGibPortalForm((current) => ({ ...current, portalUrl: event.target.value }))} />
+      </label>
+      <div className="form-actions">
+        <button className="ui-button ghost" type="button" onClick={onOpenGibPortal} disabled={busyAction === "open-gib"}>
+          {busyAction === "open-gib" ? <Loader2 size={18} className="spin" /> : <LogIn size={18} />}
+          Portal ac
+        </button>
+        <button className="ui-button ghost" type="button" onClick={onCloseGibPortalSession} disabled={busyAction === "logout-gib"}>
+          {busyAction === "logout-gib" ? <Loader2 size={18} className="spin" /> : <ShieldOff size={18} />}
+          Guvenli cikis
+        </button>
+        <button className="ui-button primary" type="submit" disabled={busyAction === "save-gib"}>
+          {busyAction === "save-gib" ? <Loader2 size={18} className="spin" /> : <LockKeyhole size={18} />}
+          Baglan
+        </button>
+      </div>
+    </form>
+  );
+}
+
 function HepsiburadaPanel({
-  apiAvailable,
   connections,
   busyAction,
   hepsiburadaForm,
-  hepsiburadaSavedAsDraft,
   products,
   orderLines,
   setHepsiburadaForm,
@@ -348,11 +518,9 @@ function HepsiburadaPanel({
   onCreateTestOrder,
   onPackageOrderLine
 }: {
-  apiAvailable: boolean;
   connections: ConnectionsSnapshot | null;
   busyAction: string | null;
   hepsiburadaForm: HepsiburadaConnectionInput;
-  hepsiburadaSavedAsDraft: boolean;
   products: HepsiburadaProductListItem[];
   orderLines: HepsiburadaOrderLineListItem[];
   setHepsiburadaForm: Dispatch<SetStateAction<HepsiburadaConnectionInput>>;
@@ -367,7 +535,6 @@ function HepsiburadaPanel({
   onCreateTestOrder: () => void;
   onPackageOrderLine: (id: string) => void;
 }) {
-  const connected = Boolean(apiAvailable && connections?.hepsiburada.configured);
   const [trackingId, setTrackingId] = useState("");
   const [editingId, setEditingId] = useState<string | undefined>();
   const [productForm, setProductForm] = useState({
@@ -426,18 +593,7 @@ function HepsiburadaPanel({
   }
 
   return (
-    <section className="surface-panel">
-      <div className="section-head">
-        <div>
-          <span className="micro-label">Canli pazaryeri</span>
-          <h2>Hepsiburada</h2>
-          <p>Katalog trackingId, stok/fiyat upload, paketleme ve fatura linki akisi ayni panelden yonetilir.</p>
-        </div>
-        <span className={cx("status-pill", connected ? "success" : "warning")}>
-          {connected ? "Bagli" : hepsiburadaSavedAsDraft ? "Taslak kayitli" : "Bekliyor"}
-        </span>
-      </div>
-
+    <>
       <div className="content-grid integration-forms">
         <form
           className="settings-form"
@@ -725,7 +881,7 @@ function HepsiburadaPanel({
           </tbody>
         </table>
       </div>
-    </section>
+    </>
   );
 }
 
@@ -746,19 +902,7 @@ function GibDirectPanel({
   const missing = direct?.missing ?? [];
 
   return (
-    <section className="surface-panel">
-      <div className="section-head">
-        <div>
-          <span className="micro-label">Canli fatura yetkisi</span>
-          <h2>GIB direct imzalama ve servis</h2>
-          <p>
-            Ozel entegrator veya sahte cevap yok. UBL XML yerel mali muhur/NES/HSM komutu ile imzalanir ve GIB servis
-            sablonuna gore canli gonderilir.
-          </p>
-        </div>
-        <span className={cx("status-pill", direct?.ready ? "success" : "warning")}>{direct?.ready ? "Hazir" : "Eksik ayar"}</span>
-      </div>
-
+    <>
       {missing.length > 0 ? (
         <div className="form-alert">
           Eksik: {missing.join(", ")}. Bu alanlar tamamlanmadan fatura kesimi sahte basarili sayilmaz, hata verir.
@@ -962,127 +1106,7 @@ function GibDirectPanel({
           </button>
         </div>
       </form>
-    </section>
-  );
-}
-
-function ConnectionWorkflow({
-  apiAvailable,
-  connections,
-  draftCount,
-  busyAction,
-  onSaveTrendyol,
-  onSaveGibPortal,
-  onSaveGibDirect,
-  onOpenGibPortal,
-  onCloseGibPortalSession
-}: {
-  apiAvailable: boolean;
-  connections: ConnectionsSnapshot | null;
-  draftCount: number;
-  busyAction: string | null;
-  onSaveTrendyol: () => void;
-  onSaveGibPortal: () => void;
-  onSaveGibDirect: () => void;
-  onOpenGibPortal: () => void;
-  onCloseGibPortalSession: () => void;
-}) {
-  const trendyolConnected = Boolean(apiAvailable && connections?.trendyol.configured);
-  const gibConnected = Boolean(apiAvailable && connections?.gibPortal.configured);
-  const gibDirectReady = Boolean(apiAvailable && connections?.gibDirect?.ready);
-  const localTrendyolDraft = Boolean(!apiAvailable && connections?.trendyol.configured);
-  const localGibDraft = Boolean(!apiAvailable && connections?.gibPortal.configured);
-
-  return (
-    <section className="surface-panel">
-      <div className="section-head">
-        <div>
-          <span className="micro-label">Baglan</span>
-          <h2>Baglan ve faturalari kes</h2>
-          <p>Once Trendyol ve e-Arsiv bilgilerini bagla; sonra kesilmeyen faturalari Faturalar ekraninda kes.</p>
-        </div>
-        <PlugZap size={20} />
-      </div>
-
-      <div className="action-lanes connection-lanes">
-        <article className="action-lane">
-          <span>1</span>
-          <strong>Trendyol baglantisi</strong>
-          <small>
-            {trendyolConnected
-              ? "Canli Trendyol baglantisi hazir."
-              : localTrendyolDraft
-                ? "Bilgiler bu tarayicida kayitli; canli baglanti icin backend gerekiyor."
-                : "Satici ID, API key ve secret girilip baglanmali."}
-          </small>
-          <button className="ui-button primary compact" type="button" onClick={onSaveTrendyol} disabled={busyAction === "save-trendyol"}>
-            {busyAction === "save-trendyol" ? <Loader2 size={17} className="spin" /> : <KeyRound size={17} />}
-            Trendyol'a baglan
-          </button>
-        </article>
-
-        <article className="action-lane">
-          <span>2</span>
-          <strong>e-Arsiv baglantisi</strong>
-          <small>
-            {gibConnected
-              ? "e-Arsiv/GIB baglantisi hazir."
-              : localGibDraft
-                ? "Portal bilgileri bu tarayicida kayitli; canli baglanti icin backend gerekiyor."
-                : "GIB kullanici, sifre ve portal URL bilgileri girilip baglanmali."}
-          </small>
-          <div className="form-actions">
-            <button className="ui-button primary compact" type="button" onClick={onSaveGibPortal} disabled={busyAction === "save-gib"}>
-              {busyAction === "save-gib" ? <Loader2 size={17} className="spin" /> : <KeyRound size={17} />}
-              e-Arsiv'e baglan
-            </button>
-            <button className="ui-button ghost compact" type="button" onClick={onOpenGibPortal} disabled={busyAction === "open-gib"}>
-              {busyAction === "open-gib" ? <Loader2 size={17} className="spin" /> : <LogIn size={17} />}
-              Portal ac
-            </button>
-            <button className="ui-button ghost compact" type="button" onClick={onCloseGibPortalSession} disabled={busyAction === "logout-gib"}>
-              {busyAction === "logout-gib" ? <Loader2 size={17} className="spin" /> : <ShieldOff size={17} />}
-              Guvenli cikis
-            </button>
-          </div>
-        </article>
-
-        <article className="action-lane">
-          <span>3</span>
-          <strong>GIB direct imza</strong>
-          <small>
-            {gibDirectReady
-              ? "Canli fatura kesimi icin servis ve imza hazir."
-              : connections?.gibDirect?.message ?? "GIB direct yetki, servis ve imzalama ayarlari girilmeli."}
-          </small>
-          <button className="ui-button primary compact" type="button" onClick={onSaveGibDirect} disabled={busyAction === "save-gib-direct"}>
-            {busyAction === "save-gib-direct" ? <Loader2 size={17} className="spin" /> : <KeyRound size={17} />}
-            GIB direct baglan
-          </button>
-        </article>
-
-        <article className="action-lane">
-          <span>4</span>
-          <strong>Kesilmeyen faturalar</strong>
-          <small>
-            {draftCount > 0
-              ? `${draftCount} fatura taslagi bekliyor. Taslaklari secip fatura kesebilirsiniz.`
-              : "Fatura taslagi geldiginde burada is akisi Faturalar ekranina yonlenir."}
-          </small>
-          <a className="ui-button primary compact" href="/invoices">
-            <Send size={17} />
-            Faturalari ac
-          </a>
-        </article>
-      </div>
-
-      {!apiAvailable ? (
-        <div className="form-alert connection-alert">
-          Canli baglanma ve otomatik fatura kesme icin backend API URL tanimli olmali. Su anda bilgiler guvenli sekilde kaydedilir,
-          canli islem backend baglaninca aktif olur.
-        </div>
-      ) : null}
-    </section>
+    </>
   );
 }
 

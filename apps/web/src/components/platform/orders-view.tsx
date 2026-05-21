@@ -373,7 +373,7 @@ function OrderTableRow({ order, selected, onSelect }: { order: OrderListItem; se
             PDF
           </a>
         ) : order.invoiceId ? (
-          <span className="muted">PDF bekliyor</span>
+          <span className="muted">{order.invoiceSourceLabel?.includes("e-Arsiv") ? "portal imzali / PDF bekliyor" : "PDF bekliyor"}</span>
         ) : order.draftId ? (
           <a className="text-link" href={api.draftPdfUrl(order.draftId)} target="_blank" rel="noreferrer">
             Taslak
@@ -536,7 +536,9 @@ function OrderDetailPanel({
             Fatura PDF
           </a>
         ) : selectedOrder.invoice ? (
-          <span className="status-pill warning">PDF bekliyor</span>
+          <span className="status-pill warning">
+            {selectedOrder.invoice.sourceLabel?.includes("e-Arsiv") ? "portal imzali / PDF bekliyor" : "PDF bekliyor"}
+          </span>
         ) : selectedOrder.draft ? (
           <a className="ui-button primary" href={api.draftPdfUrl(selectedOrder.draft.id)} target="_blank" rel="noreferrer">
             <FileText size={18} />
@@ -561,6 +563,8 @@ function OrderDetailPanel({
               <strong>{invoice.invoiceNumber ?? "Fatura no yok"}</strong>
               <small>
                 {sourceLabel(invoice.source)} · {invoice.invoiceDate ? formatDateTime(invoice.invoiceDate) : "Tarih yok"}
+                {invoice.status ? ` · Portal durum: ${invoice.status}` : ""}
+                {invoice.matchReason ? ` · Eslesme: ${invoice.matchReason}` : ""}
               </small>
               <span>{invoice.totalPayableCents ? money(invoice.totalPayableCents, invoice.currency) : "Tutar yok"}</span>
             </div>

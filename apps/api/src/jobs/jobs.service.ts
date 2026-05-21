@@ -1,9 +1,43 @@
-import { BadRequestException, Inject, Injectable, OnModuleDestroy } from "@nestjs/common";
+import { BadRequestException, Inject, Injectable, NotFoundException, OnModuleDestroy } from "@nestjs/common";
 import { DraftStatus, JobStatus, Prisma } from "@prisma/client";
 import { Queue } from "bullmq";
 import IORedis from "ioredis";
+import { ExternalInvoicesService } from "../external-invoices/external-invoices.service";
 import { InvoiceService } from "../invoice/invoice.service";
+import { OrdersService } from "../orders/orders.service";
 import { PrismaService } from "../prisma/prisma.service";
+import { TrendyolService } from "../trendyol/trendyol.service";
+
+type JsonRecord = Record<string, any>;
+
+function jsonRecord(value: unknown): JsonRecord {
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as JsonRecord) : {};
+}
+
+function stripLargeJobResponse(value: JsonRecord = {}) {
+  const { invoices: _invoices, records: _records, ...rest } = value;
+  return rest;
+}
+
+function stripLargeJobPayload(value: JsonRecord = {}) {
+  const { records: _records, ...rest } = value;
+  return rest;
+}
+
+function mapJob(job: any) {
+  return {
+    id: job.id,
+    type: job.type,
+    target: job.target,
+    status: job.status,
+    attempts: job.attempts,
+    lastError: job.lastError ?? undefined,
+    payload: stripLargeJobPayload(jsonRecord(job.payload)),
+    response: stripLargeJobResponse(jsonRecord(job.response)),
+    createdAt: job.createdAt.toISOString(),
+    updatedAt: job.updatedAt.toISOString()
+  };
+}
 
 @Injectable()
 export class JobsService implements OnModuleDestroy {
@@ -13,7 +47,10 @@ export class JobsService implements OnModuleDestroy {
 
   constructor(
     @Inject(PrismaService) private readonly prisma: PrismaService,
-    @Inject(InvoiceService) private readonly invoiceService: InvoiceService
+    @Inject(InvoiceService) private readonly invoiceService: InvoiceService,
+    @Inject(OrdersService) private readonly ordersService: OrdersService,
+    @Inject(ExternalInvoicesService) private readonly externalInvoices: ExternalInvoicesService,
+    @Inject(TrendyolService) private readonly trendyol: TrendyolService
   ) {
     if (this.syncMode) {
       return;
@@ -138,16 +175,186 @@ export class JobsService implements OnModuleDestroy {
       take: 200
     });
 
-    return jobs.map((job) => ({
-      id: job.id,
-      type: job.type,
-      target: job.target,
-      status: job.status,
-      attempts: job.attempts,
-      lastError: job.lastError ?? undefined,
-      createdAt: job.createdAt.toISOString(),
-      updatedAt: job.updatedAt.toISOString()
-    }));
+    return jobs.map(mapJob);
+  }
+
+  async getJob(id: string) {
+    const job = await this.prisma.integrationJob.findUnique({ where: { id } });
+    if (!job) throw new NotFoundException("Islem bulunamadi.");
+    return mapJob(job);
+  }
+
+  async startTrendyolSyncJob() {
+    const end = new Date();
+    const lookbackDays = Number(process.env.TRENDYOL_LOOKBACK_DAYS ?? 14);
+    const start = new Date(end.getTime() - lookbackDays * 24 * 60 * 60 * 1000);
+    const job = await this.prisma.integrationJob.create({
+      data: {
+        type: "trendyol.sync",
+        target: "trendyol",
+        status: JobStatus.PENDING,
+        payload: {
+          kind: "trendyol-sync",
+          phase: "orders",
+          startDate: start.toISOString(),
+          endDate: end.toISOString(),
+          nextCursor: undefined,
+          page: 0
+        } as Prisma.InputJsonValue,
+        response: {
+          message: "Trendyol siparis yenileme ve fatura izi yakalama baslatildi."
+        } as Prisma.InputJsonValue
+      }
+    });
+    return mapJob(job);
+  }
+
+  async startGibPortalApplyJob(input: JsonRecord) {
+    const job = await this.prisma.integrationJob.create({
+      data: {
+        type: "gib-portal.apply",
+        target: "gib-portal",
+        status: JobStatus.PENDING,
+        payload: {
+          kind: "gib-portal-apply",
+          phase: "query",
+          input
+        } as Prisma.InputJsonValue,
+        response: {
+          message: "e-Arsiv portal guvenli uygulama baslatildi."
+        } as Prisma.InputJsonValue
+      }
+    });
+    return mapJob(job);
+  }
+
+  async runNextJob(id: string) {
+    const job = await this.prisma.integrationJob.findUnique({ where: { id } });
+    if (!job) throw new NotFoundException("Islem bulunamadi.");
+    if (job.status === JobStatus.SUCCESS || job.status === JobStatus.FAILED) return mapJob(job);
+
+    try {
+      if (job.type === "trendyol.sync") return this.runNextTrendyolJob(job);
+      if (job.type === "gib-portal.apply") return this.runNextGibPortalApplyJob(job);
+      throw new BadRequestException("Bu islem tipi parca parca calistirilamaz.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Islem tamamlanamadi.";
+      const failed = await this.prisma.integrationJob.update({
+        where: { id },
+        data: {
+          status: JobStatus.FAILED,
+          lastError: message,
+          response: {
+            ...stripLargeJobResponse(jsonRecord(job.response)),
+            message
+          } as Prisma.InputJsonValue
+        }
+      });
+      return mapJob(failed);
+    }
+  }
+
+  private async runNextTrendyolJob(job: any) {
+    const payload = jsonRecord(job.payload);
+    const response = stripLargeJobResponse(jsonRecord(job.response));
+    const phase = payload.phase ?? "orders";
+
+    if (phase === "orders") {
+      const page = await this.trendyol.fetchDeliveredPackagePage({
+        startDate: payload.startDate,
+        endDate: payload.endDate,
+        nextCursor: payload.nextCursor
+      });
+      const orderResult = await this.ordersService.syncDeliveredOrderPackages(page.content ?? []);
+      const nextResponse = {
+        ...response,
+        packageCount: Number(response.packageCount ?? 0) + orderResult.packageCount,
+        ordersUpserted: Number(response.ordersUpserted ?? 0) + orderResult.upserted,
+        draftsCreated: Number(response.draftsCreated ?? 0) + orderResult.draftsCreated,
+        draftsUpdated: Number(response.draftsUpdated ?? 0) + orderResult.draftsUpdated,
+        message: page.nextCursor
+          ? "Trendyol siparisleri yenileniyor; fatura izi islemeye hazirlaniyor."
+          : "Trendyol siparisleri yenilendi; fatura izi isleniyor."
+      };
+      const nextPayload = {
+        ...payload,
+        nextCursor: page.nextCursor,
+        page: Number(payload.page ?? 0) + 1,
+        phase: page.nextCursor ? "orders" : "invoice-metadata"
+      };
+
+      if (page.nextCursor) {
+        const updated = await this.prisma.integrationJob.update({
+          where: { id: job.id },
+          data: {
+            status: JobStatus.PROCESSING,
+            attempts: job.attempts + 1,
+            payload: nextPayload as Prisma.InputJsonValue,
+            response: nextResponse as Prisma.InputJsonValue
+          }
+        });
+        return mapJob(updated);
+      }
+
+      const invoiceResult = await this.externalInvoices.syncTrendyolMetadata({ includeInvoices: false });
+      const completed = await this.prisma.integrationJob.update({
+        where: { id: job.id },
+        data: {
+          status: JobStatus.SUCCESS,
+          attempts: job.attempts + 1,
+          payload: { ...nextPayload, phase: "done" } as Prisma.InputJsonValue,
+          response: {
+            ...nextResponse,
+            externalInvoicesImported: invoiceResult.imported,
+            externalInvoicesMatched: invoiceResult.matched,
+            externalInvoicesUnmatched: invoiceResult.unmatched,
+            message:
+              invoiceResult.imported > 0
+                ? `${invoiceResult.imported} Trendyol fatura izi yakalandi; ${invoiceResult.matched} tanesi siparisle eslesti.`
+                : "Trendyol siparis verisinde fatura izi henuz yok."
+          } as Prisma.InputJsonValue
+        }
+      });
+      return mapJob(completed);
+    }
+
+    const invoiceResult = await this.externalInvoices.syncTrendyolMetadata({ includeInvoices: false });
+    const completed = await this.prisma.integrationJob.update({
+      where: { id: job.id },
+      data: {
+        status: JobStatus.SUCCESS,
+        attempts: job.attempts + 1,
+        payload: { ...payload, phase: "done" } as Prisma.InputJsonValue,
+        response: {
+          ...response,
+          externalInvoicesImported: invoiceResult.imported,
+          externalInvoicesMatched: invoiceResult.matched,
+          externalInvoicesUnmatched: invoiceResult.unmatched,
+          message:
+            invoiceResult.imported > 0
+              ? `${invoiceResult.imported} Trendyol fatura izi yakalandi; ${invoiceResult.matched} tanesi siparisle eslesti.`
+              : "Trendyol siparis verisinde fatura izi henuz yok."
+        } as Prisma.InputJsonValue
+      }
+    });
+    return mapJob(completed);
+  }
+
+  private async runNextGibPortalApplyJob(job: any) {
+    const step = await this.externalInvoices.runGibPortalApplyJobStep(jsonRecord(job.payload), stripLargeJobResponse(jsonRecord(job.response)));
+    const updated = await this.prisma.integrationJob.update({
+      where: { id: job.id },
+      data: {
+        status: step.done ? JobStatus.SUCCESS : JobStatus.PROCESSING,
+        attempts: job.attempts + 1,
+        payload: step.payload as Prisma.InputJsonValue,
+        response: {
+          ...stripLargeJobResponse(step.response),
+          message: step.message
+        } as Prisma.InputJsonValue
+      }
+    });
+    return mapJob(updated);
   }
 
   async onModuleDestroy() {

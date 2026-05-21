@@ -66,7 +66,8 @@ export function PlatformApp({ view }: PlatformAppProps) {
               onIssue={platform.issueDrafts}
               onUploadPortalDrafts={platform.uploadPortalDrafts}
               onImportExternalInvoices={(source, records) => void platform.importExternalInvoices(source, records)}
-              onSyncGibExternalInvoices={(days) => void platform.syncGibExternalInvoices(days)}
+              onPreviewGibExternalInvoices={platform.previewGibExternalInvoices}
+              onApplyGibExternalInvoices={platform.applyGibExternalInvoices}
               onSyncTrendyolExternalInvoices={() => void platform.syncTrendyolExternalInvoices()}
               onReconcileExternalInvoices={() => void platform.reconcileExternalInvoices()}
               onMatchExternalInvoice={(id, target) => void platform.matchExternalInvoice(id, target)}
@@ -83,7 +84,6 @@ export function PlatformApp({ view }: PlatformAppProps) {
               ownerUsername={session.username}
               connections={snapshot.connections}
               settings={snapshot.settings}
-              draftCount={snapshot.drafts.length}
               busyAction={platform.busyAction}
               apiAvailable={platform.apiAvailable}
               trendyolForm={platform.trendyolForm}

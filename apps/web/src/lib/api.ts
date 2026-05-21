@@ -1,6 +1,7 @@
 import type {
   ExternalInvoiceListItem,
   ExternalInvoiceSource,
+  ExternalInvoiceSyncResult,
   HepsiburadaOrderLineListItem,
   HepsiburadaProductListItem,
   IntegrationJobListItem,
@@ -174,19 +175,6 @@ export interface AuthSessionResponse {
   expiresAt?: string;
 }
 
-export interface ExternalInvoiceSyncResult {
-  imported: number;
-  matched: number;
-  unmatched: number;
-  promoted?: number;
-  trendyolSent?: number;
-  trendyolAlreadySent?: number;
-  trendyolFailed?: number;
-  pdfMissing?: number;
-  message?: string;
-  invoices: ExternalInvoiceListItem[];
-}
-
 export interface EarsivPortalSessionResponse {
   portalUrl: string;
   launchUrl: string;
@@ -346,6 +334,11 @@ function apiConnectionFailureMessage(url: string, error: unknown) {
   return error instanceof Error ? error : new Error("Canli API'ye baglanilamadi.");
 }
 
+export function isApiGatewayProxyError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  return /502|503|504/.test(message) && /Canli API yanit vermiyor|Bad Gateway|Gateway|proxy/i.test(message);
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   if (!API_AVAILABLE) {
     throw new Error("Canli API bagli degil. Backend deploy edilince bu aksiyon aktif olacak.");
@@ -441,6 +434,11 @@ export const api = {
   invoices: () => request<InvoiceListItem[]>("/invoices"),
   externalInvoices: () => request<ExternalInvoiceListItem[]>("/external-invoices"),
   jobs: () => request<IntegrationJobListItem[]>("/jobs"),
+  job: (id: string) => request<IntegrationJobListItem>(`/jobs/${encodeURIComponent(id)}`),
+  runJobNext: (id: string) =>
+    request<IntegrationJobListItem>(`/jobs/${encodeURIComponent(id)}/run-next`, {
+      method: "POST"
+    }),
   settings: () => request<{ runtime: Record<string, unknown> }>("/settings"),
   connections: () => request<ConnectionsSnapshot>("/settings/connections"),
   saveTrendyolConnection: (input: TrendyolConnectionInput) =>
@@ -505,14 +503,33 @@ export const api = {
       method: "POST",
       body: JSON.stringify(source ? { source } : {})
     }),
-  syncGibExternalInvoices: (input: { days?: number; startDate?: string; endDate?: string }) =>
+  syncGibExternalInvoices: (input: { days?: number; startDate?: string; endDate?: string; repairMissingDrafts?: boolean; repairOrderNumber?: string }) =>
     request<ExternalInvoiceSyncResult>("/external-invoices/sync/gib-portal", {
+      method: "POST",
+      body: JSON.stringify(input)
+    }),
+  previewGibExternalInvoices: (input: { days?: number; startDate?: string; endDate?: string; repairMissingDrafts?: boolean; repairOrderNumber?: string }) =>
+    request<ExternalInvoiceSyncResult>("/external-invoices/sync/gib-portal/preview", {
+      method: "POST",
+      body: JSON.stringify(input)
+    }),
+  applyGibExternalInvoices: (input: { days?: number; startDate?: string; endDate?: string; repairMissingDrafts?: boolean; repairOrderNumber?: string }) =>
+    request<ExternalInvoiceSyncResult>("/external-invoices/sync/gib-portal/apply", {
       method: "POST",
       body: JSON.stringify(input)
     }),
   syncTrendyolExternalInvoices: () =>
     request<ExternalInvoiceSyncResult>("/external-invoices/sync/trendyol", {
       method: "POST"
+    }),
+  startTrendyolExternalInvoiceJob: () =>
+    request<IntegrationJobListItem>("/external-invoices/sync/trendyol/jobs", {
+      method: "POST"
+    }),
+  startGibApplyJob: (input: { days?: number; startDate?: string; endDate?: string; repairMissingDrafts?: boolean; repairOrderNumber?: string }) =>
+    request<IntegrationJobListItem>("/external-invoices/sync/gib-portal/apply/jobs", {
+      method: "POST",
+      body: JSON.stringify(input)
     }),
   hepsiburadaCatalogUpload: () =>
     request<{ productCount: number; trackingId: string; response: unknown }>("/integrations/hepsiburada/catalog/upload", {
@@ -601,6 +618,10 @@ export const api = {
       externalInvoicesImported?: number;
       externalInvoicesMatched?: number;
     }>("/sync/trendyol", { method: "POST" }),
+  startTrendyolSyncJob: () =>
+    request<IntegrationJobListItem>("/sync/trendyol/jobs", {
+      method: "POST"
+    }),
   approve: (id: string) => request(`/invoice-drafts/${id}/approve`, { method: "POST" }),
   issue: (draftIds: string[]) =>
     request<{

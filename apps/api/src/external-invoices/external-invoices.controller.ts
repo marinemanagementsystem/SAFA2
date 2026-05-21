@@ -18,7 +18,10 @@ const reconcileSchema = z.object({
 const syncGibSchema = z.object({
   days: z.coerce.number().int().min(1).max(90).default(30),
   startDate: z.string().optional(),
-  endDate: z.string().optional()
+  endDate: z.string().optional(),
+  mode: z.enum(["preview", "apply"]).optional(),
+  repairMissingDrafts: z.boolean().optional(),
+  repairOrderNumber: z.string().optional()
 });
 
 const manualMatchSchema = z
@@ -56,7 +59,19 @@ export class ExternalInvoicesController {
   @Post("external-invoices/sync/gib-portal")
   syncGibPortal(@Body() body: unknown) {
     const parsed = syncGibSchema.parse(body ?? {});
-    return this.externalInvoices.syncGibPortal(parsed);
+    return this.externalInvoices.syncGibPortal({ ...parsed, mode: "apply" });
+  }
+
+  @Post("external-invoices/sync/gib-portal/preview")
+  previewGibPortal(@Body() body: unknown) {
+    const parsed = syncGibSchema.parse(body ?? {});
+    return this.externalInvoices.previewGibPortalSync(parsed);
+  }
+
+  @Post("external-invoices/sync/gib-portal/apply")
+  applyGibPortal(@Body() body: unknown) {
+    const parsed = syncGibSchema.parse(body ?? {});
+    return this.externalInvoices.applyGibPortalSync(parsed);
   }
 
   @Post("external-invoices/sync/trendyol")

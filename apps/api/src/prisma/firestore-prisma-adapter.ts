@@ -595,6 +595,10 @@ class ExternalInvoiceDelegate extends BaseDelegate {
 }
 
 class IntegrationJobDelegate extends BaseDelegate {
+  async findUnique(args: { where: { id: string } }) {
+    return this.store.get(firestoreCollections.integrationJobs, args.where.id);
+  }
+
   async create(args: { data: AnyRecord }) {
     const id = args.data.id ?? newId();
     const created = {

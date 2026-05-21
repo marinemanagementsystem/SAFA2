@@ -3,6 +3,7 @@
 import type {
   ExternalInvoiceListItem,
   ExternalInvoiceSource,
+  ExternalInvoiceSyncResult,
   HepsiburadaOrderLineListItem,
   HepsiburadaProductListItem,
   IntegrationJobListItem,
@@ -21,6 +22,7 @@ import {
   HepsiburadaProductInput,
   GibDirectConnectionInput,
   GibPortalConnectionInput,
+  isApiGatewayProxyError,
   TrendyolConnectionInput
 } from "../../lib/api";
 import { money } from "../../lib/platform/format";
@@ -108,6 +110,31 @@ const trendyolDraftStorageKey = "safa.trendyolConnectionDraft.v1";
 const hepsiburadaDraftStorageKey = "safa.hepsiburadaConnectionDraft.v1";
 const gibPortalDraftStorageKey = "safa.gibPortalConnectionDraft.v1";
 const gibDirectDraftStorageKey = "safa.gibDirectConnectionDraft.v1";
+const platformSnapshotCacheFreshMs = 5_000;
+
+interface PlatformSnapshotCache {
+  snapshot: PlatformSnapshot;
+  trendyolForm: TrendyolConnectionInput;
+  hepsiburadaForm: HepsiburadaConnectionInput;
+  gibPortalForm: GibPortalConnectionInput;
+  gibDirectForm: GibDirectConnectionInput;
+  message: string;
+  storedAt: number;
+}
+
+let platformSnapshotCache: PlatformSnapshotCache | null = null;
+
+interface GibPortalSyncRequest {
+  days?: number;
+  startDate?: string;
+  endDate?: string;
+  repairMissingDrafts?: boolean;
+  repairOrderNumber?: string;
+}
+
+function gibPortalSyncRequest(input: number | GibPortalSyncRequest): GibPortalSyncRequest {
+  return typeof input === "number" ? { days: input } : input;
+}
 
 function errorMessage(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
@@ -137,18 +164,134 @@ function portalUploadedSummary(items: Array<{ orderNumber: string; shipmentPacka
   return ` Yuklenen fatura: ${visible}${extra}.`;
 }
 
-function externalSyncSummary(prefix: string, result: { imported: number; matched: number; promoted?: number; trendyolSent?: number; trendyolAlreadySent?: number; trendyolFailed?: number; pdfMissing?: number }) {
+function externalSyncSummary(
+  prefix: string,
+  result: {
+    imported: number;
+    matched: number;
+    checkedCount?: number;
+    signedFound?: number;
+    promoted?: number;
+    trendyolSent?: number;
+    trendyolAlreadySent?: number;
+    trendyolFailed?: number;
+    pdfMissing?: number;
+    followup?: { needsManualMatch?: number };
+  }
+) {
   const parts = [
-    `${result.imported ?? 0} kayit sorgulandi`,
+    `${result.checkedCount ?? result.imported ?? 0} kayit sorgulandi`,
+    result.signedFound ? `${result.signedFound} imzali bulundu` : undefined,
     `${result.matched ?? 0} eslesti`,
     result.promoted ? `${result.promoted} fatura arsive alindi` : undefined,
     result.trendyolSent ? `${result.trendyolSent} Trendyol'a gonderildi` : undefined,
     result.trendyolAlreadySent ? `${result.trendyolAlreadySent} Trendyol'da zaten vardi` : undefined,
     result.pdfMissing ? `${result.pdfMissing} PDF bekliyor` : undefined,
-    result.trendyolFailed ? `${result.trendyolFailed} Trendyol hatasi` : undefined
+    result.trendyolFailed ? `${result.trendyolFailed} Trendyol hatasi` : undefined,
+    result.followup?.needsManualMatch ? `${result.followup.needsManualMatch} manuel eslesme bekliyor` : undefined
   ].filter(Boolean);
 
   return `${prefix}: ${parts.join(", ")}.`;
+}
+
+function externalSyncErrorResult(message: string): ExternalInvoiceSyncResult {
+  return {
+    imported: 0,
+    matched: 0,
+    unmatched: 0,
+    checkedCount: 0,
+    signedFound: 0,
+    promoted: 0,
+    pdfMissing: 0,
+    trendyolSent: 0,
+    trendyolAlreadySent: 0,
+    trendyolFailed: 0,
+    message,
+    invoices: [],
+    timelineEvents: [
+      {
+        type: "needs_manual_match",
+        severity: "danger",
+        at: new Date().toISOString(),
+        message: message.includes("Canli API yanit vermiyor") ? "Canli API yanit vermiyor veya proxy yanlis adrese bagli." : message,
+        nextAction: "Backend/API durumunu kontrol edin; fatura durumu bu hata yuzunden basarisiz sayilmadi."
+      }
+    ],
+    followup: {
+      checkedCount: 0,
+      signedFound: 0,
+      promoted: 0,
+      pdfMissing: 0,
+      trendyolSent: 0,
+      trendyolAlreadySent: 0,
+      trendyolFailed: 0,
+      needsManualMatch: 0,
+      unmatchedReasons: [],
+      timelineEvents: [
+        {
+          type: "needs_manual_match",
+          severity: "danger",
+          at: new Date().toISOString(),
+          message: message.includes("Canli API yanit vermiyor") ? "Canli API yanit vermiyor veya proxy yanlis adrese bagli." : message,
+          nextAction: "Backend/API durumunu kontrol edin; fatura durumu bu hata yuzunden basarisiz sayilmadi."
+        }
+      ]
+    }
+  };
+}
+
+function wait(ms: number) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+function numberFromJobResponse(job: IntegrationJobListItem, key: string) {
+  const value = job.response?.[key];
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
+}
+
+function jobUserMessage(label: string, job: IntegrationJobListItem) {
+  const responseMessage = typeof job.response?.message === "string" ? job.response.message : "";
+  if (job.status === "SUCCESS") return responseMessage || `${label} tamamlandi.`;
+  if (job.status === "FAILED") return job.lastError || responseMessage || `${label} tamamlanamadi.`;
+  return responseMessage || `${label} isleniyor.`;
+}
+
+function externalSyncResultFromJob(job: IntegrationJobListItem): ExternalInvoiceSyncResult {
+  const message = jobUserMessage("e-Arsiv guvenli uygulama", job);
+  const checkedCount = numberFromJobResponse(job, "checkedCount");
+  const signedFound = numberFromJobResponse(job, "signedFound");
+  const promoted = numberFromJobResponse(job, "promoted");
+  const pdfMissing = numberFromJobResponse(job, "pdfMissing");
+  const trendyolSent = numberFromJobResponse(job, "trendyolSent");
+  const trendyolAlreadySent = numberFromJobResponse(job, "trendyolAlreadySent");
+  const trendyolFailed = numberFromJobResponse(job, "trendyolFailed");
+  const needsManualMatch = numberFromJobResponse(job, "needsManualMatch");
+  return {
+    imported: numberFromJobResponse(job, "imported"),
+    matched: numberFromJobResponse(job, "matched"),
+    unmatched: numberFromJobResponse(job, "unmatched"),
+    checkedCount,
+    signedFound,
+    promoted,
+    pdfMissing,
+    trendyolSent,
+    trendyolAlreadySent,
+    trendyolFailed,
+    message,
+    invoices: [],
+    followup: {
+      checkedCount,
+      signedFound,
+      promoted,
+      pdfMissing,
+      trendyolSent,
+      trendyolAlreadySent,
+      trendyolFailed,
+      needsManualMatch,
+      unmatchedReasons: [],
+      timelineEvents: []
+    }
+  };
 }
 
 function readStoredJson<T>(key: string, fallback: T): T {
@@ -328,7 +471,17 @@ export function usePlatformData() {
   const [gibPortalForm, setGibPortalForm] = useState<GibPortalConnectionInput>(initialGibPortalForm);
   const [gibDirectForm, setGibDirectForm] = useState<GibDirectConnectionInput>(initialGibDirectForm);
 
-  const load = useCallback(async () => {
+  const applyCachedSnapshot = useCallback((cached: PlatformSnapshotCache) => {
+    setSnapshot(cached.snapshot);
+    setTrendyolForm(cached.trendyolForm);
+    setHepsiburadaForm(cached.hepsiburadaForm);
+    setGibPortalForm(cached.gibPortalForm);
+    setGibDirectForm(cached.gibDirectForm);
+    setMessage(cached.message);
+    setLoadState("idle");
+  }, []);
+
+  const load = useCallback(async (options: { preferCache?: boolean; force?: boolean } = {}) => {
     if (!API_AVAILABLE) {
       const storedTrendyol = readStoredJson(trendyolDraftStorageKey, initialTrendyolForm);
       const storedHepsiburada = readStoredJson(hepsiburadaDraftStorageKey, initialHepsiburadaForm);
@@ -349,7 +502,15 @@ export function usePlatformData() {
       return;
     }
 
-    setLoadState("loading");
+    if (options.preferCache && platformSnapshotCache) {
+      applyCachedSnapshot(platformSnapshotCache);
+      const cacheAge = Date.now() - platformSnapshotCache.storedAt;
+      if (!options.force && cacheAge < platformSnapshotCacheFreshMs) {
+        return;
+      }
+    }
+
+    setLoadState(options.preferCache && platformSnapshotCache ? "idle" : "loading");
 
     try {
       const [orders, hepsiburadaProducts, hepsiburadaOrderLines, drafts, invoices, externalInvoices, jobs, settings, connections] = await Promise.all([
@@ -365,8 +526,7 @@ export function usePlatformData() {
       ]);
 
       const normalizedConnections = normalizeConnectionsSnapshot(connections);
-
-      setSnapshot({
+      const nextSnapshot = {
         orders,
         hepsiburadaProducts,
         hepsiburadaOrderLines,
@@ -376,8 +536,8 @@ export function usePlatformData() {
         jobs,
         settings: settings.runtime ?? {},
         connections: normalizedConnections
-      });
-      setTrendyolForm({
+      };
+      const nextTrendyolForm = {
         sellerId: normalizedConnections.trendyol.sellerId,
         apiKey: "",
         apiSecret: "",
@@ -385,8 +545,8 @@ export function usePlatformData() {
         baseUrl: normalizedConnections.trendyol.baseUrl,
         storefrontCode: normalizedConnections.trendyol.storefrontCode,
         lookbackDays: normalizedConnections.trendyol.lookbackDays
-      });
-      setHepsiburadaForm({
+      };
+      const nextHepsiburadaForm = {
         merchantId: normalizedConnections.hepsiburada.merchantId,
         username: normalizedConnections.hepsiburada.username,
         password: "",
@@ -397,13 +557,13 @@ export function usePlatformData() {
         orderBaseUrl: normalizedConnections.hepsiburada.orderBaseUrl,
         supplierBaseUrl: normalizedConnections.hepsiburada.supplierBaseUrl,
         lookbackDays: normalizedConnections.hepsiburada.lookbackDays
-      });
-      setGibPortalForm({
+      };
+      const nextGibPortalForm = {
         username: normalizedConnections.gibPortal.username,
         password: "",
         portalUrl: normalizedConnections.gibPortal.portalUrl
-      });
-      setGibDirectForm({
+      };
+      const nextGibDirectForm = {
         environment: normalizedConnections.gibDirect.environment,
         taxId: normalizedConnections.gibDirect.taxId,
         serviceUrl: normalizedConnections.gibDirect.serviceUrl,
@@ -425,21 +585,125 @@ export function usePlatformData() {
         clientKeyPath: "",
         clientPfxPath: "",
         clientCertPassword: ""
-      });
-      setMessage(
-        normalizedConnections.gibDirect.ready
-          ? "Canli entegrasyon modu acik. GIB direct fatura kesimi hazir."
-          : `Canli entegrasyon modu acik. ${normalizedConnections.gibDirect.message}`
-      );
+      };
+      const nextMessage = normalizedConnections.gibDirect.ready
+        ? "Canli entegrasyon modu acik. GIB direct fatura kesimi hazir."
+        : `Canli entegrasyon modu acik. ${normalizedConnections.gibDirect.message}`;
+
+      platformSnapshotCache = {
+        snapshot: nextSnapshot,
+        trendyolForm: nextTrendyolForm,
+        hepsiburadaForm: nextHepsiburadaForm,
+        gibPortalForm: nextGibPortalForm,
+        gibDirectForm: nextGibDirectForm,
+        message: nextMessage,
+        storedAt: Date.now()
+      };
+
+      setSnapshot(nextSnapshot);
+      setTrendyolForm(nextTrendyolForm);
+      setHepsiburadaForm(nextHepsiburadaForm);
+      setGibPortalForm(nextGibPortalForm);
+      setGibDirectForm(nextGibDirectForm);
+      setMessage(nextMessage);
       setLoadState("idle");
     } catch (error) {
       setLoadState("error");
       setMessage(errorMessage(error, "API baglantisi basarisiz."));
     }
+  }, [applyCachedSnapshot]);
+
+  const upsertJobInSnapshot = useCallback((job: IntegrationJobListItem) => {
+    setSnapshot((current) => {
+      const existing = current.jobs.filter((item) => item.id !== job.id);
+      return { ...current, jobs: [job, ...existing].slice(0, 200) };
+    });
   }, []);
 
+  const findLatestRelatedJob = useCallback(
+    async (types: string[]) => {
+      if (types.length === 0) return null;
+      const jobs = await api.jobs();
+      const job = jobs.find((item) => types.includes(item.type)) ?? null;
+      if (job) upsertJobInSnapshot(job);
+      return job;
+    },
+    [upsertJobInSnapshot]
+  );
+
+  const runIntegrationJob = useCallback(
+    async (
+      label: string,
+      busyKey: string,
+      startJob: () => Promise<IntegrationJobListItem>,
+      relatedTypes: string[] = []
+    ): Promise<IntegrationJobListItem | null> => {
+      if (!API_AVAILABLE) {
+        setMessage(apiOfflineMessage);
+        return null;
+      }
+
+      setBusyAction(busyKey);
+      let currentJob: IntegrationJobListItem | null = null;
+
+      const driveJob = async (initialJob: IntegrationJobListItem) => {
+        let job = initialJob;
+        upsertJobInSnapshot(job);
+        setMessage(jobUserMessage(label, job));
+
+        for (let attempt = 0; attempt < 120; attempt += 1) {
+          if (job.status === "SUCCESS" || job.status === "FAILED") break;
+
+          try {
+            job = await api.runJobNext(job.id);
+          } catch (error) {
+            if (!isApiGatewayProxyError(error)) throw error;
+            setMessage("Istek proxy'de kesildi; islem durumunu kontrol ediyorum. Fatura basarisiz sayilmadi.");
+            await wait(1200);
+            job = await api.job(job.id);
+          }
+
+          upsertJobInSnapshot(job);
+          setMessage(jobUserMessage(label, job));
+
+          if (job.status === "SUCCESS" || job.status === "FAILED") break;
+          await wait(350);
+        }
+
+        if (job.status === "SUCCESS") {
+          await load({ force: true });
+        }
+        return job;
+      };
+
+      try {
+        currentJob = await startJob();
+        currentJob = await driveJob(currentJob);
+        return currentJob;
+      } catch (error) {
+        if (isApiGatewayProxyError(error)) {
+          setMessage("Istek proxy'de kesildi; son islem durumunu kontrol ediyorum. Fatura basarisiz sayilmadi.");
+          const recoveredJob = await findLatestRelatedJob(relatedTypes);
+          if (recoveredJob) {
+            currentJob = await driveJob(recoveredJob);
+            return currentJob;
+          }
+          setMessage(
+            "Istek proxy'de kesildi; son islem bulunamadi. Yenile ile canli durumu kontrol edin. Fatura basarisiz sayilmadi."
+          );
+        } else {
+          setMessage(errorMessage(error, `${label} basarisiz.`));
+        }
+        return currentJob;
+      } finally {
+        setBusyAction(null);
+      }
+    },
+    [findLatestRelatedJob, load, upsertJobInSnapshot]
+  );
+
   useEffect(() => {
-    void load();
+    void load({ preferCache: true });
   }, [load]);
 
   useEffect(() => {
@@ -490,23 +754,19 @@ export function usePlatformData() {
       return;
     }
 
-    setBusyAction("sync");
-    setMessage("Trendyol senkronizasyonu baslatildi.");
-
-    try {
-      const result = await api.sync();
-      const externalText =
-        result.externalInvoicesImported && result.externalInvoicesImported > 0
-          ? ` ${result.externalInvoicesImported} Trendyol faturasi yakalandi, ${result.externalInvoicesMatched ?? 0} tanesi siparisle eslesti.`
-          : "";
-      setMessage(`${result.upserted} siparis guncellendi, ${result.draftsCreated} yeni taslak olustu.${externalText}`);
-      await load();
-    } catch (error) {
-      setMessage(errorMessage(error, "Trendyol senkronizasyonu basarisiz."));
-    } finally {
-      setBusyAction(null);
+    setMessage("Trendyol siparisleri yenileniyor; ardindan manuel eklenen fatura izleri islenecek.");
+    const job = await runIntegrationJob("Trendyol yenileme ve fatura izi", "sync", api.startTrendyolSyncJob, ["trendyol.sync"]);
+    if (job?.status === "SUCCESS") {
+      const imported = numberFromJobResponse(job, "externalInvoicesImported");
+      const matched = numberFromJobResponse(job, "externalInvoicesMatched");
+      const upserted = numberFromJobResponse(job, "ordersUpserted");
+      setMessage(
+        imported > 0
+          ? `${upserted} siparis guncellendi. ${imported} Trendyol fatura izi yakalandi, ${matched} tanesi siparisle eslesti.`
+          : `${upserted} siparis guncellendi. Trendyol siparis verisinde fatura izi henuz yok.`
+      );
     }
-  }, [load]);
+  }, [runIntegrationJob]);
 
   const approveDrafts = useCallback(
     async (draftIds: string[]) => {
@@ -524,7 +784,7 @@ export function usePlatformData() {
           await api.approve(id);
         }
         const nextMessage = `${draftIds.length} taslak onaylandi.`;
-        const resultMessage = `${nextMessage} Sonraki adim: GIB taslagina yukle veya Onayla ve fatura kes.`;
+        const resultMessage = `${nextMessage} Sonraki adim: GIB taslagina yukle; imza ve Trendyol aktarimi portal takip ekranindan izlenecek.`;
         setMessage(resultMessage);
         await load();
         return resultMessage;
@@ -821,26 +1081,57 @@ export function usePlatformData() {
     [load]
   );
 
-  const syncGibExternalInvoices = useCallback(
-    async (days: number) => {
+  const previewGibExternalInvoices = useCallback(
+    async (input: number | GibPortalSyncRequest): Promise<ExternalInvoiceSyncResult | null> => {
       if (!API_AVAILABLE) {
         setMessage(apiOfflineMessage);
-        return;
+        return externalSyncErrorResult(apiOfflineMessage);
       }
 
-      setBusyAction("external-gib-sync");
+      setBusyAction("external-gib-preview");
 
       try {
-        const result = await api.syncGibExternalInvoices({ days });
-        setMessage(externalSyncSummary("e-Arsiv sorgusu", result));
-        await load();
+        const result = await api.previewGibExternalInvoices(gibPortalSyncRequest(input));
+        setMessage(externalSyncSummary("e-Arsiv imza kontrolu", result));
+        return result;
       } catch (error) {
-        setMessage(errorMessage(error, "e-Arsiv harici fatura sorgusu basarisiz."));
+        const message = errorMessage(error, "e-Arsiv imza kontrolu basarisiz.");
+        setMessage(message);
+        return externalSyncErrorResult(message);
       } finally {
         setBusyAction(null);
       }
     },
-    [load]
+    []
+  );
+
+  const applyGibExternalInvoices = useCallback(
+    async (input: number | GibPortalSyncRequest): Promise<ExternalInvoiceSyncResult | null> => {
+      if (!API_AVAILABLE) {
+        setMessage(apiOfflineMessage);
+        return externalSyncErrorResult(apiOfflineMessage);
+      }
+
+      const job = await runIntegrationJob(
+        "e-Arsiv guvenli uygulama",
+        "external-gib-apply",
+        () => api.startGibApplyJob(gibPortalSyncRequest(input)),
+        ["gib-portal.apply"]
+      );
+      if (!job) return externalSyncErrorResult(apiOfflineMessage);
+      if (job.status === "FAILED") return externalSyncErrorResult(job.lastError ?? "e-Arsiv guvenli uygulama basarisiz.");
+      const result = externalSyncResultFromJob(job);
+      setMessage(externalSyncSummary("e-Arsiv guvenli uygulama", result));
+      return result;
+    },
+    [runIntegrationJob]
+  );
+
+  const syncGibExternalInvoices = useCallback(
+    async (days: number) => {
+      await applyGibExternalInvoices(days);
+    },
+    [applyGibExternalInvoices]
   );
 
   const syncTrendyolExternalInvoices = useCallback(async () => {
@@ -849,18 +1140,20 @@ export function usePlatformData() {
       return;
     }
 
-    setBusyAction("external-trendyol-sync");
-
-    try {
-      const result = await api.syncTrendyolExternalInvoices();
-      setMessage(result.message ?? externalSyncSummary("Trendyol fatura izi", result));
-      await load();
-    } catch (error) {
-      setMessage(errorMessage(error, "Trendyol harici fatura sorgusu basarisiz."));
-    } finally {
-      setBusyAction(null);
+    setMessage("Trendyol siparisleri yenileniyor; manuel eklenen fatura izleri sonra islenecek.");
+    const job = await runIntegrationJob("Trendyol fatura izi", "external-trendyol-sync", api.startTrendyolExternalInvoiceJob, [
+      "trendyol.sync"
+    ]);
+    if (job?.status === "SUCCESS") {
+      const imported = numberFromJobResponse(job, "externalInvoicesImported");
+      const matched = numberFromJobResponse(job, "externalInvoicesMatched");
+      setMessage(
+        imported > 0
+          ? `Trendyol fatura izi: ${imported} kayit yakalandi, ${matched} tanesi siparisle eslesti.`
+          : "Trendyol siparisleri yenilendi; Trendyol siparis verisinde fatura izi henuz yok."
+      );
     }
-  }, [load]);
+  }, [runIntegrationJob]);
 
   const reconcileExternalInvoices = useCallback(async () => {
     if (!API_AVAILABLE) {
@@ -1215,6 +1508,8 @@ export function usePlatformData() {
     logoutGibPortalSession,
     openTrendyolPartner,
     importExternalInvoices,
+    previewGibExternalInvoices,
+    applyGibExternalInvoices,
     syncGibExternalInvoices,
     syncTrendyolExternalInvoices,
     reconcileExternalInvoices,

@@ -208,6 +208,27 @@ export class OrdersService {
 
   async syncDeliveredOrders() {
     const packages = await this.trendyol.fetchDeliveredPackages();
+    const orderSync = await this.syncDeliveredOrderPackages(packages);
+    const trendyolInvoices = await this.externalInvoices.syncTrendyolMetadata();
+
+    await this.prisma.auditLog.create({
+      data: {
+        action: "trendyol.sync",
+        subjectType: "orders",
+        subjectId: "trendyol",
+        message: `${orderSync.upserted} Trendyol paketi senkronize edildi, ${orderSync.draftsCreated} taslak olusturuldu, ${orderSync.draftsUpdated} acik taslak guncellendi, ${trendyolInvoices.imported} Trendyol fatura kaydi yakalandi.`,
+        metadata: { ...orderSync, trendyolInvoices }
+      }
+    });
+
+    return {
+      ...orderSync,
+      externalInvoicesImported: trendyolInvoices.imported,
+      externalInvoicesMatched: trendyolInvoices.matched
+    };
+  }
+
+  async syncDeliveredOrderPackages(packages: Record<string, unknown>[]) {
     let upserted = 0;
     let draftsCreated = 0;
     let draftsUpdated = 0;
@@ -293,25 +314,11 @@ export class OrdersService {
       }
     }
 
-    const trendyolInvoices = await this.externalInvoices.syncTrendyolMetadata();
-
-    await this.prisma.auditLog.create({
-      data: {
-        action: "trendyol.sync",
-        subjectType: "orders",
-        subjectId: "trendyol",
-        message: `${upserted} Trendyol paketi senkronize edildi, ${draftsCreated} taslak olusturuldu, ${draftsUpdated} acik taslak guncellendi, ${trendyolInvoices.imported} Trendyol fatura kaydi yakalandi.`,
-        metadata: { packageCount: packages.length, upserted, draftsCreated, draftsUpdated, trendyolInvoices }
-      }
-    });
-
     return {
       packageCount: packages.length,
       upserted,
       draftsCreated,
-      draftsUpdated,
-      externalInvoicesImported: trendyolInvoices.imported,
-      externalInvoicesMatched: trendyolInvoices.matched
+      draftsUpdated
     };
   }
 }
