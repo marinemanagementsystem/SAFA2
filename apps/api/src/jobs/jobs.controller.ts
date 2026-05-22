@@ -49,6 +49,11 @@ export class JobsController {
     return this.jobsService.startGibPortalApplyJob(parsed);
   }
 
+  @Post("jobs/scheduled/gib-followup/run-next")
+  runScheduledGibFollowup() {
+    return this.jobsService.runScheduledGibFollowup();
+  }
+
   @Post("invoices/issue")
   issue(@Body() body: unknown) {
     const parsed = issueSchema.parse(body);

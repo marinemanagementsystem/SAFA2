@@ -17,10 +17,13 @@ export type GibPortalFollowupStatus =
   | "portal_uploaded"
   | "signature_pending"
   | "signed_found"
+  | "pdf_fetch_attempted"
+  | "pdf_saved"
   | "pdf_missing"
   | "archived"
   | "trendyol_sent"
   | "trendyol_failed"
+  | "trendyol_manual_detected"
   | "needs_manual_match";
 
 export type GibPortalFollowupSeverity = "info" | "success" | "warning" | "danger";

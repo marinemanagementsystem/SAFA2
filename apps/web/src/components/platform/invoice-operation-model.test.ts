@@ -1,8 +1,8 @@
 import type { ExternalInvoiceListItem, InvoiceDraftListItem, InvoiceListItem } from "@safa/shared";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { buildInvoiceOperationMetrics, buildInvoiceOperationRows } from "./invoice-operation-model";
 
-const deliveredAt = "2026-05-21T09:00:00.000Z";
+const deliveredAt = "2026-05-22T09:00:00.000Z";
 
 function draft(input: Partial<InvoiceDraftListItem> = {}): InvoiceDraftListItem {
   return {
@@ -61,6 +61,15 @@ function externalInvoice(input: Partial<ExternalInvoiceListItem> = {}): External
 }
 
 describe("buildInvoiceOperationRows", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-22T10:00:00+03:00"));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("keeps draft-only records visible and points to approval", () => {
     const [row] = buildInvoiceOperationRows({ drafts: [draft()], invoices: [], externalInvoices: [], jobs: [] });
 
@@ -86,6 +95,30 @@ describe("buildInvoiceOperationRows", () => {
     expect(row.queueKeys).toContain("external-found");
   });
 
+  it("keeps signed portal invoices without PDF actionable instead of marking them complete", () => {
+    const [row] = buildInvoiceOperationRows({
+      drafts: [],
+      invoices: [],
+      externalInvoices: [
+        externalInvoice({
+          orderNumber: undefined,
+          shipmentPackageId: undefined,
+          matchedOrderId: undefined,
+          matchedOrderNumber: undefined,
+          matchedShipmentPackageId: undefined,
+          pdfUrl: undefined,
+          requiresPdfUpload: false
+        })
+      ],
+      jobs: []
+    });
+
+    expect(row.statusLabel).toBe("PDF eksik");
+    expect(row.queueKeys).toContain("pdf-missing");
+    expect(row.nextAction.kind).not.toBe("none");
+    expect(row.nextAction.detail).not.toContain("yapilacak is yok");
+  });
+
   it("marks Trendyol-sent invoices as complete", () => {
     const [row] = buildInvoiceOperationRows({
       drafts: [draft({ status: "ISSUED" })],
@@ -103,6 +136,35 @@ describe("buildInvoiceOperationRows", () => {
     const metrics = buildInvoiceOperationMetrics(buildInvoiceOperationRows({ drafts: [], invoices: [], externalInvoices: [], jobs: [] }));
 
     expect(metrics).toEqual({
+      actionCount: 0,
+      portalSignatureCount: 0,
+      pdfMissingCount: 0,
+      externalFoundCount: 0,
+      marketplaceCount: 0
+    });
+  });
+
+  it("keeps pre-today invoices visible but out of operation queues", () => {
+    const rows = buildInvoiceOperationRows({
+      drafts: [],
+      invoices: [
+        invoice({
+          invoiceDate: "2026-05-21T09:00:00.000Z",
+          status: "TRENDYOL_SEND_FAILED",
+          pdfAvailable: false,
+          error: "Eski pazaryeri hatasi"
+        })
+      ],
+      externalInvoices: [],
+      jobs: []
+    });
+    const [row] = rows;
+
+    expect(row.statusLabel).toBe("Eski kayit");
+    expect(row.nextAction.kind).toBe("view-order");
+    expect(row.queueKeys).toEqual(["all"]);
+    expect(row.stages.pdf.state).toBe("idle");
+    expect(buildInvoiceOperationMetrics(rows)).toEqual({
       actionCount: 0,
       portalSignatureCount: 0,
       pdfMissingCount: 0,

@@ -111,6 +111,21 @@ export interface PortalProxySessionResult {
   message: string;
 }
 
+export interface PortalOfficialPdfLookup {
+  externalKey: string;
+  invoiceNumber?: string | null;
+  invoiceDate?: Date | null;
+  pdfUrl?: string | null;
+  raw?: unknown;
+}
+
+export interface PortalOfficialPdfResult {
+  buffer: Buffer;
+  pdfUrl?: string;
+  source: string;
+  raw?: unknown;
+}
+
 const GIB_PORTAL_LAUNCH_SESSION_KEY = "session.gibPortal.launch";
 const GIB_PORTAL_PROXY_SESSION_PREFIX = "session.gibPortal.proxy";
 const GIB_PORTAL_PROXY_LATEST_SESSION_KEY = "session.gibPortal.proxy.latest";
@@ -302,6 +317,127 @@ function findArrays(value: unknown, output: Record<string, unknown>[][] = []) {
   }
 
   return output;
+}
+
+function rawRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+}
+
+function firstString(values: unknown[]) {
+  for (const value of values) {
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return undefined;
+}
+
+function pickRawString(record: Record<string, unknown>, keys: string[]) {
+  for (const key of keys) {
+    const value = record[key];
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return undefined;
+}
+
+function looksLikePdfBuffer(buffer: Buffer) {
+  return buffer.subarray(0, 5).toString("utf8") === "%PDF-";
+}
+
+function dataUriPdf(value: string) {
+  const match = value.match(/^data:application\/pdf;base64,(.+)$/i);
+  if (!match) return undefined;
+  try {
+    const buffer = Buffer.from(match[1], "base64");
+    return looksLikePdfBuffer(buffer) ? buffer : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function base64Pdf(value: string) {
+  const text = value.replace(/\s+/g, "");
+  if (text.length < 32 || !/^[A-Za-z0-9+/]+=*$/.test(text)) return undefined;
+  try {
+    const buffer = Buffer.from(text, "base64");
+    return looksLikePdfBuffer(buffer) ? buffer : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function findPdfPayload(value: unknown): { buffer?: Buffer; url?: string; raw?: unknown } | undefined {
+  if (Buffer.isBuffer(value)) return looksLikePdfBuffer(value) ? { buffer: value, raw: value } : undefined;
+  if (typeof value === "string") {
+    const pdf = dataUriPdf(value) ?? base64Pdf(value);
+    if (pdf) return { buffer: pdf, raw: value };
+    if (/^https?:\/\//i.test(value) || /^\/.+/i.test(value)) {
+      const lower = value.toLocaleLowerCase("tr-TR");
+      if (lower.includes("pdf") || lower.includes("indir") || lower.includes("download")) return { url: value, raw: value };
+    }
+    return undefined;
+  }
+
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const found = findPdfPayload(item);
+      if (found) return found;
+    }
+    return undefined;
+  }
+
+  if (value && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    const priorityKeys = [
+      "pdf",
+      "pdfData",
+      "pdfBase64",
+      "belgePdf",
+      "documentPdf",
+      "downloadUrl",
+      "pdfUrl",
+      "faturaPdfUrl",
+      "invoicePdfUrl",
+      "url"
+    ];
+    for (const key of priorityKeys) {
+      const found = findPdfPayload(record[key]);
+      if (found) return { ...found, raw: value };
+    }
+    for (const item of Object.values(record)) {
+      const found = findPdfPayload(item);
+      if (found) return { ...found, raw: value };
+    }
+  }
+
+  return undefined;
+}
+
+function portalPdfPayloads(input: PortalOfficialPdfLookup) {
+  const raw = rawRecord(input.raw);
+  const uuid = firstString([
+    raw.faturaUuid,
+    raw.uuid,
+    raw.ettn,
+    raw.ETTN,
+    raw.ettnId,
+    input.externalKey
+  ]);
+  const belgeOid = pickRawString(raw, ["belgeOid", "faturaOid", "oid", "id"]);
+  const invoiceNumber = input.invoiceNumber ?? pickRawString(raw, ["faturaNo", "belgeNo", "seriSiraNo", "belgeNumarasi"]);
+  const invoiceDate = input.invoiceDate ? formatPortalDate(input.invoiceDate) : pickRawString(raw, ["faturaTarihi", "belgeTarihi", "tarih"]);
+  const base = {
+    ...(uuid ? { faturaUuid: uuid, uuid, ettn: uuid } : {}),
+    ...(belgeOid ? { belgeOid, faturaOid: belgeOid, oid: belgeOid } : {}),
+    ...(invoiceNumber ? { faturaNo: invoiceNumber, belgeNo: invoiceNumber, seriSiraNo: invoiceNumber, belgeNumarasi: invoiceNumber } : {}),
+    ...(invoiceDate ? { faturaTarihi: invoiceDate, belgeTarihi: invoiceDate, tarih: invoiceDate } : {})
+  };
+
+  return [
+    base,
+    { table: [base] },
+    { seciliFatura: base },
+    { belge: base },
+    { data: base }
+  ];
 }
 
 function stringifyResponseData(response: DispatchResponse) {
@@ -676,6 +812,73 @@ export class EarsivPortalService {
     );
   }
 
+  async downloadIssuedInvoicePdf(input: PortalOfficialPdfLookup): Promise<PortalOfficialPdfResult | undefined> {
+    const raw = rawRecord(input.raw);
+    const directUrl =
+      input.pdfUrl ??
+      pickRawString(raw, [
+        "pdfUrl",
+        "invoicePdfUrl",
+        "faturaPdfUrl",
+        "downloadUrl",
+        "pdf",
+        "faturaLinki"
+      ]);
+
+    const { connection, response } = await this.loginForOperation("SAFA live e-arsiv official PDF follow-up");
+    if (!response.token) {
+      throw new ServiceUnavailableException("e-Arsiv portali oturum tokeni donmedi; resmi PDF sorgusu baslatilamadi.");
+    }
+
+    if (directUrl && (/^https?:\/\//i.test(directUrl) || directUrl.startsWith("/"))) {
+      const direct = await this.downloadPdfUrl(connection.portalUrl, directUrl, "direct-pdf-url");
+      if (direct) return direct;
+    }
+
+    const payloads = portalPdfPayloads(input);
+    const candidates = [
+      { cmd: "EARSIV_PORTAL_FATURA_PDF_INDIR", pageName: "RG_TASLAKLAR" },
+      { cmd: "EARSIV_PORTAL_FATURA_INDIR", pageName: "RG_TASLAKLAR" },
+      { cmd: "EARSIV_PORTAL_FATURA_GORUNTULE", pageName: "RG_TASLAKLAR" },
+      { cmd: "EARSIV_PORTAL_FATURA_GOSTER", pageName: "RG_TASLAKLAR" },
+      { cmd: "EARSIV_PORTAL_FATURA_PDF_INDIR", pageName: "RG_ALICI_TASLAKLAR" },
+      { cmd: "EARSIV_PORTAL_FATURA_GORUNTULE", pageName: "RG_ALICI_TASLAKLAR" }
+    ];
+
+    for (const candidate of candidates) {
+      for (const payload of payloads) {
+        try {
+          const dispatch = await this.dispatch(
+            connection,
+            response.token,
+            candidate.cmd,
+            candidate.pageName,
+            payload,
+            "SAFA live e-arsiv official PDF follow-up"
+          );
+          if (dispatch.error) continue;
+
+          const found = findPdfPayload(dispatch.data ?? dispatch.result ?? dispatch.rows ?? dispatch);
+          if (found?.buffer) {
+            return {
+              buffer: found.buffer,
+              source: candidate.cmd,
+              raw: found.raw ?? dispatch
+            };
+          }
+          if (found?.url) {
+            const downloaded = await this.downloadPdfUrl(connection.portalUrl, found.url, candidate.cmd);
+            if (downloaded) return { ...downloaded, raw: found.raw ?? dispatch };
+          }
+        } catch {
+          continue;
+        }
+      }
+    }
+
+    return undefined;
+  }
+
   async createInvoiceDrafts(inputs: PortalDraftUploadInput[]): Promise<PortalDraftUploadResult[]> {
     if (inputs.length === 0) return [];
 
@@ -735,6 +938,34 @@ export class EarsivPortalService {
     }
 
     return results;
+  }
+
+  private async downloadPdfUrl(portalUrl: string, value: string, source: string): Promise<PortalOfficialPdfResult | undefined> {
+    try {
+      const target = new URL(value, new URL(portalUrl).origin);
+      const response = await axios.get<ArrayBuffer>(target.toString(), {
+        headers: {
+          Accept: "application/pdf,*/*",
+          "User-Agent": "SAFA live e-arsiv official PDF follow-up"
+        },
+        responseType: "arraybuffer",
+        timeout: 30_000,
+        maxContentLength: 10 * 1024 * 1024,
+        validateStatus: () => true
+      });
+      if (response.status < 200 || response.status >= 300) return undefined;
+
+      const buffer = Buffer.from(response.data);
+      if (!looksLikePdfBuffer(buffer) || buffer.length > 10 * 1024 * 1024) return undefined;
+
+      return {
+        buffer,
+        pdfUrl: target.toString(),
+        source
+      };
+    } catch {
+      return undefined;
+    }
   }
 
   private async rememberProxySession(

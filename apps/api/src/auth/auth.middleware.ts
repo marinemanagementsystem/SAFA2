@@ -24,8 +24,20 @@ function isPublicApiRequest(request: Request) {
   );
 }
 
+function isAuthorizedSchedulerRequest(request: Request) {
+  const path = requestPath(request);
+  if (path !== "/api/jobs/scheduled/gib-followup/run-next") return false;
+
+  const expected = process.env.SAFA_SCHEDULER_SECRET?.trim();
+  if (!expected) return false;
+
+  const value = request.headers["x-safa-scheduler-secret"];
+  const received = Array.isArray(value) ? value[0] : value;
+  return received === expected;
+}
+
 export function apiAuthMiddleware(request: AuthenticatedRequest, response: Response, next: NextFunction) {
-  if (request.method === "OPTIONS" || !isProtectedApiRequest(request) || isPublicApiRequest(request)) {
+  if (request.method === "OPTIONS" || !isProtectedApiRequest(request) || isPublicApiRequest(request) || isAuthorizedSchedulerRequest(request)) {
     next();
     return;
   }

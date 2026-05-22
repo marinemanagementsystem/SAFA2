@@ -89,10 +89,13 @@ type GibPortalFollowupEventType =
   | "portal_uploaded"
   | "signature_pending"
   | "signed_found"
+  | "pdf_fetch_attempted"
+  | "pdf_saved"
   | "pdf_missing"
   | "archived"
   | "trendyol_sent"
   | "trendyol_failed"
+  | "trendyol_manual_detected"
   | "needs_manual_match";
 
 type GibPortalFollowupSeverity = "info" | "success" | "warning" | "danger";
@@ -267,6 +270,35 @@ function istanbulDateKey(date: Date) {
   }).format(date);
 }
 
+function istanbulDayWindow(date = new Date()) {
+  const dateKey = istanbulDateKey(date);
+  const start = new Date(`${dateKey}T00:00:00+03:00`);
+  const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
+  return { dateKey, start, end };
+}
+
+function todayGibPortalInput(date = new Date()) {
+  const { dateKey } = istanbulDayWindow(date);
+  return {
+    startDate: `${dateKey}T00:00:00+03:00`,
+    endDate: `${dateKey}T23:59:59+03:00`
+  };
+}
+
+function invoiceDateWhere(input?: { startDate?: string; endDate?: string }) {
+  const start = input?.startDate ? parseDate(input.startDate) : undefined;
+  const end = input?.endDate ? parseDate(input.endDate) : undefined;
+  if (input?.startDate && !start) throw new BadRequestException("Fatura takip baslangic tarihi okunamadi.");
+  if (input?.endDate && !end) throw new BadRequestException("Fatura takip bitis tarihi okunamadi.");
+  if (!start && !end) return {};
+  return {
+    invoiceDate: {
+      ...(start ? { gte: start } : {}),
+      ...(end ? { lte: end } : {})
+    }
+  };
+}
+
 function isMay20RepairRange(start: Date, end: Date) {
   return istanbulDateKey(start) === "2026-05-20" && istanbulDateKey(end) === "2026-05-20" && start.getTime() <= end.getTime();
 }
@@ -321,6 +353,20 @@ function sourceLabel(source: ExternalInvoiceSource) {
   if (source === ExternalInvoiceSource.GIB_PORTAL) return "e-Arsiv Portal";
   if (source === ExternalInvoiceSource.TRENDYOL) return "Trendyol";
   return "Manuel";
+}
+
+function orderPackageKey(value?: string | null) {
+  const text = String(value ?? "").trim();
+  return text ? `package:${text}` : undefined;
+}
+
+function orderNumberKey(value?: string | null) {
+  const text = String(value ?? "").trim();
+  return text ? `order:${text}` : undefined;
+}
+
+function addKey(target: Set<string>, value?: string) {
+  if (value) target.add(value);
 }
 
 function invoiceSourceLabel(provider?: string | null) {
@@ -399,6 +445,21 @@ function isLikelyPdfUrl(value?: string | null) {
 function mergeRawWithUpload(raw: Prisma.JsonValue, uploadedPdfPath: string) {
   const base = raw && typeof raw === "object" && !Array.isArray(raw) ? (raw as RawRecord) : {};
   return json({ ...base, uploadedPdfPath });
+}
+
+function mergeRawWithOfficialPdf(
+  raw: Prisma.JsonValue,
+  input: { uploadedPdfPath: string; pdfUrl?: string | null; source?: string; raw?: unknown }
+) {
+  const base = raw && typeof raw === "object" && !Array.isArray(raw) ? (raw as RawRecord) : {};
+  return json({
+    ...base,
+    uploadedPdfPath: input.uploadedPdfPath,
+    ...(input.pdfUrl ? { officialPdfUrl: input.pdfUrl } : {}),
+    ...(input.source ? { officialPdfSource: input.source } : {}),
+    ...(input.raw ? { officialPdfResponse: input.raw } : {}),
+    officialPdfFetchedAt: new Date().toISOString()
+  });
 }
 
 function mergeRawWithMatchSuggestion(raw: Prisma.JsonValue, match: OrderMatchResult) {
@@ -687,6 +748,8 @@ export class ExternalInvoicesService {
     }
 
     const reconcile = await this.reconcile(source, { externalInvoiceIds: upsertedIds });
+    const manualTrendyol =
+      source === ExternalInvoiceSource.TRENDYOL ? await this.markManualTrendyolInvoicesFromExternal(upsertedIds) : undefined;
     const shouldPromote = options.autoPromoteGib ?? true;
     const promotion =
       source === ExternalInvoiceSource.GIB_PORTAL && shouldPromote
@@ -697,6 +760,7 @@ export class ExternalInvoicesService {
       imported,
       matched: reconcile.matched,
       unmatched: reconcile.unmatched,
+      ...(manualTrendyol ? { trendyolManualDetected: manualTrendyol.updated } : {}),
       invoices: options.includeInvoices === false ? [] : await this.list(source)
     };
   }
@@ -940,6 +1004,77 @@ export class ExternalInvoicesService {
     };
   }
 
+  async runGibPortalFollowupJobStep(
+    payload: Record<string, any>,
+    response: Record<string, any> = {}
+  ): Promise<{ payload: Record<string, any>; response: Record<string, any>; done: boolean; message: string }> {
+    const phase = payload.phase ?? "gib-apply";
+    const requestedInput = payload.input && typeof payload.input === "object" ? payload.input : {};
+    const followupInput =
+      requestedInput.startDate || requestedInput.endDate
+        ? { startDate: requestedInput.startDate, endDate: requestedInput.endDate }
+        : todayGibPortalInput();
+
+    if (phase === "gib-apply") {
+      const applyPayload =
+        payload.applyPayload ??
+        ({
+          kind: "gib-portal-apply",
+          phase: "query",
+          input: followupInput
+        } as Record<string, any>);
+      const step = await this.runGibPortalApplyJobStep(applyPayload, response);
+      if (!step.done) {
+        return {
+          payload: { ...payload, phase: "gib-apply", applyPayload: step.payload },
+          response: step.response,
+          done: false,
+          message: step.message
+        };
+      }
+
+      return {
+        payload: { ...payload, phase: "promote-existing", applyPayload: step.payload },
+        response: step.response,
+        done: false,
+        message: "GIB portal sorgusu tamamlandi; PDF bekleyen arsiv kayitlari kontrol ediliyor."
+      };
+    }
+
+    if (phase === "promote-existing") {
+      const promotion = await this.promoteSignedGibInvoices({
+        autoSendTrendyol: true,
+        startDate: followupInput.startDate,
+        endDate: followupInput.endDate
+      });
+      const followup = promotion.followup ?? emptyFollowup();
+      const nextResponse = {
+        ...response,
+        signedFound: Number(response.signedFound ?? 0) + (promotion.signedFound ?? followup.signedFound ?? 0),
+        promoted: Number(response.promoted ?? 0) + (promotion.promoted ?? followup.promoted ?? 0),
+        pdfMissing: Number(response.pdfMissing ?? 0) + (promotion.pdfMissing ?? followup.pdfMissing ?? 0),
+        trendyolSent: Number(response.trendyolSent ?? 0) + (promotion.trendyolSent ?? followup.trendyolSent ?? 0),
+        trendyolAlreadySent: Number(response.trendyolAlreadySent ?? 0) + (promotion.trendyolAlreadySent ?? followup.trendyolAlreadySent ?? 0),
+        trendyolFailed: Number(response.trendyolFailed ?? 0) + (promotion.trendyolFailed ?? followup.trendyolFailed ?? 0),
+        needsManualMatch: Number(response.needsManualMatch ?? 0) + (followup.needsManualMatch ?? 0),
+        message: "GIB portal imza/PDF/Trendyol takibi tamamlandi."
+      };
+      return {
+        payload: { ...payload, phase: "done" },
+        response: nextResponse,
+        done: true,
+        message: nextResponse.message
+      };
+    }
+
+    return {
+      payload: { ...payload, phase: "done" },
+      response: { ...response, message: response.message ?? "GIB portal takibi tamamlandi." },
+      done: true,
+      message: String(response.message ?? "GIB portal takibi tamamlandi.")
+    };
+  }
+
   async promoteOne(externalInvoiceId: string, options: { autoSendTrendyol?: boolean } = {}) {
     return this.promoteSignedGibInvoices({ ...options, externalInvoiceId });
   }
@@ -1007,17 +1142,97 @@ export class ExternalInvoicesService {
     return this.importRecords(ExternalInvoiceSource.TRENDYOL, records, { includeInvoices: options.includeInvoices });
   }
 
+  private async markManualTrendyolInvoicesFromExternal(externalInvoiceIds: string[]) {
+    if (externalInvoiceIds.length === 0) return { updated: 0 };
+
+    const trendYolInvoices = await this.prisma.externalInvoice.findMany({
+      where: { id: { in: externalInvoiceIds }, source: ExternalInvoiceSource.TRENDYOL },
+      include: { matchedOrder: { select: { orderNumber: true, shipmentPackageId: true } } },
+      take: 5000
+    });
+    if (trendYolInvoices.length === 0) return { updated: 0 };
+
+    const trendYolKeys = new Set<string>();
+    for (const invoice of trendYolInvoices as any[]) {
+      addKey(trendYolKeys, orderPackageKey(invoice.matchedOrder?.shipmentPackageId ?? invoice.shipmentPackageId));
+      addKey(trendYolKeys, orderNumberKey(invoice.matchedOrder?.orderNumber ?? invoice.orderNumber));
+    }
+    if (trendYolKeys.size === 0) return { updated: 0 };
+
+    const today = istanbulDayWindow();
+    const invoices = await this.prisma.invoice.findMany({
+      where: {
+        invoiceDate: {
+          gte: today.start,
+          lt: today.end
+        }
+      },
+      include: { draft: { include: { order: true } } },
+      take: 5000
+    });
+    let updated = 0;
+    for (const invoice of invoices as any[]) {
+      const alreadyDone =
+        invoice.status === InvoiceStatus.TRENDYOL_SENT ||
+        invoice.trendyolStatus === "SENT" ||
+        invoice.trendyolStatus === "ALREADY_SENT" ||
+        invoice.trendyolStatus === "MANUAL_DETECTED";
+      if (alreadyDone) continue;
+
+      const invoiceKeys = new Set<string>();
+      addKey(invoiceKeys, orderPackageKey(invoice.draft?.order?.shipmentPackageId));
+      addKey(invoiceKeys, orderNumberKey(invoice.draft?.order?.orderNumber));
+      const matched = Array.from(invoiceKeys).some((key) => trendYolKeys.has(key));
+      if (!matched) continue;
+
+      await this.prisma.invoice.update({
+        where: { id: invoice.id },
+        data: {
+          status: InvoiceStatus.TRENDYOL_SENT,
+          trendyolStatus: "MANUAL_DETECTED",
+          trendyolSentAt: new Date(),
+          error: null
+        }
+      });
+      updated += 1;
+
+      const externalInvoice = (trendYolInvoices as any[]).find((candidate) => {
+        const keys = new Set<string>();
+        addKey(keys, orderPackageKey(candidate.matchedOrder?.shipmentPackageId ?? candidate.shipmentPackageId));
+        addKey(keys, orderNumberKey(candidate.matchedOrder?.orderNumber ?? candidate.orderNumber));
+        return Array.from(keys).some((key) => invoiceKeys.has(key));
+      });
+      const event = eventFor({
+        type: "trendyol_manual_detected",
+        severity: "success",
+        externalInvoiceId: externalInvoice?.id,
+        invoiceNumber: invoice.invoiceNumber,
+        orderNumber: invoice.draft?.order?.orderNumber,
+        shipmentPackageId: invoice.draft?.order?.shipmentPackageId,
+        draftId: invoice.draftId,
+        message: `${invoice.invoiceNumber} icin Trendyol siparis verisinde manuel fatura izi bulundu.`,
+        nextAction: invoice.pdfPath ? "Pazaryeri adimi tamam; PDF arsivi hazir." : "Pazaryeri adimi tamam; SAFA PDF arsivi resmi PDF bekliyor."
+      });
+      await this.writeFollowupAudit(event);
+    }
+
+    return { updated };
+  }
+
   async promoteSignedGibInvoices(options: {
     externalInvoiceId?: string;
     externalInvoiceIds?: string[];
     autoSendTrendyol?: boolean;
     forcedPdfPath?: string;
+    startDate?: string;
+    endDate?: string;
   } = {}) {
+    const dateWhere = invoiceDateWhere({ startDate: options.startDate, endDate: options.endDate });
     const externalInvoiceWhere = options.externalInvoiceId
       ? { id: options.externalInvoiceId }
       : options.externalInvoiceIds && options.externalInvoiceIds.length > 0
-        ? { id: { in: options.externalInvoiceIds }, source: ExternalInvoiceSource.GIB_PORTAL }
-        : { source: ExternalInvoiceSource.GIB_PORTAL };
+        ? { id: { in: options.externalInvoiceIds }, source: ExternalInvoiceSource.GIB_PORTAL, ...dateWhere }
+        : { source: ExternalInvoiceSource.GIB_PORTAL, ...dateWhere };
     const [externalInvoices, drafts, existingInvoices] = await Promise.all([
       this.prisma.externalInvoice.findMany({
         where: externalInvoiceWhere,
@@ -1181,17 +1396,44 @@ export class ExternalInvoicesService {
       }
 
       const uploadedPdfPath = this.uploadedPdfPath(externalInvoice);
+      const shouldAcquirePdf = !options.forcedPdfPath && !existingForDraft?.pdfPath && !uploadedPdfPath;
       const downloadedPdfPath =
-        !options.forcedPdfPath && !existingForDraft?.pdfPath && !uploadedPdfPath && externalInvoice.pdfUrl
-          ? await this.tryDownloadOfficialPdf(externalInvoice.invoiceNumber, externalInvoice.pdfUrl)
-          : undefined;
-      const pdfPath = options.forcedPdfPath ?? existingForDraft?.pdfPath ?? uploadedPdfPath ?? downloadedPdfPath;
+        shouldAcquirePdf && externalInvoice.pdfUrl ? await this.tryDownloadOfficialPdf(externalInvoice.invoiceNumber, externalInvoice.pdfUrl) : undefined;
+      const portalPdf = shouldAcquirePdf && !downloadedPdfPath ? await this.tryDownloadPortalOfficialPdf(externalInvoice) : undefined;
+      const pdfPath = options.forcedPdfPath ?? existingForDraft?.pdfPath ?? uploadedPdfPath ?? downloadedPdfPath ?? portalPdf?.pdfPath;
+      const resolvedPdfUrl = portalPdf?.pdfUrl ?? externalInvoice.pdfUrl;
 
-      if ((options.forcedPdfPath || downloadedPdfPath) && pdfPath && !uploadedPdfPath) {
+      if ((options.forcedPdfPath || downloadedPdfPath || portalPdf) && pdfPath && !uploadedPdfPath) {
         await this.prisma.externalInvoice.update({
           where: { id: externalInvoice.id },
-          data: { raw: mergeRawWithUpload(externalInvoice.raw, pdfPath) }
+          data: {
+            raw: portalPdf
+              ? mergeRawWithOfficialPdf(externalInvoice.raw, {
+                  uploadedPdfPath: pdfPath,
+                  pdfUrl: portalPdf.pdfUrl,
+                  source: portalPdf.source,
+                  raw: portalPdf.raw
+                })
+              : mergeRawWithUpload(externalInvoice.raw, pdfPath),
+            ...(resolvedPdfUrl ? { pdfUrl: resolvedPdfUrl } : {})
+          }
         });
+        if (portalPdf) {
+          const event = eventFor({
+            type: "pdf_saved",
+            severity: "success",
+            externalInvoiceId: externalInvoice.id,
+            invoiceNumber: externalInvoice.invoiceNumber,
+            orderNumber: match.orderNumber,
+            shipmentPackageId: match.shipmentPackageId,
+            draftId: match.id,
+            message: `${externalInvoice.invoiceNumber} resmi PDF GIB portalindan alindi ve SAFA arsivine yazildi.`,
+            nextAction: "PDF bulundu; Trendyol dosya gonderimi kontrol ediliyor.",
+            metadata: { source: portalPdf.source, pdfUrl: portalPdf.pdfUrl }
+          });
+          followup.timelineEvents.push(event);
+          await this.writeFollowupAudit(event);
+        }
       }
 
       const invoice =
@@ -1205,7 +1447,7 @@ export class ExternalInvoicesService {
             invoiceDate: externalInvoice.invoiceDate,
             status: InvoiceStatus.ISSUED,
             pdfPath,
-            pdfUrl: externalInvoice.pdfUrl,
+            pdfUrl: resolvedPdfUrl,
             error: pdfPath ? null : "Resmi e-Arsiv PDF bekliyor; Trendyol'a gonderilmedi."
           }
         }));
@@ -1265,7 +1507,7 @@ export class ExternalInvoicesService {
         if (pdfPath && !existingForDraft.pdfPath) {
           await this.prisma.invoice.update({
             where: { id: existingForDraft.id },
-            data: { pdfPath, pdfUrl: externalInvoice.pdfUrl, error: null }
+            data: { pdfPath, pdfUrl: resolvedPdfUrl, error: null }
           });
         }
       }
@@ -1952,6 +2194,39 @@ export class ExternalInvoicesService {
       const buffer = Buffer.from(response.data);
       if (buffer.length === 0 || buffer.length > 10 * 1024 * 1024) return undefined;
       return this.writeInvoicePdf(invoiceNumber, buffer);
+    } catch {
+      return undefined;
+    }
+  }
+
+  private async tryDownloadPortalOfficialPdf(invoice: ExternalInvoice) {
+    const downloader = (this.earsivPortal as unknown as {
+      downloadIssuedInvoicePdf?: (input: {
+        externalKey: string;
+        invoiceNumber?: string | null;
+        invoiceDate?: Date | null;
+        pdfUrl?: string | null;
+        raw?: Prisma.JsonValue;
+      }) => Promise<{ buffer: Buffer; pdfUrl?: string; source?: string; raw?: unknown } | undefined>;
+    }).downloadIssuedInvoicePdf;
+    if (typeof downloader !== "function" || !invoice.invoiceNumber) return undefined;
+
+    try {
+      const result = await downloader.call(this.earsivPortal, {
+        externalKey: invoice.externalKey,
+        invoiceNumber: invoice.invoiceNumber,
+        invoiceDate: invoice.invoiceDate,
+        pdfUrl: invoice.pdfUrl,
+        raw: invoice.raw
+      });
+      if (!result?.buffer?.length || result.buffer.length > 10 * 1024 * 1024) return undefined;
+      const pdfPath = await this.writeInvoicePdf(invoice.invoiceNumber, result.buffer);
+      return {
+        pdfPath,
+        pdfUrl: result.pdfUrl,
+        source: result.source ?? "GIB_PORTAL_OFFICIAL_PDF",
+        raw: result.raw
+      };
     } catch {
       return undefined;
     }

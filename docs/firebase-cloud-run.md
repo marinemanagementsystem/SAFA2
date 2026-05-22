@@ -10,6 +10,7 @@ This is the permanent production path for `https://safa-8f76e.web.app`.
 - Firestore Native mode stores orders, drafts, invoices, jobs, and encrypted integration settings.
 - Production can run in low-cost `QUEUE_MODE=sync`, which skips Memorystore Redis and processes invoice jobs in the request path. Use Redis only when background queue reliability is worth the extra monthly cost.
 - Cloud Storage is mounted at `/mnt/safa-storage` so invoice PDFs survive Cloud Run restarts.
+- Cloud Scheduler calls the secured `/api/jobs/scheduled/gib-followup/run-next` endpoint every 10 minutes so today's GIB signed invoice, missing PDF, and Trendyol follow-up can progress even when the web panel is closed. The scheduled job intentionally does not reprocess invoices from previous days.
 - A Pub/Sub-triggered Cloud Run Function can disable project billing when the 400 TRY budget notification reaches the cap. This is intentionally disruptive: Firebase Hosting, Cloud Run, Firestore, and Storage may stop until billing is linked again.
 
 ## Required secrets
@@ -19,6 +20,7 @@ Create these Secret Manager secrets before deploying:
 - `safa-app-secret-key`
 - `safa-session-secret`
 - `safa-admin-password-hash`
+- `safa-scheduler-secret` is created automatically by `scripts/deploy-cloud-run-api.sh` if missing. It is passed to Cloud Run as `SAFA_SCHEDULER_SECRET` and to Cloud Scheduler as the `X-SAFA-SCHEDULER-SECRET` header.
 
 Keep the same `APP_SECRET_KEY` if you migrate an existing local database. Otherwise saved Trendyol and e-Arsiv credentials cannot be decrypted.
 
@@ -45,7 +47,7 @@ CONFIRM_DEPLOY=1 \
 ./scripts/deploy-cloud-run-api.sh
 ```
 
-The script builds `Dockerfile.cloudrun`, deploys Cloud Run in low-cost scale-to-zero mode with `DATA_BACKEND=firestore`, mounts the Cloud Storage bucket, creates the default Firestore database if needed, and deploys Firebase Hosting with the `/api/**` rewrite.
+The script builds `Dockerfile.cloudrun`, deploys Cloud Run in low-cost scale-to-zero mode with `DATA_BACKEND=firestore`, mounts the Cloud Storage bucket, creates the default Firestore database if needed, creates/updates the `safa-gib-followup` Cloud Scheduler job, and deploys Firebase Hosting with the `/api/**` rewrite.
 
 The deploy script uses Cloud Run's `--no-invoker-iam-check` because this project blocks public `allUsers` IAM bindings through organization policy. Firebase Hosting still reaches the service through the `/api/**` rewrite.
 

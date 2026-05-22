@@ -26,12 +26,19 @@ function makeJob(overrides: Record<string, unknown> = {}) {
 }
 
 function serviceWith(job = makeJob()) {
+  let currentJob = job;
   const prisma = {
     integrationJob: {
-      create: vi.fn(async (args) => ({ ...makeJob(), ...args.data, id: "job-1" })),
-      findUnique: vi.fn(async () => job),
-      findMany: vi.fn(async () => [job]),
-      update: vi.fn(async (args) => ({ ...job, ...args.data }))
+      create: vi.fn(async (args) => {
+        currentJob = { ...makeJob(), ...args.data, id: "job-1" };
+        return currentJob;
+      }),
+      findUnique: vi.fn(async () => currentJob),
+      findMany: vi.fn(async () => [currentJob]),
+      update: vi.fn(async (args) => {
+        currentJob = { ...currentJob, ...args.data };
+        return currentJob;
+      })
     }
   };
   const invoiceService = {};
@@ -45,6 +52,12 @@ function serviceWith(job = makeJob()) {
       response: { imported: 2, matched: 2, invoices: [{ id: "too-large" }] },
       done: true,
       message: "GIB apply tamamlandi."
+    })),
+    runGibPortalFollowupJobStep: vi.fn(async () => ({
+      payload: { kind: "gib-portal-followup", phase: "done" },
+      response: { pdfSaved: 1, trendyolSent: 1, invoices: [{ id: "too-large" }] },
+      done: true,
+      message: "GIB takip tamamlandi."
     }))
   };
   const trendyol = {
@@ -114,5 +127,97 @@ describe("JobsService long-running integration jobs", () => {
       })
     });
     expect(JSON.stringify(result)).not.toContain("too-large");
+  });
+
+  it("advances an active scheduled GIB follow-up job instead of creating duplicate work", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-22T10:00:00+03:00"));
+    const activeJob = makeJob({
+      id: "active-gib-job",
+      type: "gib-portal.followup",
+      target: "scheduled-gib-followup",
+      status: JobStatus.PROCESSING,
+      payload: {
+        kind: "gib-portal-followup",
+        phase: "pdf-missing",
+        input: {
+          startDate: "2026-05-22T00:00:00+03:00",
+          endDate: "2026-05-22T23:59:59+03:00"
+        }
+      },
+      response: {
+        message: "PDF bekleyen kayitlar kontrol ediliyor."
+      }
+    });
+    try {
+      const { service, prisma, externalInvoices } = serviceWith(activeJob);
+      prisma.integrationJob.findMany.mockResolvedValueOnce([activeJob]);
+
+      const result = await service.runScheduledGibFollowup();
+
+      expect(prisma.integrationJob.create).not.toHaveBeenCalled();
+      expect(externalInvoices.runGibPortalFollowupJobStep).toHaveBeenCalledWith(activeJob.payload, activeJob.response);
+      expect(result.id).toBe("active-gib-job");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("stops stale scheduled GIB follow-up jobs and creates a today-only job", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-22T10:00:00+03:00"));
+    const staleJob = makeJob({
+      id: "stale-gib-job",
+      type: "gib-portal.followup",
+      target: "scheduled-gib-followup",
+      status: JobStatus.PROCESSING,
+      payload: {
+        kind: "gib-portal-followup",
+        phase: "gib-apply",
+        input: { days: 30 }
+      },
+      response: {
+        message: "Eski takip isi."
+      }
+    });
+    try {
+      const { service, prisma, externalInvoices } = serviceWith(staleJob);
+      prisma.integrationJob.findMany.mockResolvedValueOnce([staleJob]);
+
+      await service.runScheduledGibFollowup();
+
+      expect(prisma.integrationJob.update).toHaveBeenCalledWith({
+        where: { id: "stale-gib-job" },
+        data: expect.objectContaining({
+          status: JobStatus.FAILED,
+          lastError: expect.stringContaining("scheduler yalnizca bugunu isler")
+        })
+      });
+      expect(prisma.integrationJob.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          type: "gib-portal.followup",
+          target: "scheduled-gib-followup",
+          payload: {
+            kind: "gib-portal-followup",
+            phase: "gib-apply",
+            input: {
+              startDate: "2026-05-22T00:00:00+03:00",
+              endDate: "2026-05-22T23:59:59+03:00"
+            }
+          }
+        })
+      });
+      expect(externalInvoices.runGibPortalFollowupJobStep).toHaveBeenCalledWith(
+        expect.objectContaining({
+          input: {
+            startDate: "2026-05-22T00:00:00+03:00",
+            endDate: "2026-05-22T23:59:59+03:00"
+          }
+        }),
+        expect.any(Object)
+      );
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

@@ -91,6 +91,8 @@ const stageLabels: Record<InvoiceOperationStageKey, string> = {
   marketplace: "Pazaryeri"
 };
 
+const operationTimeZone = "Europe/Istanbul";
+
 export function buildInvoiceOperationRows(input: InvoiceOperationBuildInput): InvoiceOperationRow[] {
   const invoiceByDraftId = new Map(input.invoices.map((invoice) => [invoice.draftId, invoice]));
   const externalById = new Map(input.externalInvoices.map((invoice) => [invoice.id, invoice]));
@@ -176,13 +178,17 @@ function buildInvoiceOperationRow(input: {
   const customerName = draft?.customerName ?? externalInvoice?.buyerName ?? "Alici bilinmiyor";
   const amountCents = draft?.totalPayableCents ?? externalInvoice?.totalPayableCents ?? 0;
   const currency = draft?.currency ?? externalInvoice?.currency ?? "TRY";
-  const stages = buildStages(draft, invoice, externalInvoice, visibleJob);
-  const nextAction = buildNextAction(draft, invoice, externalInvoice, visibleJob, stages);
-  const queueKeys = buildQueueKeys(draft, invoice, externalInvoice, visibleJob, stages);
-  const priority = buildPriority(draft, invoice, externalInvoice, visibleJob, stages, queueKeys);
+  const historical = isBeforeTodayOperation(draft, invoice, externalInvoice);
+  const baseStages = buildStages(draft, invoice, externalInvoice, visibleJob);
+  const stages = historical ? maskHistoricalStages(baseStages) : baseStages;
+  const nextAction = historical
+    ? historicalNextAction(draft, invoice, externalInvoice)
+    : buildNextAction(draft, invoice, externalInvoice, visibleJob, stages);
+  const queueKeys = historical ? (["all"] as InvoiceOperationQueueKey[]) : buildQueueKeys(draft, invoice, externalInvoice, visibleJob, stages);
+  const priority = historical ? 8 : buildPriority(draft, invoice, externalInvoice, visibleJob, stages, queueKeys);
   const detailEvents = buildDetailEvents(draft, invoice, externalInvoice, visibleJob, stages);
-  const statusTone = rowTone(priority, stages);
-  const statusLabel = buildStatusLabel(draft, invoice, externalInvoice, visibleJob, stages);
+  const statusTone = historical ? historicalTone(invoice, stages) : rowTone(priority, stages);
+  const statusLabel = historical ? historicalStatusLabel(invoice, stages) : buildStatusLabel(draft, invoice, externalInvoice, visibleJob, stages);
 
   return {
     id: draft?.id ?? invoice?.id ?? externalInvoice?.id ?? `${orderNumber}-${shipmentPackageId}`,
@@ -242,6 +248,55 @@ function buildStages(
     pdf: buildPdfStage(draft, invoice, externalInvoice),
     marketplace: buildMarketplaceStage(invoice, externalInvoice)
   };
+}
+
+function maskHistoricalStages(
+  stages: Record<InvoiceOperationStageKey, InvoiceOperationStage>
+): Record<InvoiceOperationStageKey, InvoiceOperationStage> {
+  return {
+    draft:
+      stages.draft.state === "done"
+        ? stages.draft
+        : stage("draft", "idle", "Bugunden onceki kayit; taslak islemi tekrar takip edilmiyor."),
+    gib:
+      stages.gib.state === "done"
+        ? stages.gib
+        : stage("gib", "idle", "Bugunden onceki kayit GIB takibine tekrar alinmiyor."),
+    pdf:
+      stages.pdf.state === "done"
+        ? stages.pdf
+        : stage("pdf", "idle", "Bugunden onceki kayit PDF eksigi icin tekrar kuyruga alinmiyor."),
+    marketplace:
+      stages.marketplace.state === "done"
+        ? stages.marketplace
+        : stage("marketplace", "idle", "Bugunden onceki kayit Trendyol icin tekrar islenmiyor.")
+  };
+}
+
+function historicalNextAction(
+  draft: InvoiceDraftListItem | undefined,
+  invoice: InvoiceListItem | undefined,
+  externalInvoice: ExternalInvoiceListItem | undefined
+): InvoiceOperationNextAction {
+  if (draft?.orderNumber || invoice?.orderNumber || externalInvoice?.matchedOrderNumber || externalInvoice?.orderNumber) {
+    return action(
+      "view-order",
+      "Siparise git",
+      "Bugunden onceki faturalar yeniden GIB/PDF/Trendyol takibine alinmaz; sadece kayit incelemesi yapilir.",
+      "neutral"
+    );
+  }
+  return action("none", "Eski kayit", "Bugunden onceki fatura hareketi tekrar islenmiyor.", "neutral");
+}
+
+function historicalStatusLabel(invoice: InvoiceListItem | undefined, stages: Record<InvoiceOperationStageKey, InvoiceOperationStage>) {
+  if (invoice?.status === "TRENDYOL_SENT" || stages.marketplace.state === "done") return "Tamam";
+  return "Eski kayit";
+}
+
+function historicalTone(invoice: InvoiceListItem | undefined, stages: Record<InvoiceOperationStageKey, InvoiceOperationStage>): InvoiceOperationTone {
+  if (invoice?.status === "TRENDYOL_SENT" || stages.marketplace.state === "done") return "success";
+  return "neutral";
 }
 
 function buildDraftStage(
@@ -318,14 +373,27 @@ function buildNextAction(
   if (invoice?.status === "TRENDYOL_SEND_FAILED") {
     return action("send-trendyol", "Trendyol'a tekrar gonder", "PDF hazirsa pazaryeri aktarimini yeniden dene.", "danger");
   }
-  if (stages.pdf.state === "missing" && externalInvoice?.id && externalInvoice.requiresPdfUpload) {
-    return action("upload-pdf", "Resmi PDF yukle", "PDF yuklenince arsiv ve Trendyol adimi acilir.", "danger");
+  if (externalInvoice?.matchedOrderId && !externalInvoice.promotedInvoiceId) {
+    return action("promote-external", "Arsive al", "Eslestirilen e-Arsiv kaydini SAFA arsivine al.", "warning");
+  }
+  if (stages.pdf.state === "missing" && externalInvoice?.id) {
+    return action(
+      "upload-pdf",
+      "Resmi PDF yukle",
+      "Fatura GIB'de bulundu; resmi PDF yuklenince arsiv ve Trendyol adimi acilir.",
+      "danger"
+    );
+  }
+  if (stages.pdf.state === "missing" && invoice) {
+    return action(
+      "preview-signed",
+      "PDF'i tekrar kontrol et",
+      "Fatura bulundu; SAFA resmi PDF'i GIB'den tekrar sorgulamali veya manuel PDF yuklenmeli.",
+      "danger"
+    );
   }
   if (stages.pdf.state === "missing" && draft?.status === "PORTAL_DRAFTED") {
     return action("preview-signed", "Imzalilari sorgula", "Portal imzasini ve resmi PDF durumunu GIB'den sorgula.", "warning");
-  }
-  if (externalInvoice?.matchedOrderId && !externalInvoice.promotedInvoiceId) {
-    return action("promote-external", "Arsive al", "Eslestirilen e-Arsiv kaydini SAFA arsivine al.", "warning");
   }
   if (invoice?.pdfAvailable && stages.marketplace.state === "waiting") {
     return action("send-trendyol", "Trendyol'a gonder", "Hazir PDF dosyasini pazaryerine aktar.", "warning");
@@ -496,6 +564,35 @@ function latestTime(...values: Array<string | undefined>) {
     const time = new Date(value).getTime();
     return Number.isFinite(time) ? Math.max(latest, time) : latest;
   }, 0);
+}
+
+function isBeforeTodayOperation(
+  draft?: InvoiceDraftListItem,
+  invoice?: InvoiceListItem,
+  externalInvoice?: ExternalInvoiceListItem
+) {
+  const date =
+    invoice?.invoiceDate ??
+    invoice?.deliveredAt ??
+    draft?.deliveredAt ??
+    draft?.externalInvoiceDate ??
+    externalInvoice?.invoiceDate ??
+    externalInvoice?.updatedAt ??
+    externalInvoice?.createdAt;
+  const dateKey = date ? dateKeyInOperationTimeZone(date) : undefined;
+  const todayKey = dateKeyInOperationTimeZone(new Date());
+  return Boolean(dateKey && todayKey && dateKey < todayKey);
+}
+
+function dateKeyInOperationTimeZone(value: string | Date) {
+  const date = value instanceof Date ? value : new Date(value);
+  if (!Number.isFinite(date.getTime())) return undefined;
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: operationTimeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).format(date);
 }
 
 function normalizeSearch(value: string) {

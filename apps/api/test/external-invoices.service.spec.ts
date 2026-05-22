@@ -1,4 +1,7 @@
 import { DraftStatus, ExternalInvoiceSource, InvoiceStatus } from "@prisma/client";
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { ExternalInvoicesService } from "../src/external-invoices/external-invoices.service";
 
@@ -360,6 +363,280 @@ describe("ExternalInvoicesService", () => {
         pdfPath: "/tmp/GIB202600003.pdf"
       })
     );
+  });
+
+  it("downloads a missing official portal PDF before sending the promoted invoice to Trendyol", async () => {
+    const storageRoot = await fs.mkdtemp(path.join(os.tmpdir(), "safa-gib-pdf-"));
+    const previousStorageDir = process.env.STORAGE_DIR;
+    process.env.STORAGE_DIR = storageRoot;
+    const signed = makeSignedExternal({
+      id: "external-pdf-fetch",
+      externalKey: "55555555-5555-4555-8555-555555555555",
+      invoiceNumber: "GIB202600005",
+      pdfUrl: null,
+      raw: {
+        uuid: "55555555-5555-4555-8555-555555555555",
+        belgeOid: "oid-555",
+        kaynakKomut: "EARSIV_PORTAL_ADIMA_KESILEN_BELGELERI_GETIR"
+      }
+    });
+    const draft = {
+      id: "draft-pdf-fetch",
+      orderId: "order-1",
+      status: DraftStatus.PORTAL_DRAFTED,
+      portalDraftUuid: "55555555-5555-4555-8555-555555555555",
+      portalDraftNumber: "GIB202600005",
+      order: {
+        orderNumber: "11227170653",
+        shipmentPackageId: "pkg-1"
+      },
+      invoice: null
+    };
+    const prisma = {
+      externalInvoice: {
+        findMany: vi.fn(async () => [signed]),
+        update: vi.fn(async (args) => ({ ...signed, raw: args.data.raw }))
+      },
+      invoiceDraft: {
+        findMany: vi.fn(async () => [draft]),
+        update: vi.fn(async (args) => ({ ...draft, ...args.data }))
+      },
+      invoice: {
+        findMany: vi.fn(async () => []),
+        create: vi.fn(async (args) => ({
+          id: "invoice-pdf-fetch",
+          ...args.data,
+          trendyolStatus: null
+        })),
+        update: vi.fn(async (args) => ({ id: args.where.id, ...args.data }))
+      },
+      auditLog: {
+        create: vi.fn()
+      }
+    };
+    const earsivPortal = {
+      downloadIssuedInvoicePdf: vi.fn(async () => ({
+        buffer: Buffer.from("%PDF-1.4 official"),
+        pdfUrl: "/earsiv-services/download/pdf/oid-555",
+        source: "EARSIV_PORTAL_FATURA_PDF_INDIR"
+      }))
+    };
+    const trendyol = {
+      sendInvoiceFile: vi.fn(async () => ({ ok: true, alreadySent: false }))
+    };
+    const service = new ExternalInvoicesService(prisma as never, earsivPortal as never, trendyol as never);
+
+    try {
+      const result = await service.promoteSignedGibInvoices({ autoSendTrendyol: true });
+
+      expect(earsivPortal.downloadIssuedInvoicePdf).toHaveBeenCalledWith(
+        expect.objectContaining({
+          invoiceNumber: "GIB202600005",
+          externalKey: "55555555-5555-4555-8555-555555555555"
+        })
+      );
+      expect(prisma.externalInvoice.update).toHaveBeenCalledWith({
+        where: { id: "external-pdf-fetch" },
+        data: expect.objectContaining({
+          raw: expect.objectContaining({
+            uploadedPdfPath: expect.stringContaining("GIB202600005.pdf"),
+            officialPdfSource: "EARSIV_PORTAL_FATURA_PDF_INDIR"
+          }),
+          pdfUrl: "/earsiv-services/download/pdf/oid-555"
+        })
+      });
+      expect(prisma.invoice.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          invoiceNumber: "GIB202600005",
+          pdfPath: expect.stringContaining("GIB202600005.pdf"),
+          pdfUrl: "/earsiv-services/download/pdf/oid-555",
+          error: null
+        })
+      });
+      expect(trendyol.sendInvoiceFile).toHaveBeenCalledWith(
+        expect.objectContaining({
+          shipmentPackageId: "pkg-1",
+          invoiceNumber: "GIB202600005",
+          pdfPath: expect.stringContaining("GIB202600005.pdf")
+        })
+      );
+      expect(result.trendyolSent).toBe(1);
+    } finally {
+      if (previousStorageDir === undefined) delete process.env.STORAGE_DIR;
+      else process.env.STORAGE_DIR = previousStorageDir;
+      await fs.rm(storageRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("keeps scheduled GIB follow-up promotion scoped to the requested day", async () => {
+    const service = new ExternalInvoicesService({} as never, {} as never, {} as never);
+    const input = {
+      startDate: "2026-05-22T00:00:00+03:00",
+      endDate: "2026-05-22T23:59:59+03:00"
+    };
+    vi.spyOn(service, "promoteSignedGibInvoices").mockResolvedValueOnce({
+      imported: 0,
+      matched: 0,
+      unmatched: 0,
+      checkedCount: 0,
+      signedFound: 0,
+      promoted: 0,
+      pdfMissing: 0,
+      trendyolSent: 0,
+      trendyolAlreadySent: 0,
+      trendyolFailed: 0,
+      unmatchedReasons: [],
+      timelineEvents: [],
+      followup: {
+        checkedCount: 0,
+        signedFound: 0,
+        promoted: 0,
+        pdfMissing: 0,
+        trendyolSent: 0,
+        trendyolAlreadySent: 0,
+        trendyolFailed: 0,
+        needsManualMatch: 0,
+        unmatchedReasons: [],
+        timelineEvents: []
+      },
+      invoices: []
+    } as never);
+
+    await service.runGibPortalFollowupJobStep({ kind: "gib-portal-followup", phase: "promote-existing", input }, {});
+
+    expect(service.promoteSignedGibInvoices).toHaveBeenCalledWith({
+      autoSendTrendyol: true,
+      startDate: "2026-05-22T00:00:00+03:00",
+      endDate: "2026-05-22T23:59:59+03:00"
+    });
+  });
+
+  it("marks the marketplace step complete when Trendyol order data contains a manual invoice trace", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-22T10:00:00+03:00"));
+    const order = {
+      id: "order-manual-trendyol",
+      orderNumber: "11226054818",
+      shipmentPackageId: "pkg-manual-trendyol",
+      customerName: "Manual Trendyol",
+      customerIdentifier: "12345678901",
+      totalPayableCents: 58300,
+      currency: "TRY",
+      raw: {
+        invoiceNumber: "TY-MANUAL-001",
+        invoiceLink: "https://supplier.example/invoices/TY-MANUAL-001.pdf"
+      }
+    };
+    const prisma = {
+      order: {
+        findMany: vi.fn(async () => [order])
+      },
+      externalInvoice: {
+        upsert: vi.fn(async (args) => ({
+          id: "external-trendyol-manual",
+          ...args.create,
+          matchedOrderId: null,
+          matchScore: 0,
+          createdAt: new Date("2026-05-22T09:00:00.000Z"),
+          updatedAt: new Date("2026-05-22T09:00:00.000Z")
+        })),
+        findMany: vi
+          .fn()
+          .mockResolvedValueOnce([
+            {
+              id: "external-trendyol-manual",
+              source: ExternalInvoiceSource.TRENDYOL,
+              externalKey: "https://supplier.example/invoices/TY-MANUAL-001.pdf",
+              invoiceNumber: "TY-MANUAL-001",
+              invoiceDate: null,
+              buyerName: "Manual Trendyol",
+              buyerIdentifier: "12345678901",
+              orderNumber: "11226054818",
+              shipmentPackageId: "pkg-manual-trendyol",
+              totalPayableCents: 58300,
+              currency: "TRY",
+              status: null,
+              pdfUrl: "https://supplier.example/invoices/TY-MANUAL-001.pdf",
+              xmlUrl: null,
+              raw: order.raw,
+              matchedOrderId: null,
+              matchedOrder: null,
+              matchScore: 0,
+              matchReason: null,
+              createdAt: new Date("2026-05-22T09:00:00.000Z"),
+              updatedAt: new Date("2026-05-22T09:00:00.000Z")
+            }
+          ])
+          .mockResolvedValueOnce([
+            {
+              id: "external-trendyol-manual",
+              source: ExternalInvoiceSource.TRENDYOL,
+              externalKey: "https://supplier.example/invoices/TY-MANUAL-001.pdf",
+              invoiceNumber: "TY-MANUAL-001",
+              orderNumber: "11226054818",
+              shipmentPackageId: "pkg-manual-trendyol",
+              matchedOrder: null
+            }
+          ]),
+        update: vi.fn(async (args) => ({ id: args.where.id, ...args.data }))
+      },
+      invoice: {
+        findMany: vi
+          .fn()
+          .mockResolvedValueOnce([
+            {
+              id: "invoice-manual-trendyol",
+              draftId: "draft-manual-trendyol",
+              provider: "gib-portal-manual",
+              providerInvoiceId: "GIB202600006",
+              invoiceNumber: "GIB202600006",
+              invoiceDate: new Date("2026-05-22T10:00:00.000Z"),
+              status: InvoiceStatus.ISSUED,
+              pdfPath: null,
+              pdfUrl: null,
+              trendyolStatus: null,
+              draft: {
+                order: {
+                  id: "order-manual-trendyol",
+                  orderNumber: "11226054818",
+                  shipmentPackageId: "pkg-manual-trendyol"
+                }
+              }
+            }
+          ]),
+        update: vi.fn()
+      },
+      auditLog: {
+        create: vi.fn()
+      }
+    };
+    const service = new ExternalInvoicesService(prisma as never, {} as never, {} as never);
+
+    try {
+      const result = await service.syncTrendyolMetadata({ includeInvoices: false });
+
+      expect(result.imported).toBe(1);
+      expect(prisma.invoice.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            invoiceDate: {
+              gte: new Date("2026-05-21T21:00:00.000Z"),
+              lt: new Date("2026-05-22T21:00:00.000Z")
+            }
+          }
+        })
+      );
+      expect(prisma.invoice.update).toHaveBeenCalledWith({
+        where: { id: "invoice-manual-trendyol" },
+        data: expect.objectContaining({
+          status: InvoiceStatus.TRENDYOL_SENT,
+          trendyolStatus: "MANUAL_DETECTED",
+          error: null
+        })
+      });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("previews only the locked 20 May repair without creating drafts or uploading to GIB", async () => {

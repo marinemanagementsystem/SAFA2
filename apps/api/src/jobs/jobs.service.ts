@@ -24,6 +24,37 @@ function stripLargeJobPayload(value: JsonRecord = {}) {
   return rest;
 }
 
+function istanbulDateKey(date = new Date()) {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Istanbul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).format(date);
+}
+
+function scheduledGibFollowupInput(date = new Date()) {
+  const dateKey = istanbulDateKey(date);
+  return {
+    startDate: `${dateKey}T00:00:00+03:00`,
+    endDate: `${dateKey}T23:59:59+03:00`
+  };
+}
+
+function gibFollowupInput(payload: unknown) {
+  const record = jsonRecord(payload);
+  const input = jsonRecord(record.input);
+  return {
+    startDate: typeof input.startDate === "string" ? input.startDate : undefined,
+    endDate: typeof input.endDate === "string" ? input.endDate : undefined
+  };
+}
+
+function isTodayGibFollowupJob(job: any, input: { startDate: string; endDate: string }) {
+  const current = gibFollowupInput(job?.payload);
+  return current.startDate === input.startDate && current.endDate === input.endDate;
+}
+
 function mapJob(job: any) {
   return {
     id: job.id,
@@ -236,6 +267,7 @@ export class JobsService implements OnModuleDestroy {
     try {
       if (job.type === "trendyol.sync") return this.runNextTrendyolJob(job);
       if (job.type === "gib-portal.apply") return this.runNextGibPortalApplyJob(job);
+      if (job.type === "gib-portal.followup") return this.runNextGibPortalFollowupJob(job);
       throw new BadRequestException("Bu islem tipi parca parca calistirilamaz.");
     } catch (error) {
       const message = error instanceof Error ? error.message : "Islem tamamlanamadi.";
@@ -342,6 +374,71 @@ export class JobsService implements OnModuleDestroy {
 
   private async runNextGibPortalApplyJob(job: any) {
     const step = await this.externalInvoices.runGibPortalApplyJobStep(jsonRecord(job.payload), stripLargeJobResponse(jsonRecord(job.response)));
+    const updated = await this.prisma.integrationJob.update({
+      where: { id: job.id },
+      data: {
+        status: step.done ? JobStatus.SUCCESS : JobStatus.PROCESSING,
+        attempts: job.attempts + 1,
+        payload: step.payload as Prisma.InputJsonValue,
+        response: {
+          ...stripLargeJobResponse(step.response),
+          message: step.message
+        } as Prisma.InputJsonValue
+      }
+    });
+    return mapJob(updated);
+  }
+
+  async runScheduledGibFollowup() {
+    const todayInput = scheduledGibFollowupInput();
+    const activeJobs = await this.prisma.integrationJob.findMany({
+      where: {
+        type: "gib-portal.followup",
+        target: "scheduled-gib-followup",
+        status: { in: [JobStatus.PENDING, JobStatus.PROCESSING] }
+      },
+      orderBy: [{ updatedAt: "desc" }],
+      take: 10
+    });
+    const activeJob = activeJobs.find((job) => isTodayGibFollowupJob(job, todayInput));
+    const staleJobs = activeJobs.filter((job) => !isTodayGibFollowupJob(job, todayInput));
+    for (const staleJob of staleJobs) {
+      await this.prisma.integrationJob.update({
+        where: { id: staleJob.id },
+        data: {
+          status: JobStatus.FAILED,
+          lastError: "Bugunden onceki GIB takip isi durduruldu; scheduler yalnizca bugunu isler.",
+          response: {
+            ...stripLargeJobResponse(jsonRecord(staleJob.response)),
+            message: "Bugunden onceki GIB takip isi durduruldu; yeni is sadece bugunu isleyecek."
+          } as Prisma.InputJsonValue
+        }
+      });
+    }
+
+    const job =
+      activeJob ??
+      (await this.prisma.integrationJob.create({
+        data: {
+          type: "gib-portal.followup",
+          target: "scheduled-gib-followup",
+          status: JobStatus.PENDING,
+          payload: {
+            kind: "gib-portal-followup",
+            phase: "gib-apply",
+            input: todayInput
+          } as Prisma.InputJsonValue,
+          response: {
+            message: "Bugunun GIB portal imza/PDF/Trendyol takibi baslatildi."
+          } as Prisma.InputJsonValue
+        }
+      }));
+
+    return this.runNextJob(job.id);
+  }
+
+  private async runNextGibPortalFollowupJob(job: any) {
+    const step = await this.externalInvoices.runGibPortalFollowupJobStep(jsonRecord(job.payload), stripLargeJobResponse(jsonRecord(job.response)));
     const updated = await this.prisma.integrationJob.update({
       where: { id: job.id },
       data: {
