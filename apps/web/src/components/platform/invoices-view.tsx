@@ -36,6 +36,7 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { api } from "../../lib/api";
 import { cx, dateMatches, formatDateTime, money, numberValue, startOfToday, statusLabel, statusTone, stringValue } from "../../lib/platform/format";
+import { todayGibPortalSyncRequest } from "./gib-portal-sync-window";
 import {
   buildInvoiceOperationMetrics,
   buildInvoiceOperationRows,
@@ -120,13 +121,6 @@ function initialInvoiceDeskQuery() {
   const params = new URLSearchParams(window.location.search);
   return params.get("draft") ?? params.get("order") ?? params.get("package") ?? "";
 }
-
-const may20RepairRequest = {
-  days: 1,
-  startDate: "2026-05-20T00:00:00+03:00",
-  endDate: "2026-05-20T23:59:59+03:00",
-  repairMissingDrafts: true
-};
 
 function dateTimeValue(value?: string) {
   if (!value) return 0;
@@ -909,7 +903,6 @@ export function InvoicesView({
   const [draftActionTraces, setDraftActionTraces] = useState<Record<string, DraftActionTrace>>({});
   const [externalSource, setExternalSource] = useState<ExternalInvoiceSource>("GIB_PORTAL");
   const [externalText, setExternalText] = useState("");
-  const [externalDays, setExternalDays] = useState(30);
   const [externalError, setExternalError] = useState("");
   const [gibFollowupResult, setGibFollowupResult] = useState<ExternalInvoiceSyncResult | null>(null);
   const externallyInvoicedDrafts = drafts.filter(
@@ -919,10 +912,12 @@ export function InvoicesView({
   const portalDraftedDrafts = drafts.filter((draft) => draft.status === "PORTAL_DRAFTED" && draft.externalInvoiceCount === 0);
   const portalDraftsWithExternalInvoices = drafts.filter((draft) => draft.status === "PORTAL_DRAFTED" && draft.externalInvoiceCount > 0);
   const matchedExternalInvoices = externalInvoices.filter((invoice) => invoice.matchedOrderId).length;
-  const signedUnarchivedPortalInvoices = externalInvoices.filter(
-    (invoice) => isSignedPortalExternal(invoice) && !invoice.promotedInvoiceId
+  const todaySignedUnarchivedPortalInvoices = externalInvoices.filter(
+    (invoice) => isSignedPortalExternal(invoice) && !invoice.promotedInvoiceId && dateMatches(invoice.invoiceDate, "today")
   );
-  const pdfWaitingInvoices = invoices.filter((invoice) => !invoice.pdfAvailable || stringValue(invoice.error).includes("pdf bekliyor"));
+  const todayPdfWaitingInvoices = invoices.filter(
+    (invoice) => dateMatches(invoice.invoiceDate, "today") && (!invoice.pdfAvailable || stringValue(invoice.error).includes("pdf bekliyor"))
+  );
   const draftById = useMemo(() => new Map(drafts.map((draft) => [draft.id, draft])), [drafts]);
   const invoiceByDraftId = useMemo(() => new Map(invoices.map((invoice) => [invoice.draftId, invoice])), [invoices]);
   const selectedDraftItems = selectedDrafts.map((id) => draftById.get(id)).filter((draft): draft is InvoiceDraftListItem => Boolean(draft));
@@ -1214,22 +1209,12 @@ export function InvoicesView({
   }
 
   async function previewSignedPortalInvoices() {
-    const result = await onPreviewGibExternalInvoices(externalDays);
+    const result = await onPreviewGibExternalInvoices(todayGibPortalSyncRequest());
     if (result) setGibFollowupResult(result);
   }
 
   async function applySignedPortalInvoices() {
-    const result = await onApplyGibExternalInvoices(externalDays);
-    if (result) setGibFollowupResult(result);
-  }
-
-  async function previewMay20Repair() {
-    const result = await onPreviewGibExternalInvoices(may20RepairRequest);
-    if (result) setGibFollowupResult(result);
-  }
-
-  async function applyMay20Repair() {
-    const result = await onApplyGibExternalInvoices(may20RepairRequest);
+    const result = await onApplyGibExternalInvoices(todayGibPortalSyncRequest());
     if (result) setGibFollowupResult(result);
   }
 
@@ -1323,8 +1308,8 @@ export function InvoicesView({
         selectedNeedsApprovalCount={selectedNeedsApprovalCount}
         selectionAdvice={selectionAdvice}
         visibleSelectableDraftCount={visibleOperationSelectableDraftIds.length}
-        signedUnarchivedPortalInvoices={signedUnarchivedPortalInvoices.length}
-        pdfWaitingInvoices={pdfWaitingInvoices.length}
+        signedUnarchivedPortalInvoices={todaySignedUnarchivedPortalInvoices.length}
+        pdfWaitingInvoices={todayPdfWaitingInvoices.length}
         onQueryChange={setOperationQuery}
         onQueueChange={setOperationQueue}
         onSelectRow={(row) => setSelectedOperationId(row.id)}
@@ -1528,11 +1513,11 @@ export function InvoicesView({
                   </button>
                   <button className="ui-button primary compact" type="button" onClick={() => void previewSignedPortalInvoices()} disabled={busyAction === "external-gib-preview"}>
                     {busyAction === "external-gib-preview" ? <Loader2 size={16} className="spin" /> : <FileSearch size={16} />}
-                    Imzalananlari kontrol et
+                    Bugunun imzalilarini kontrol et
                   </button>
                   <button className="ui-button ghost compact" type="button" onClick={() => void applySignedPortalInvoices()} disabled={busyAction === "external-gib-apply"}>
                     {busyAction === "external-gib-apply" ? <Loader2 size={16} className="spin" /> : <CheckCircle2 size={16} />}
-                    Guvenli olanlari uygula
+                    Bugun guvenli olanlari uygula
                   </button>
                 </div>
                 <div className="portal-draft-finder-list">
@@ -1778,13 +1763,13 @@ export function InvoicesView({
             </div>
           ) : null}
 
-          {signedUnarchivedPortalInvoices.length > 0 || pdfWaitingInvoices.length > 0 ? (
+          {todaySignedUnarchivedPortalInvoices.length > 0 || todayPdfWaitingInvoices.length > 0 ? (
             <div className="form-alert table-note">
-              {signedUnarchivedPortalInvoices.length > 0 ? (
-                <span>{signedUnarchivedPortalInvoices.length} portalda imzali ama SAFA arsivine alinmamis kayit var. Guvenli olanlari uygula ile onarilir.</span>
+              {todaySignedUnarchivedPortalInvoices.length > 0 ? (
+                <span>{todaySignedUnarchivedPortalInvoices.length} bugun portalda imzali ama SAFA arsivine alinmamis kayit var. Bugun guvenli olanlari uygula ile onarilir.</span>
               ) : null}
-              {pdfWaitingInvoices.length > 0 ? (
-                <span>{pdfWaitingInvoices.length} arsiv kaydi portal imzali / PDF bekliyor; PDF gelmeden Trendyol'a dosya gonderilmez.</span>
+              {todayPdfWaitingInvoices.length > 0 ? (
+                <span>{todayPdfWaitingInvoices.length} bugunku arsiv kaydi portal imzali / PDF bekliyor; PDF gelmeden Trendyol'a dosya gonderilmez.</span>
               ) : null}
             </div>
           ) : null}
@@ -1826,23 +1811,17 @@ export function InvoicesView({
         </div>
 
         <div className="external-tools">
-          <label className="field compact-field">
-            <span>e-Arsiv gun araligi</span>
-            <input
-              type="number"
-              min={1}
-              max={90}
-              value={externalDays}
-              onChange={(event) => setExternalDays(Number(event.target.value))}
-            />
-          </label>
+          <div className="field compact-field readonly-field">
+            <span>e-Arsiv kapsam</span>
+            <strong>Bugun</strong>
+          </div>
           <button
             className="ui-button primary"
             onClick={() => void previewSignedPortalInvoices()}
             disabled={busyAction === "external-gib-preview"}
           >
             {busyAction === "external-gib-preview" ? <Loader2 size={18} className="spin" /> : <FileSearch size={18} />}
-            Imzalananlari kontrol et
+            Bugunun imzalilarini kontrol et
           </button>
           <button
             className="ui-button ghost"
@@ -1850,25 +1829,7 @@ export function InvoicesView({
             disabled={busyAction === "external-gib-apply"}
           >
             {busyAction === "external-gib-apply" ? <Loader2 size={18} className="spin" /> : <CheckCircle2 size={18} />}
-            Guvenli olanlari uygula
-          </button>
-          <button
-            className="ui-button ghost"
-            onClick={() => void previewMay20Repair()}
-            disabled={busyAction === "external-gib-preview"}
-            title="Sadece 20.05.2026 icin eksik SAFA taslagi, portal imza ve PDF/Trendyol durumunu raporlar."
-          >
-            {busyAction === "external-gib-preview" ? <Loader2 size={18} className="spin" /> : <FileSearch size={18} />}
-            20 Mayis raporu
-          </button>
-          <button
-            className="ui-button ghost"
-            onClick={() => void applyMay20Repair()}
-            disabled={busyAction === "external-gib-apply"}
-            title="Sadece 20.05.2026 icin guvenli eksik taslaklari olusturup GIB portalina yuklemeyi dener."
-          >
-            {busyAction === "external-gib-apply" ? <Loader2 size={18} className="spin" /> : <CheckCircle2 size={18} />}
-            20 Mayis onar
+            Bugun guvenli olanlari uygula
           </button>
           <button
             className="ui-button ghost"
@@ -2236,7 +2197,7 @@ function InvoiceOperationsDashboard({
                 disabled={busyAction === "external-gib-apply"}
               >
                 {busyAction === "external-gib-apply" ? <Loader2 size={16} className="spin" /> : <CheckCircle2 size={16} />}
-                Eslesenleri uygula
+                Bugun eslesenleri uygula
               </button>
             </div>
           </div>

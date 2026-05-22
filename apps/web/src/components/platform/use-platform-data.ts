@@ -27,6 +27,7 @@ import {
 } from "../../lib/api";
 import { money } from "../../lib/platform/format";
 import type { LoadState } from "../../lib/platform/types";
+import type { GibPortalSyncRequest } from "./gib-portal-sync-window";
 
 export interface PlatformSnapshot {
   orders: OrderListItem[];
@@ -123,14 +124,6 @@ interface PlatformSnapshotCache {
 }
 
 let platformSnapshotCache: PlatformSnapshotCache | null = null;
-
-interface GibPortalSyncRequest {
-  days?: number;
-  startDate?: string;
-  endDate?: string;
-  repairMissingDrafts?: boolean;
-  repairOrderNumber?: string;
-}
 
 function gibPortalSyncRequest(input: number | GibPortalSyncRequest): GibPortalSyncRequest {
   return typeof input === "number" ? { days: input } : input;
