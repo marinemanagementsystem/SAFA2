@@ -143,6 +143,27 @@ function canUseServerIssuedPortalLaunchUrl() {
   return host.endsWith(".local");
 }
 
+function writePortalLoading(target: Window | null, message: string) {
+  if (!target) return;
+
+  try {
+    target.document.open();
+    target.document.write(`<p style="font-family:Arial;padding:24px">${message}</p>`);
+    target.document.close();
+  } catch {
+    // The popup may have already navigated or been closed by the browser.
+  }
+}
+
+function navigatePortalTarget(target: Window | null, url: string) {
+  if (target) {
+    target.location.href = url;
+    return;
+  }
+
+  window.location.assign(url);
+}
+
 function portalUploadedSummary(items: Array<{ orderNumber: string; shipmentPackageId: string; customerName: string; totalPayableCents: number; currency: string }>) {
   if (items.length === 0) return "";
 
@@ -978,14 +999,13 @@ export function usePlatformData() {
   const openGibPortal = useCallback(async () => {
     const portalTab = window.open("about:blank", "_blank");
     if (!portalTab) {
-      setMessage("Popup engellendi. Tarayicida bu site icin popup izni verin.");
-      return;
+      setMessage("Popup engellendi; e-Arsiv portali bu sekmede aciliyor.");
     }
 
-    portalTab.document.write('<p style="font-family:Arial;padding:24px">e-Arsiv oturumu aciliyor...</p>');
+    writePortalLoading(portalTab, "e-Arsiv oturumu aciliyor...");
 
     if (!snapshot.connections?.gibPortal.configured) {
-      portalTab.location.href = gibPortalForm.portalUrl;
+      navigatePortalTarget(portalTab, gibPortalForm.portalUrl);
       setMessage(
         API_AVAILABLE
           ? "e-Arsiv portal bilgisi kayitli degil; portal manuel giris icin acildi."
@@ -995,7 +1015,7 @@ export function usePlatformData() {
     }
 
     if (!API_AVAILABLE) {
-      portalTab.location.href = gibPortalForm.portalUrl;
+      navigatePortalTarget(portalTab, gibPortalForm.portalUrl);
       setMessage("Canli API bagli degil; e-Arsiv portali manuel giris icin acildi.");
       return;
     }
@@ -1004,19 +1024,18 @@ export function usePlatformData() {
 
     try {
       if (!canUseServerIssuedPortalLaunchUrl()) {
-        portalTab.document.body.innerHTML =
-          '<p style="font-family:Arial;padding:24px">e-Arsiv proxy oturumu aciliyor...</p>';
+        writePortalLoading(portalTab, "e-Arsiv proxy oturumu aciliyor...");
         const proxySession = await api.openEarsivPortalProxySession();
-        portalTab.location.href = proxySession.proxyUrl;
+        navigatePortalTarget(portalTab, proxySession.proxyUrl);
         setMessage(proxySession.message);
         return;
       }
 
       const session = await api.openEarsivPortalSession();
-      portalTab.location.href = session.launchUrl;
+      navigatePortalTarget(portalTab, session.launchUrl);
       setMessage(session.source === "cached" ? "Aktif e-Arsiv oturumu yeni sekmede acildi." : session.message);
     } catch (error) {
-      portalTab.location.href = gibPortalForm.portalUrl;
+      navigatePortalTarget(portalTab, gibPortalForm.portalUrl);
       const details = errorMessage(error, "e-Arsiv oturumu acilamadi; portal manuel giris icin acildi.");
       setMessage(`${details} GIB portali acilirsa Guvenli Cikis yapip SAFA'dan tekrar deneyin.`);
     } finally {

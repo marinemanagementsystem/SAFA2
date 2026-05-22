@@ -65,6 +65,27 @@ function badgeClass(status?: string) {
   return "badge";
 }
 
+function writePortalLoading(target: Window | null, message: string) {
+  if (!target) return;
+
+  try {
+    target.document.open();
+    target.document.write(`<p style="font-family:Arial;padding:24px">${message}</p>`);
+    target.document.close();
+  } catch {
+    // The popup may have already navigated or been closed by the browser.
+  }
+}
+
+function navigatePortalTarget(target: Window | null, url: string) {
+  if (target) {
+    target.location.href = url;
+    return;
+  }
+
+  window.location.assign(url);
+}
+
 function formatDateTime(value?: string) {
   if (!value) return "-";
   return new Intl.DateTimeFormat("tr-TR", {
@@ -362,24 +383,23 @@ export function OpsConsole() {
   async function openGibPortal() {
     const popup = window.open("about:blank", "gib-earsiv-portal", "popup=yes,width=1280,height=860");
     if (!popup) {
-      setMessage("Popup engellendi. Tarayicida bu site icin popup izni verin.");
-      return;
+      setMessage("Popup engellendi; e-Arsiv portali bu sekmede aciliyor.");
     }
 
-    popup.document.write("<p style=\"font-family:Arial;padding:24px\">e-Arsiv oturumu aciliyor...</p>");
+    writePortalLoading(popup, "e-Arsiv oturumu aciliyor...");
 
     if (!connections?.gibPortal.configured) {
-      popup.location.href = gibPortalForm.portalUrl;
+      navigatePortalTarget(popup, gibPortalForm.portalUrl);
       setMessage("e-Arsiv portal bilgisi kayitli degil; portal manuel giris icin acildi.");
       return;
     }
 
     try {
       const session = await api.openEarsivPortalSession();
-      popup.location.href = session.launchUrl;
+      navigatePortalTarget(popup, session.launchUrl);
       setMessage(session.tokenReceived ? "e-Arsiv portali tokenli oturumla acildi." : "e-Arsiv portali acildi.");
     } catch (error) {
-      popup.location.href = gibPortalForm.portalUrl;
+      navigatePortalTarget(popup, gibPortalForm.portalUrl);
       setMessage(error instanceof Error ? error.message : "e-Arsiv oturumu acilamadi; portal manuel giris icin acildi.");
     }
   }
