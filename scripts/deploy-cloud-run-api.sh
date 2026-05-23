@@ -109,7 +109,7 @@ if gcloud scheduler jobs describe "${SCHEDULER_JOB}" --location "${REGION}" --pr
     --time-zone "Europe/Istanbul" \
     --uri "${SCHEDULER_URI}" \
     --http-method POST \
-    --headers "X-SAFA-SCHEDULER-SECRET=${SCHEDULER_SECRET_VALUE}" \
+    --update-headers "X-SAFA-SCHEDULER-SECRET=${SCHEDULER_SECRET_VALUE}" \
     --project "${PROJECT_ID}" >/dev/null
 else
   gcloud scheduler jobs create http "${SCHEDULER_JOB}" \
