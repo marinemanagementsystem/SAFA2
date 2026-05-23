@@ -1910,6 +1910,12 @@ a {
   backdrop-filter: blur(10px);
 }
 
+@media (min-width: 981px) {
+  .platform-shell .integration-modal-backdrop {
+    left: 236px;
+  }
+}
+
 .integration-modal {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
