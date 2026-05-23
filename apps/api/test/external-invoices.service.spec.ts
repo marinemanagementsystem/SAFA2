@@ -511,9 +511,54 @@ describe("ExternalInvoicesService", () => {
     });
   });
 
+  it("defaults scheduled GIB follow-up promotion to the current 7-day Istanbul window", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-23T10:00:00+03:00"));
+    const service = new ExternalInvoicesService({} as never, {} as never, {} as never);
+    vi.spyOn(service, "promoteSignedGibInvoices").mockResolvedValueOnce({
+      imported: 0,
+      matched: 0,
+      unmatched: 0,
+      checkedCount: 0,
+      signedFound: 0,
+      promoted: 0,
+      pdfMissing: 0,
+      trendyolSent: 0,
+      trendyolAlreadySent: 0,
+      trendyolFailed: 0,
+      unmatchedReasons: [],
+      timelineEvents: [],
+      followup: {
+        checkedCount: 0,
+        signedFound: 0,
+        promoted: 0,
+        pdfMissing: 0,
+        trendyolSent: 0,
+        trendyolAlreadySent: 0,
+        trendyolFailed: 0,
+        needsManualMatch: 0,
+        unmatchedReasons: [],
+        timelineEvents: []
+      },
+      invoices: []
+    } as never);
+
+    try {
+      await service.runGibPortalFollowupJobStep({ kind: "gib-portal-followup", phase: "promote-existing" }, {});
+
+      expect(service.promoteSignedGibInvoices).toHaveBeenCalledWith({
+        autoSendTrendyol: true,
+        startDate: "2026-05-17T00:00:00+03:00",
+        endDate: "2026-05-23T23:59:59+03:00"
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("marks the marketplace step complete when Trendyol order data contains a manual invoice trace", async () => {
     vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-05-22T10:00:00+03:00"));
+    vi.setSystemTime(new Date("2026-05-23T10:00:00+03:00"));
     const order = {
       id: "order-manual-trendyol",
       orderNumber: "11226054818",
@@ -620,8 +665,8 @@ describe("ExternalInvoicesService", () => {
         expect.objectContaining({
           where: {
             invoiceDate: {
-              gte: new Date("2026-05-21T21:00:00.000Z"),
-              lt: new Date("2026-05-22T21:00:00.000Z")
+              gte: new Date("2026-05-16T21:00:00.000Z"),
+              lt: new Date("2026-05-23T21:00:00.000Z")
             }
           }
         })

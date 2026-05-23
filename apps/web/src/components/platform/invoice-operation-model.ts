@@ -92,6 +92,8 @@ const stageLabels: Record<InvoiceOperationStageKey, string> = {
 };
 
 const operationTimeZone = "Europe/Istanbul";
+const operationWindowDays = 7;
+const dayMs = 24 * 60 * 60 * 1000;
 
 export function buildInvoiceOperationRows(input: InvoiceOperationBuildInput): InvoiceOperationRow[] {
   const invoiceByDraftId = new Map(input.invoices.map((invoice) => [invoice.draftId, invoice]));
@@ -178,7 +180,7 @@ function buildInvoiceOperationRow(input: {
   const customerName = draft?.customerName ?? externalInvoice?.buyerName ?? "Alici bilinmiyor";
   const amountCents = draft?.totalPayableCents ?? externalInvoice?.totalPayableCents ?? 0;
   const currency = draft?.currency ?? externalInvoice?.currency ?? "TRY";
-  const historical = isBeforeTodayOperation(draft, invoice, externalInvoice);
+  const historical = isOutsideOperationWindow(draft, invoice, externalInvoice);
   const baseStages = buildStages(draft, invoice, externalInvoice, visibleJob);
   const stages = historical ? maskHistoricalStages(baseStages) : baseStages;
   const nextAction = historical
@@ -257,19 +259,19 @@ function maskHistoricalStages(
     draft:
       stages.draft.state === "done"
         ? stages.draft
-        : stage("draft", "idle", "Bugunden onceki kayit; taslak islemi tekrar takip edilmiyor."),
+        : stage("draft", "idle", "Son 7 gun disindaki kayit; taslak islemi tekrar takip edilmiyor."),
     gib:
       stages.gib.state === "done"
         ? stages.gib
-        : stage("gib", "idle", "Bugunden onceki kayit GIB takibine tekrar alinmiyor."),
+        : stage("gib", "idle", "Son 7 gun disindaki kayit GIB takibine tekrar alinmiyor."),
     pdf:
       stages.pdf.state === "done"
         ? stages.pdf
-        : stage("pdf", "idle", "Bugunden onceki kayit PDF eksigi icin tekrar kuyruga alinmiyor."),
+        : stage("pdf", "idle", "Son 7 gun disindaki kayit PDF eksigi icin tekrar kuyruga alinmiyor."),
     marketplace:
       stages.marketplace.state === "done"
         ? stages.marketplace
-        : stage("marketplace", "idle", "Bugunden onceki kayit Trendyol icin tekrar islenmiyor.")
+        : stage("marketplace", "idle", "Son 7 gun disindaki kayit Trendyol icin tekrar islenmiyor.")
   };
 }
 
@@ -282,11 +284,11 @@ function historicalNextAction(
     return action(
       "view-order",
       "Siparise git",
-      "Bugunden onceki faturalar yeniden GIB/PDF/Trendyol takibine alinmaz; sadece kayit incelemesi yapilir.",
+      "Son 7 gun disindaki faturalar yeniden GIB/PDF/Trendyol takibine alinmaz; sadece kayit incelemesi yapilir.",
       "neutral"
     );
   }
-  return action("none", "Eski kayit", "Bugunden onceki fatura hareketi tekrar islenmiyor.", "neutral");
+  return action("none", "Eski kayit", "Son 7 gun disindaki fatura hareketi tekrar islenmiyor.", "neutral");
 }
 
 function historicalStatusLabel(invoice: InvoiceListItem | undefined, stages: Record<InvoiceOperationStageKey, InvoiceOperationStage>) {
@@ -566,7 +568,7 @@ function latestTime(...values: Array<string | undefined>) {
   }, 0);
 }
 
-function isBeforeTodayOperation(
+function isOutsideOperationWindow(
   draft?: InvoiceDraftListItem,
   invoice?: InvoiceListItem,
   externalInvoice?: ExternalInvoiceListItem
@@ -581,7 +583,10 @@ function isBeforeTodayOperation(
     externalInvoice?.createdAt;
   const dateKey = date ? dateKeyInOperationTimeZone(date) : undefined;
   const todayKey = dateKeyInOperationTimeZone(new Date());
-  return Boolean(dateKey && todayKey && dateKey < todayKey);
+  if (!dateKey || !todayKey) return false;
+  const todayStart = new Date(`${todayKey}T00:00:00+03:00`);
+  const windowStartKey = dateKeyInOperationTimeZone(new Date(todayStart.getTime() - (operationWindowDays - 1) * dayMs));
+  return Boolean(windowStartKey && dateKey < windowStartKey);
 }
 
 function dateKeyInOperationTimeZone(value: string | Date) {

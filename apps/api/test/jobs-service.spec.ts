@@ -129,9 +129,9 @@ describe("JobsService long-running integration jobs", () => {
     expect(JSON.stringify(result)).not.toContain("too-large");
   });
 
-  it("advances an active scheduled GIB follow-up job instead of creating duplicate work", async () => {
+  it("advances an active scheduled GIB follow-up job for the current 7-day window instead of creating duplicate work", async () => {
     vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-05-22T10:00:00+03:00"));
+    vi.setSystemTime(new Date("2026-05-23T10:00:00+03:00"));
     const activeJob = makeJob({
       id: "active-gib-job",
       type: "gib-portal.followup",
@@ -141,8 +141,8 @@ describe("JobsService long-running integration jobs", () => {
         kind: "gib-portal-followup",
         phase: "pdf-missing",
         input: {
-          startDate: "2026-05-22T00:00:00+03:00",
-          endDate: "2026-05-22T23:59:59+03:00"
+          startDate: "2026-05-17T00:00:00+03:00",
+          endDate: "2026-05-23T23:59:59+03:00"
         }
       },
       response: {
@@ -163,11 +163,28 @@ describe("JobsService long-running integration jobs", () => {
     }
   });
 
-  it("stops stale scheduled GIB follow-up jobs and creates a today-only job", async () => {
+  it("stops stale scheduled GIB follow-up jobs and creates a 7-day job", async () => {
     vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-05-22T10:00:00+03:00"));
-    const staleJob = makeJob({
-      id: "stale-gib-job",
+    vi.setSystemTime(new Date("2026-05-23T10:00:00+03:00"));
+    const staleTodayJob = makeJob({
+      id: "stale-today-gib-job",
+      type: "gib-portal.followup",
+      target: "scheduled-gib-followup",
+      status: JobStatus.PROCESSING,
+      payload: {
+        kind: "gib-portal-followup",
+        phase: "gib-apply",
+        input: {
+          startDate: "2026-05-23T00:00:00+03:00",
+          endDate: "2026-05-23T23:59:59+03:00"
+        }
+      },
+      response: {
+        message: "Bugunluk takip isi."
+      }
+    });
+    const staleWideJob = makeJob({
+      id: "stale-wide-gib-job",
       type: "gib-portal.followup",
       target: "scheduled-gib-followup",
       status: JobStatus.PROCESSING,
@@ -181,16 +198,23 @@ describe("JobsService long-running integration jobs", () => {
       }
     });
     try {
-      const { service, prisma, externalInvoices } = serviceWith(staleJob);
-      prisma.integrationJob.findMany.mockResolvedValueOnce([staleJob]);
+      const { service, prisma, externalInvoices } = serviceWith(staleTodayJob);
+      prisma.integrationJob.findMany.mockResolvedValueOnce([staleTodayJob, staleWideJob]);
 
       await service.runScheduledGibFollowup();
 
       expect(prisma.integrationJob.update).toHaveBeenCalledWith({
-        where: { id: "stale-gib-job" },
+        where: { id: "stale-today-gib-job" },
         data: expect.objectContaining({
           status: JobStatus.FAILED,
-          lastError: expect.stringContaining("scheduler yalnizca bugunu isler")
+          lastError: expect.stringContaining("scheduler son 7 gunu isler")
+        })
+      });
+      expect(prisma.integrationJob.update).toHaveBeenCalledWith({
+        where: { id: "stale-wide-gib-job" },
+        data: expect.objectContaining({
+          status: JobStatus.FAILED,
+          lastError: expect.stringContaining("scheduler son 7 gunu isler")
         })
       });
       expect(prisma.integrationJob.create).toHaveBeenCalledWith({
@@ -201,8 +225,8 @@ describe("JobsService long-running integration jobs", () => {
             kind: "gib-portal-followup",
             phase: "gib-apply",
             input: {
-              startDate: "2026-05-22T00:00:00+03:00",
-              endDate: "2026-05-22T23:59:59+03:00"
+              startDate: "2026-05-17T00:00:00+03:00",
+              endDate: "2026-05-23T23:59:59+03:00"
             }
           }
         })
@@ -210,8 +234,8 @@ describe("JobsService long-running integration jobs", () => {
       expect(externalInvoices.runGibPortalFollowupJobStep).toHaveBeenCalledWith(
         expect.objectContaining({
           input: {
-            startDate: "2026-05-22T00:00:00+03:00",
-            endDate: "2026-05-22T23:59:59+03:00"
+            startDate: "2026-05-17T00:00:00+03:00",
+            endDate: "2026-05-23T23:59:59+03:00"
           }
         }),
         expect.any(Object)

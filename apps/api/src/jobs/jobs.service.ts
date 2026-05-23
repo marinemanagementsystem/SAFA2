@@ -10,6 +10,9 @@ import { TrendyolService } from "../trendyol/trendyol.service";
 
 type JsonRecord = Record<string, any>;
 
+const GIB_FOLLOWUP_WINDOW_DAYS = 7;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
 function jsonRecord(value: unknown): JsonRecord {
   return value && typeof value === "object" && !Array.isArray(value) ? (value as JsonRecord) : {};
 }
@@ -34,10 +37,12 @@ function istanbulDateKey(date = new Date()) {
 }
 
 function scheduledGibFollowupInput(date = new Date()) {
-  const dateKey = istanbulDateKey(date);
+  const endDateKey = istanbulDateKey(date);
+  const endStart = new Date(`${endDateKey}T00:00:00+03:00`);
+  const startDateKey = istanbulDateKey(new Date(endStart.getTime() - (GIB_FOLLOWUP_WINDOW_DAYS - 1) * DAY_MS));
   return {
-    startDate: `${dateKey}T00:00:00+03:00`,
-    endDate: `${dateKey}T23:59:59+03:00`
+    startDate: `${startDateKey}T00:00:00+03:00`,
+    endDate: `${endDateKey}T23:59:59+03:00`
   };
 }
 
@@ -50,7 +55,7 @@ function gibFollowupInput(payload: unknown) {
   };
 }
 
-function isTodayGibFollowupJob(job: any, input: { startDate: string; endDate: string }) {
+function isCurrentGibFollowupJob(job: any, input: { startDate: string; endDate: string }) {
   const current = gibFollowupInput(job?.payload);
   return current.startDate === input.startDate && current.endDate === input.endDate;
 }
@@ -390,7 +395,7 @@ export class JobsService implements OnModuleDestroy {
   }
 
   async runScheduledGibFollowup() {
-    const todayInput = scheduledGibFollowupInput();
+    const followupInput = scheduledGibFollowupInput();
     const activeJobs = await this.prisma.integrationJob.findMany({
       where: {
         type: "gib-portal.followup",
@@ -400,17 +405,17 @@ export class JobsService implements OnModuleDestroy {
       orderBy: [{ updatedAt: "desc" }],
       take: 10
     });
-    const activeJob = activeJobs.find((job) => isTodayGibFollowupJob(job, todayInput));
-    const staleJobs = activeJobs.filter((job) => !isTodayGibFollowupJob(job, todayInput));
+    const activeJob = activeJobs.find((job) => isCurrentGibFollowupJob(job, followupInput));
+    const staleJobs = activeJobs.filter((job) => !isCurrentGibFollowupJob(job, followupInput));
     for (const staleJob of staleJobs) {
       await this.prisma.integrationJob.update({
         where: { id: staleJob.id },
         data: {
           status: JobStatus.FAILED,
-          lastError: "Bugunden onceki GIB takip isi durduruldu; scheduler yalnizca bugunu isler.",
+          lastError: "GIB takip isi durduruldu; scheduler son 7 gunu isler.",
           response: {
             ...stripLargeJobResponse(jsonRecord(staleJob.response)),
-            message: "Bugunden onceki GIB takip isi durduruldu; yeni is sadece bugunu isleyecek."
+            message: "Eski GIB takip isi durduruldu; yeni is son 7 gunu isleyecek."
           } as Prisma.InputJsonValue
         }
       });
@@ -426,10 +431,10 @@ export class JobsService implements OnModuleDestroy {
           payload: {
             kind: "gib-portal-followup",
             phase: "gib-apply",
-            input: todayInput
+            input: followupInput
           } as Prisma.InputJsonValue,
           response: {
-            message: "Bugunun GIB portal imza/PDF/Trendyol takibi baslatildi."
+            message: "Son 7 gun GIB portal imza/PDF/Trendyol takibi baslatildi."
           } as Prisma.InputJsonValue
         }
       }));

@@ -36,7 +36,7 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { api } from "../../lib/api";
 import { cx, dateMatches, formatDateTime, money, numberValue, startOfToday, statusLabel, statusTone, stringValue } from "../../lib/platform/format";
-import { todayGibPortalSyncRequest } from "./gib-portal-sync-window";
+import { isInRecentGibPortalSyncWindow, recentGibPortalSyncRequest } from "./gib-portal-sync-window";
 import {
   buildInvoiceOperationMetrics,
   buildInvoiceOperationRows,
@@ -912,11 +912,11 @@ export function InvoicesView({
   const portalDraftedDrafts = drafts.filter((draft) => draft.status === "PORTAL_DRAFTED" && draft.externalInvoiceCount === 0);
   const portalDraftsWithExternalInvoices = drafts.filter((draft) => draft.status === "PORTAL_DRAFTED" && draft.externalInvoiceCount > 0);
   const matchedExternalInvoices = externalInvoices.filter((invoice) => invoice.matchedOrderId).length;
-  const todaySignedUnarchivedPortalInvoices = externalInvoices.filter(
-    (invoice) => isSignedPortalExternal(invoice) && !invoice.promotedInvoiceId && dateMatches(invoice.invoiceDate, "today")
+  const recentSignedUnarchivedPortalInvoices = externalInvoices.filter(
+    (invoice) => isSignedPortalExternal(invoice) && !invoice.promotedInvoiceId && isInRecentGibPortalSyncWindow(invoice.invoiceDate)
   );
-  const todayPdfWaitingInvoices = invoices.filter(
-    (invoice) => dateMatches(invoice.invoiceDate, "today") && (!invoice.pdfAvailable || stringValue(invoice.error).includes("pdf bekliyor"))
+  const recentPdfWaitingInvoices = invoices.filter(
+    (invoice) => isInRecentGibPortalSyncWindow(invoice.invoiceDate) && (!invoice.pdfAvailable || stringValue(invoice.error).includes("pdf bekliyor"))
   );
   const draftById = useMemo(() => new Map(drafts.map((draft) => [draft.id, draft])), [drafts]);
   const invoiceByDraftId = useMemo(() => new Map(invoices.map((invoice) => [invoice.draftId, invoice])), [invoices]);
@@ -1209,12 +1209,12 @@ export function InvoicesView({
   }
 
   async function previewSignedPortalInvoices() {
-    const result = await onPreviewGibExternalInvoices(todayGibPortalSyncRequest());
+    const result = await onPreviewGibExternalInvoices(recentGibPortalSyncRequest());
     if (result) setGibFollowupResult(result);
   }
 
   async function applySignedPortalInvoices() {
-    const result = await onApplyGibExternalInvoices(todayGibPortalSyncRequest());
+    const result = await onApplyGibExternalInvoices(recentGibPortalSyncRequest());
     if (result) setGibFollowupResult(result);
   }
 
@@ -1308,8 +1308,8 @@ export function InvoicesView({
         selectedNeedsApprovalCount={selectedNeedsApprovalCount}
         selectionAdvice={selectionAdvice}
         visibleSelectableDraftCount={visibleOperationSelectableDraftIds.length}
-        signedUnarchivedPortalInvoices={todaySignedUnarchivedPortalInvoices.length}
-        pdfWaitingInvoices={todayPdfWaitingInvoices.length}
+        signedUnarchivedPortalInvoices={recentSignedUnarchivedPortalInvoices.length}
+        pdfWaitingInvoices={recentPdfWaitingInvoices.length}
         onQueryChange={setOperationQuery}
         onQueueChange={setOperationQueue}
         onSelectRow={(row) => setSelectedOperationId(row.id)}
@@ -1501,7 +1501,7 @@ export function InvoicesView({
             {portalDraftedDrafts.length > 0 ? (
               <div className="form-alert table-note portal-draft-finder">
                 <strong>{portalDraftedDrafts.length} taslak GIB portalina yuklendi ve manuel imza bekliyor.</strong>
-                <span>Portalda Duzenlenen Belgeler ekraninda bugunun tarihi, alici adi ve tutarla bulun.</span>
+                <span>Portalda Duzenlenen Belgeler ekraninda son 7 gun araligini, alici adi ve tutarla bulun.</span>
                 <div className="portal-draft-finder-actions">
                   <button className="ui-button ghost compact" type="button" onClick={onOpenGibPortal} disabled={busyAction === "open-gib"}>
                     {busyAction === "open-gib" ? <Loader2 size={16} className="spin" /> : <Link2 size={16} />}
@@ -1513,11 +1513,11 @@ export function InvoicesView({
                   </button>
                   <button className="ui-button primary compact" type="button" onClick={() => void previewSignedPortalInvoices()} disabled={busyAction === "external-gib-preview"}>
                     {busyAction === "external-gib-preview" ? <Loader2 size={16} className="spin" /> : <FileSearch size={16} />}
-                    Bugunun imzalilarini kontrol et
+                    Son 7 gun imzalilarini kontrol et
                   </button>
                   <button className="ui-button ghost compact" type="button" onClick={() => void applySignedPortalInvoices()} disabled={busyAction === "external-gib-apply"}>
                     {busyAction === "external-gib-apply" ? <Loader2 size={16} className="spin" /> : <CheckCircle2 size={16} />}
-                    Bugun guvenli olanlari uygula
+                    Son 7 gun guvenli olanlari uygula
                   </button>
                 </div>
                 <div className="portal-draft-finder-list">
@@ -1763,13 +1763,13 @@ export function InvoicesView({
             </div>
           ) : null}
 
-          {todaySignedUnarchivedPortalInvoices.length > 0 || todayPdfWaitingInvoices.length > 0 ? (
+          {recentSignedUnarchivedPortalInvoices.length > 0 || recentPdfWaitingInvoices.length > 0 ? (
             <div className="form-alert table-note">
-              {todaySignedUnarchivedPortalInvoices.length > 0 ? (
-                <span>{todaySignedUnarchivedPortalInvoices.length} bugun portalda imzali ama SAFA arsivine alinmamis kayit var. Bugun guvenli olanlari uygula ile onarilir.</span>
+              {recentSignedUnarchivedPortalInvoices.length > 0 ? (
+                <span>{recentSignedUnarchivedPortalInvoices.length} son 7 gunde portalda imzali ama SAFA arsivine alinmamis kayit var. Son 7 gun guvenli olanlari uygula ile onarilir.</span>
               ) : null}
-              {todayPdfWaitingInvoices.length > 0 ? (
-                <span>{todayPdfWaitingInvoices.length} bugunku arsiv kaydi portal imzali / PDF bekliyor; PDF gelmeden Trendyol'a dosya gonderilmez.</span>
+              {recentPdfWaitingInvoices.length > 0 ? (
+                <span>{recentPdfWaitingInvoices.length} son 7 gun arsiv kaydi portal imzali / PDF bekliyor; PDF gelmeden Trendyol'a dosya gonderilmez.</span>
               ) : null}
             </div>
           ) : null}
@@ -1813,7 +1813,7 @@ export function InvoicesView({
         <div className="external-tools">
           <div className="field compact-field readonly-field">
             <span>e-Arsiv kapsam</span>
-            <strong>Bugun</strong>
+            <strong>Son 7 gun</strong>
           </div>
           <button
             className="ui-button primary"
@@ -1821,7 +1821,7 @@ export function InvoicesView({
             disabled={busyAction === "external-gib-preview"}
           >
             {busyAction === "external-gib-preview" ? <Loader2 size={18} className="spin" /> : <FileSearch size={18} />}
-            Bugunun imzalilarini kontrol et
+            Son 7 gun imzalilarini kontrol et
           </button>
           <button
             className="ui-button ghost"
@@ -1829,7 +1829,7 @@ export function InvoicesView({
             disabled={busyAction === "external-gib-apply"}
           >
             {busyAction === "external-gib-apply" ? <Loader2 size={18} className="spin" /> : <CheckCircle2 size={18} />}
-            Bugun guvenli olanlari uygula
+            Son 7 gun guvenli olanlari uygula
           </button>
           <button
             className="ui-button ghost"
@@ -2040,7 +2040,7 @@ function InvoiceOperationsDashboard({
   onSendInvoiceToTrendyol: (id: string) => void;
 }) {
   const queueCards: Array<{ key: InvoiceOperationQueueKey; title: string; count: number; detail: string; tone: NoticeTone }> = [
-    { key: "action", title: "Bugun oncelik", count: metrics.actionCount, detail: "Operator aksiyonu bekleyen kayit", tone: "danger" },
+    { key: "action", title: "Son 7 gun oncelik", count: metrics.actionCount, detail: "Operator aksiyonu bekleyen kayit", tone: "danger" },
     { key: "portal-signature", title: "Portal imza bekliyor", count: metrics.portalSignatureCount, detail: "GIB sorgusu veya portal imzasi gerekli", tone: "warning" },
     { key: "pdf-missing", title: "PDF arsivi bos", count: metrics.pdfMissingCount, detail: "Arsive dusmeyen resmi PDF eksikleri", tone: "danger" },
     { key: "external-found", title: "Harici e-Arsiv eslesti", count: metrics.externalFoundCount, detail: "SAFA arsivine alinabilecek kayit", tone: "neutral" },
@@ -2197,7 +2197,7 @@ function InvoiceOperationsDashboard({
                 disabled={busyAction === "external-gib-apply"}
               >
                 {busyAction === "external-gib-apply" ? <Loader2 size={16} className="spin" /> : <CheckCircle2 size={16} />}
-                Bugun eslesenleri uygula
+                Son 7 gun eslesenleri uygula
               </button>
             </div>
           </div>
@@ -2418,7 +2418,7 @@ function InvoiceOperationsDashboard({
           </div>
           <div>
             <strong>Operator onceligi</strong>
-            <span>Bugun yapilacak isler otomatik uste tasinir.</span>
+            <span>Son 7 gunde yapilacak isler otomatik uste tasinir.</span>
           </div>
         </div>
         <div className="archive-filter-bar" aria-label="PDF arsivi filtreleri">

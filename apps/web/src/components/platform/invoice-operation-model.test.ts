@@ -144,12 +144,43 @@ describe("buildInvoiceOperationRows", () => {
     });
   });
 
-  it("keeps pre-today invoices visible but out of operation queues", () => {
+  it("keeps yesterday invoices actionable inside the 7-day operation window", () => {
+    vi.setSystemTime(new Date("2026-05-23T10:00:00+03:00"));
     const rows = buildInvoiceOperationRows({
       drafts: [],
       invoices: [
         invoice({
-          invoiceDate: "2026-05-21T09:00:00.000Z",
+          invoiceDate: "2026-05-22T09:00:00.000Z",
+          status: "TRENDYOL_SEND_FAILED",
+          pdfAvailable: false,
+          error: "Dunku pazaryeri hatasi"
+        })
+      ],
+      externalInvoices: [],
+      jobs: []
+    });
+    const [row] = rows;
+
+    expect(row.statusLabel).toBe("Pazaryeri hatasi");
+    expect(row.nextAction.kind).toBe("send-trendyol");
+    expect(row.queueKeys).toEqual(expect.arrayContaining(["action", "pdf-missing", "marketplace"]));
+    expect(row.stages.pdf.state).toBe("missing");
+    expect(buildInvoiceOperationMetrics(rows)).toEqual({
+      actionCount: 1,
+      portalSignatureCount: 0,
+      pdfMissingCount: 1,
+      externalFoundCount: 0,
+      marketplaceCount: 1
+    });
+  });
+
+  it("keeps invoices outside the 7-day operation window visible but out of operation queues", () => {
+    vi.setSystemTime(new Date("2026-05-23T10:00:00+03:00"));
+    const rows = buildInvoiceOperationRows({
+      drafts: [],
+      invoices: [
+        invoice({
+          invoiceDate: "2026-05-16T09:00:00.000Z",
           status: "TRENDYOL_SEND_FAILED",
           pdfAvailable: false,
           error: "Eski pazaryeri hatasi"

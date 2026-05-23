@@ -277,11 +277,23 @@ function istanbulDayWindow(date = new Date()) {
   return { dateKey, start, end };
 }
 
-function todayGibPortalInput(date = new Date()) {
-  const { dateKey } = istanbulDayWindow(date);
+const GIB_FOLLOWUP_WINDOW_DAYS = 7;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+function istanbulRecentDayWindow(days = GIB_FOLLOWUP_WINDOW_DAYS, date = new Date()) {
+  const endDateKey = istanbulDateKey(date);
+  const endStart = new Date(`${endDateKey}T00:00:00+03:00`);
+  const startDateKey = istanbulDateKey(new Date(endStart.getTime() - (Math.max(1, days) - 1) * DAY_MS));
+  const start = new Date(`${startDateKey}T00:00:00+03:00`);
+  const end = new Date(endStart.getTime() + DAY_MS);
+  return { startDateKey, endDateKey, start, end };
+}
+
+function recentGibPortalInput(date = new Date()) {
+  const { startDateKey, endDateKey } = istanbulRecentDayWindow(GIB_FOLLOWUP_WINDOW_DAYS, date);
   return {
-    startDate: `${dateKey}T00:00:00+03:00`,
-    endDate: `${dateKey}T23:59:59+03:00`
+    startDate: `${startDateKey}T00:00:00+03:00`,
+    endDate: `${endDateKey}T23:59:59+03:00`
   };
 }
 
@@ -1013,7 +1025,7 @@ export class ExternalInvoicesService {
     const followupInput =
       requestedInput.startDate || requestedInput.endDate
         ? { startDate: requestedInput.startDate, endDate: requestedInput.endDate }
-        : todayGibPortalInput();
+        : recentGibPortalInput();
 
     if (phase === "gib-apply") {
       const applyPayload =
@@ -1159,12 +1171,12 @@ export class ExternalInvoicesService {
     }
     if (trendYolKeys.size === 0) return { updated: 0 };
 
-    const today = istanbulDayWindow();
+    const recentWindow = istanbulRecentDayWindow();
     const invoices = await this.prisma.invoice.findMany({
       where: {
         invoiceDate: {
-          gte: today.start,
-          lt: today.end
+          gte: recentWindow.start,
+          lt: recentWindow.end
         }
       },
       include: { draft: { include: { order: true } } },
