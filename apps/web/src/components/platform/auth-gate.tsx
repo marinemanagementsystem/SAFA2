@@ -14,6 +14,8 @@ interface AuthGateSession extends StoredAuthSession {
   logout: () => void;
 }
 
+const offlineDevUsername = "sarper";
+
 function loginErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : "Kullanici adi veya sifre hatali.";
 }
@@ -39,7 +41,7 @@ export function AuthGate({ children }: { children: (session: AuthGateSession) =>
       .catch((error) => {
         if (!cancelled) {
           if (process.env.NODE_ENV !== "production") {
-            setSession({ username: "offline-dev", source: "offline" });
+            setSession({ username: offlineDevUsername, source: "offline" });
           }
           setError(loginErrorMessage(error));
         }

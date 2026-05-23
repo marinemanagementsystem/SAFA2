@@ -47,11 +47,14 @@ export function PlatformApp({ view }: PlatformAppProps) {
           ) : null}
           {view === "orders" ? (
             <OrdersView
+              ownerUsername={session.username}
               orders={snapshot.orders}
               selectedOrderId={platform.selectedOrderId}
               selectedOrder={platform.selectedOrder}
               detailState={platform.detailState}
+              busyAction={platform.busyAction ?? ""}
               onSelectOrder={platform.setSelectedOrderId}
+              onUploadPortalDrafts={platform.uploadPortalDrafts}
             />
           ) : null}
           {view === "invoices" ? (
