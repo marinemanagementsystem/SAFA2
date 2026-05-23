@@ -1272,6 +1272,10 @@ a {
   cursor: not-allowed;
 }
 
+.invoice-op-select.disabled span {
+  color: var(--muted);
+}
+
 .skeleton-line {
   display: block;
   width: 74px;
@@ -1469,6 +1473,44 @@ a {
   display: grid;
   min-height: 220px;
   align-content: center;
+}
+
+.invoice-ops-detail-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(15, 23, 42, 0.44);
+  backdrop-filter: blur(10px);
+}
+
+@media (min-width: 981px) {
+  .view-invoices .invoice-ops-detail-modal-backdrop {
+    left: 220px;
+  }
+}
+
+.invoice-ops-detail-modal {
+  position: relative;
+  width: min(1060px, 100%);
+  max-height: min(88vh, 920px);
+  overflow: auto;
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+}
+
+.invoice-ops-detail-modal .invoice-ops-detail {
+  position: static;
+}
+
+.invoice-ops-detail-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 2;
+  background: var(--surface);
 }
 
 .invoice-ops-detail-head,
@@ -3631,20 +3673,53 @@ a {
   }
 }
 
-@media (max-width: 1380px) and (min-width: 981px) {
+@media (max-width: 1620px) and (min-width: 981px) {
   .view-invoices .invoice-ops-workspace {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .view-invoices .invoice-ops-queue {
+    display: grid;
     grid-template-columns: 238px minmax(0, 1fr);
   }
 
-  .view-invoices .invoice-ops-detail {
+  .view-invoices .invoice-ops-queue > .section-head {
+    margin: 0;
+    border-right: 1px solid var(--line);
+  }
+
+  .view-invoices .invoice-ops-mock-fields {
+    grid-template-columns: 180px 210px minmax(180px, 1fr);
+    gap: 10px;
+    padding: 12px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .view-invoices .invoice-ops-queue-list {
     grid-column: 2;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 8px;
+    padding: 0 12px 12px;
+  }
+
+  .view-invoices .invoice-ops-table-panel {
+    grid-column: 1;
     grid-row: 2;
+  }
+
+  .view-invoices .invoice-ops-detail {
+    grid-column: 1;
+    grid-row: 3;
     position: static;
+  }
+
+  .view-invoices .invoice-ops-workspace > .invoice-ops-detail {
+    display: none;
   }
 
   .view-invoices .invoice-archive-panel {
     grid-column: 1 / -1;
-    grid-row: 3;
+    grid-row: 4;
   }
 }
 

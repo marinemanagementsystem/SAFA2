@@ -172,6 +172,17 @@ function isSelectableDraft(draft: InvoiceDraftListItem) {
   );
 }
 
+function draftSelectionLockReason(row: InvoiceOperationRow) {
+  if (!row.draft) return "Bu satirda toplu taslak islemine uygun taslak yok.";
+  if (isSelectableDraft(row.draft)) return "";
+  if (row.draft.externalInvoiceCount > 0) return "Harici e-Arsiv kaydi eslestigi icin taslak toplu islemine dahil degil.";
+  if (row.draft.status === "ISSUED") return "Resmi fatura olustugu icin taslak secimi kapali.";
+  if (row.draft.status === "PORTAL_DRAFTED") return "GIB portal taslagi olustugu icin sonraki adim satir aksiyonundan ilerler.";
+  if (row.draft.status === "ISSUING") return "Fatura kesimi devam ederken secim kapali.";
+  if (row.draft.status === "ERROR" && row.draft.errors.length > 0) return "Hatali taslak once satir uzerinden kontrol edilmeli.";
+  return `${statusLabel(row.draft.status)} durumundaki taslak toplu secime uygun degil.`;
+}
+
 function matchesDraftDeskFilter(
   draft: InvoiceDraftListItem,
   filter: DraftDeskFilter,
@@ -887,6 +898,7 @@ export function InvoicesView({
   const [operationQuery, setOperationQuery] = useState(initialDeskQuery);
   const [operationQueue, setOperationQueue] = useState<InvoiceOperationQueueKey>("all");
   const [selectedOperationId, setSelectedOperationId] = useState("");
+  const [operationDetailOpen, setOperationDetailOpen] = useState(false);
   const [draftQuery, setDraftQuery] = useState(initialDeskQuery);
   const [draftDeskFilter, setDraftDeskFilter] = useState<DraftDeskFilter>(initialDeskQuery ? "all" : "actionable");
   const [draftExternalFilter, setDraftExternalFilter] = useState<DraftExternalFilter>("all");
@@ -1321,7 +1333,10 @@ export function InvoicesView({
         pdfWaitingInvoices={recentPdfWaitingInvoices.length}
         onQueryChange={setOperationQuery}
         onQueueChange={setOperationQueue}
-        onSelectRow={(row) => setSelectedOperationId(row.id)}
+        onSelectRow={(row) => {
+          setSelectedOperationId(row.id);
+          setOperationDetailOpen(true);
+        }}
         onToggleDraftSelection={toggleOperationDraftSelection}
         onSelectVisibleDrafts={selectVisibleOperationDrafts}
         onClearSelectedDrafts={() => setSelectedDrafts([])}
@@ -1345,6 +1360,29 @@ export function InvoicesView({
         onCreateMonthlyArchive={createMonthlyArchive}
         onSendInvoiceToTrendyol={onSendInvoiceToTrendyol}
       />
+      {operationDetailOpen && selectedOperation ? (
+        <div className="invoice-ops-detail-modal-backdrop" role="presentation" onMouseDown={() => setOperationDetailOpen(false)}>
+          <div
+            aria-label={`${selectedOperation.orderNumber} fatura detayi`}
+            aria-modal="true"
+            className="invoice-ops-detail-modal"
+            role="dialog"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <button className="icon-button invoice-ops-detail-close" type="button" onClick={() => setOperationDetailOpen(false)} aria-label="Fatura detayini kapat">
+              <X size={18} />
+            </button>
+            <InvoiceOperationDetailPanel
+              row={selectedOperation}
+              busyAction={busyAction}
+              onRunAction={runOperationAction}
+              onUploadPdf={uploadOperationPdf}
+              onOpenGibPortal={onOpenGibPortal}
+              onCloseGibPortalSession={onCloseGibPortalSession}
+            />
+          </div>
+        </div>
+      ) : null}
       <section className="content-grid invoice-grid legacy-invoice-grid" aria-hidden="true">
         <article className="surface-panel">
           <div className="section-head">
@@ -2062,6 +2100,7 @@ function InvoiceOperationsDashboard({
   const workQueueCards = [queueCards[2], queueCards[1], queueCards[3], queueCards[4]];
   const hasSelectableDrafts = visibleSelectableDraftCount > 0;
   const showBulkActions = selectedDraftIds.length > 0 || hasSelectableDrafts;
+  const lockedDraftRowCount = filteredRows.filter((row) => row.draft && !isSelectableDraft(row.draft)).length;
   const selectedDraftSummary =
     selectedDraftIds.length > 0
       ? [
@@ -2072,7 +2111,7 @@ function InvoiceOperationsDashboard({
           .filter(Boolean)
           .join(" · ") || `${selectedDraftIds.length} taslak secili`
       : hasSelectableDrafts
-        ? `${visibleSelectableDraftCount} gorunur taslak secilebilir`
+        ? `${visibleSelectableDraftCount} taslak toplu isleme uygun`
         : "Secilebilir taslak yok. Filtreyi degistirin veya senkronizasyon calistirin.";
   const allVisibleSelected = visibleSelectableDraftCount > 0 && visibleSelectedDraftCount === visibleSelectableDraftCount;
   const portalActionDisabled = selectedDraftIds.length === 0 || selectedPortalReadyCount === 0 || busyAction === busyKeyForAction("portal");
@@ -2262,6 +2301,9 @@ function InvoiceOperationsDashboard({
                 <small>
                   {selectionAdvice || selectedDraftSummary}
                   {selectedDraftIds.length > 0 ? ` Portal yukleme icin ${selectedPortalReadyCount} onayli taslak hazir.` : ""}
+                  {selectedDraftIds.length === 0 && lockedDraftRowCount > 0
+                    ? ` ${lockedDraftRowCount} satir harici/eski asamada oldugu icin taslak toplu secimine dahil degil.`
+                    : ""}
                 </small>
               </div>
             </div>
@@ -2269,7 +2311,7 @@ function InvoiceOperationsDashboard({
               <div className="invoice-ops-bulkbar-actions">
                 <button className="ui-button ghost compact" type="button" onClick={onSelectVisibleDrafts} disabled={visibleSelectableDraftCount === 0}>
                   <Check size={16} />
-                  {allVisibleSelected ? "Gorunenleri birak" : "Gorunenleri sec"}
+                  {allVisibleSelected ? "Secilebilirleri birak" : `${visibleSelectableDraftCount} taslagi sec`}
                 </button>
                 <button className="ui-button ghost compact" type="button" onClick={onClearSelectedDrafts} disabled={selectedDraftIds.length === 0}>
                   <X size={16} />
@@ -2544,9 +2586,15 @@ function DraftSelectionControl({
   onToggle: (row: InvoiceOperationRow, checked: boolean) => void;
 }) {
   const selectable = Boolean(row.draft && isSelectableDraft(row.draft));
+  const lockReason = selectable ? "" : draftSelectionLockReason(row);
 
   return (
-    <label className={cx("invoice-op-select", !selectable && "disabled")} onClick={(event) => event.stopPropagation()}>
+    <label
+      className={cx("invoice-op-select", !selectable && "disabled")}
+      onClick={(event) => event.stopPropagation()}
+      title={selectable ? `${row.orderNumber} taslagini sec` : lockReason}
+      aria-label={selectable ? `${row.orderNumber} taslagini sec` : lockReason}
+    >
       <input
         type="checkbox"
         checked={checked}
@@ -2554,7 +2602,7 @@ function DraftSelectionControl({
         onChange={(event) => onToggle(row, event.target.checked)}
         aria-label={`${row.orderNumber} taslagini sec`}
       />
-      <span aria-hidden="true">{checked ? <Check size={12} /> : null}</span>
+      <span aria-hidden="true">{checked ? <Check size={12} /> : !selectable ? <X size={12} /> : null}</span>
     </label>
   );
 }
