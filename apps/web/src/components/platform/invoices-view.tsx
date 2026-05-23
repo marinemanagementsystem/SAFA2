@@ -37,6 +37,7 @@ import { useMemo, useState } from "react";
 import { api } from "../../lib/api";
 import { cx, dateMatches, formatDateTime, money, numberValue, startOfToday, statusLabel, statusTone, stringValue } from "../../lib/platform/format";
 import { isInRecentGibPortalSyncWindow, recentGibPortalSyncRequest } from "./gib-portal-sync-window";
+import { approvedSelectedDraftIds, toggleDraftSelection, toggleVisibleDraftSelection } from "./invoice-bulk-selection";
 import {
   buildInvoiceOperationMetrics,
   buildInvoiceOperationRows,
@@ -925,6 +926,7 @@ export function InvoicesView({
   const selectedRetryCount = selectedDraftItems.filter((draft) => draft.status === "ERROR").length;
   const selectedApprovedCount = selectedDraftItems.filter((draft) => draft.status === "APPROVED").length;
   const selectedNeedsApprovalCount = selectedReadyCount + selectedRetryCount;
+  const selectedPortalReadyCount = selectedApprovedCount;
   const archiveStatuses = useMemo(() => Array.from(new Set(invoices.map((invoice) => invoice.status))).sort(), [invoices]);
   const selectedArchiveMonth = parseMonthValue(monthlyArchiveMonth);
   const operationRows = useMemo(
@@ -939,6 +941,10 @@ export function InvoicesView({
   const visibleOperationSelectableDraftIds = useMemo(
     () => Array.from(new Set(filteredOperationRows.flatMap((row) => (row.draft && isSelectableDraft(row.draft) ? [row.draft.id] : [])))),
     [filteredOperationRows]
+  );
+  const visibleSelectedOperationDraftCount = useMemo(
+    () => visibleOperationSelectableDraftIds.filter((id) => selectedDrafts.includes(id)).length,
+    [selectedDrafts, visibleOperationSelectableDraftIds]
   );
   const selectedOperation =
     filteredOperationRows.find((row) => row.id === selectedOperationId) ??
@@ -1079,7 +1085,7 @@ export function InvoicesView({
   }, [filteredInvoices]);
 
   function toggleDraft(id: string, checked: boolean) {
-    setSelectedDrafts((current) => (checked ? [...current, id] : current.filter((draftId) => draftId !== id)));
+    setSelectedDrafts((current) => toggleDraftSelection(current, id, checked));
   }
 
   function selectVisibleDrafts() {
@@ -1088,7 +1094,7 @@ export function InvoicesView({
   }
 
   function selectVisibleOperationDrafts() {
-    setSelectedDrafts((current) => Array.from(new Set([...current, ...visibleOperationSelectableDraftIds])));
+    setSelectedDrafts((current) => toggleVisibleDraftSelection(current, visibleOperationSelectableDraftIds));
   }
 
   function resetDraftFilters() {
@@ -1205,7 +1211,8 @@ export function InvoicesView({
   }
 
   function uploadPortalSelected() {
-    void runDraftOperation("portal", [...selectedDrafts], onUploadPortalDrafts);
+    const ids = approvedSelectedDraftIds(selectedDrafts, draftById);
+    void runDraftOperation("portal", ids, onUploadPortalDrafts);
   }
 
   async function previewSignedPortalInvoices() {
@@ -1305,9 +1312,11 @@ export function InvoicesView({
         selectedReadyCount={selectedReadyCount}
         selectedRetryCount={selectedRetryCount}
         selectedApprovedCount={selectedApprovedCount}
+        selectedPortalReadyCount={selectedPortalReadyCount}
         selectedNeedsApprovalCount={selectedNeedsApprovalCount}
         selectionAdvice={selectionAdvice}
         visibleSelectableDraftCount={visibleOperationSelectableDraftIds.length}
+        visibleSelectedDraftCount={visibleSelectedOperationDraftCount}
         signedUnarchivedPortalInvoices={recentSignedUnarchivedPortalInvoices.length}
         pdfWaitingInvoices={recentPdfWaitingInvoices.length}
         onQueryChange={setOperationQuery}
@@ -1958,9 +1967,11 @@ function InvoiceOperationsDashboard({
   selectedReadyCount,
   selectedRetryCount,
   selectedApprovedCount,
+  selectedPortalReadyCount,
   selectedNeedsApprovalCount,
   selectionAdvice,
   visibleSelectableDraftCount,
+  visibleSelectedDraftCount,
   signedUnarchivedPortalInvoices,
   pdfWaitingInvoices,
   onQueryChange,
@@ -2008,9 +2019,11 @@ function InvoiceOperationsDashboard({
   selectedReadyCount: number;
   selectedRetryCount: number;
   selectedApprovedCount: number;
+  selectedPortalReadyCount: number;
   selectedNeedsApprovalCount: number;
   selectionAdvice: string;
   visibleSelectableDraftCount: number;
+  visibleSelectedDraftCount: number;
   signedUnarchivedPortalInvoices: number;
   pdfWaitingInvoices: number;
   onQueryChange: (value: string) => void;
@@ -2061,6 +2074,14 @@ function InvoiceOperationsDashboard({
       : hasSelectableDrafts
         ? `${visibleSelectableDraftCount} gorunur taslak secilebilir`
         : "Secilebilir taslak yok. Filtreyi degistirin veya senkronizasyon calistirin.";
+  const allVisibleSelected = visibleSelectableDraftCount > 0 && visibleSelectedDraftCount === visibleSelectableDraftCount;
+  const portalActionDisabled = selectedDraftIds.length === 0 || selectedPortalReadyCount === 0 || busyAction === busyKeyForAction("portal");
+  const portalActionLabel =
+    selectedDraftIds.length > 0 && selectedPortalReadyCount === 0
+      ? "Once onay gerekli"
+      : selectedPortalReadyCount > 0 && selectedPortalReadyCount < selectedDraftIds.length
+        ? `${selectedPortalReadyCount} onayliyi yukle`
+        : "Onaylilari GIB'e yukle";
 
   return (
     <section className="invoice-ops-page" aria-label="Fatura operasyon masasi">
@@ -2238,14 +2259,17 @@ function InvoiceOperationsDashboard({
               </span>
               <div>
                 <strong>{showBulkActions ? "Toplu taslak islemleri" : "Secilecek taslak yok"}</strong>
-                <small>{selectionAdvice || selectedDraftSummary}</small>
+                <small>
+                  {selectionAdvice || selectedDraftSummary}
+                  {selectedDraftIds.length > 0 ? ` Portal yukleme icin ${selectedPortalReadyCount} onayli taslak hazir.` : ""}
+                </small>
               </div>
             </div>
             {showBulkActions ? (
               <div className="invoice-ops-bulkbar-actions">
                 <button className="ui-button ghost compact" type="button" onClick={onSelectVisibleDrafts} disabled={visibleSelectableDraftCount === 0}>
                   <Check size={16} />
-                  Gorunenleri sec
+                  {allVisibleSelected ? "Gorunenleri birak" : "Gorunenleri sec"}
                 </button>
                 <button className="ui-button ghost compact" type="button" onClick={onClearSelectedDrafts} disabled={selectedDraftIds.length === 0}>
                   <X size={16} />
@@ -2264,10 +2288,10 @@ function InvoiceOperationsDashboard({
                   className="ui-button primary compact"
                   type="button"
                   onClick={onUploadPortalSelected}
-                  disabled={selectedDraftIds.length === 0 || busyAction === busyKeyForAction("portal")}
+                  disabled={portalActionDisabled}
                 >
                   {busyAction === busyKeyForAction("portal") ? <Loader2 size={16} className="spin" /> : <UploadCloud size={16} />}
-                  GIB taslagina yukle
+                  {portalActionLabel}
                 </button>
               </div>
             ) : null}

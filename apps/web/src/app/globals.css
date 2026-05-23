@@ -947,14 +947,17 @@ a {
 }
 
 .view-invoices .invoice-ops-workspace {
-  grid-template-columns: 238px minmax(0, 1fr) 296px;
+  grid-template-columns: 248px minmax(760px, 1fr) 312px;
   gap: 12px;
 }
 
-.invoice-ops-queue,
 .invoice-ops-detail {
   position: sticky;
   top: 84px;
+}
+
+.invoice-ops-queue {
+  position: static;
 }
 
 .view-invoices .invoice-ops-detail {
@@ -1144,48 +1147,48 @@ a {
 
 .invoice-ops-table {
   width: 100%;
-  min-width: 650px;
+  min-width: 900px;
   border-collapse: collapse;
   table-layout: fixed;
 }
 
 .invoice-ops-table th:nth-child(1),
 .invoice-ops-table td:nth-child(1) {
-  width: 68px;
+  width: 74px;
 }
 
 .invoice-ops-table th:nth-child(2),
 .invoice-ops-table td:nth-child(2) {
-  width: 160px;
+  width: 210px;
 }
 
 .invoice-ops-table th:nth-child(3),
 .invoice-ops-table td:nth-child(3) {
-  width: 126px;
+  width: 188px;
 }
 
 .invoice-ops-table th:nth-child(4),
 .invoice-ops-table td:nth-child(4) {
-  width: 164px;
+  width: 190px;
 }
 
 .invoice-ops-table th:nth-child(5),
 .invoice-ops-table td:nth-child(5) {
-  width: 112px;
+  width: 150px;
 }
 
 .invoice-ops-table th:nth-child(6),
 .invoice-ops-table td:nth-child(6) {
-  width: 78px;
+  width: 88px;
 }
 
 .invoice-ops-table th,
 .invoice-ops-table td {
-  padding: 9px 10px;
+  padding: 11px 12px;
   border-bottom: 1px solid var(--line);
   text-align: left;
   vertical-align: middle;
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .invoice-ops-table th {
@@ -1331,10 +1334,8 @@ a {
 .invoice-op-record strong,
 .invoice-op-record small,
 .invoice-op-record em {
-  max-width: 136px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  max-width: 100%;
+  overflow-wrap: anywhere;
 }
 
 .invoice-op-cell-stack .status-pill,
@@ -1342,16 +1343,22 @@ a {
   width: 100%;
   max-width: 100%;
   min-width: 0;
-  display: block;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
   min-height: 26px;
-  padding: 5px 8px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  height: auto;
+  padding: 6px 8px;
+  white-space: normal;
+  text-align: left;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
 }
 
 .invoice-op-record strong {
-  font-size: 13px;
+  color: var(--ink);
+  font-size: 14px;
+  line-height: 1.25;
 }
 
 .invoice-op-record small,
@@ -1359,6 +1366,7 @@ a {
   color: var(--muted);
   font-size: 12px;
   font-style: normal;
+  line-height: 1.35;
 }
 
 .invoice-op-stage-rail {
@@ -1373,7 +1381,7 @@ a {
 }
 
 .invoice-op-stage {
-  min-height: 28px;
+  min-height: 30px;
   display: grid;
   place-items: center;
   padding: 0 7px;
@@ -1383,12 +1391,13 @@ a {
   font-size: 11px;
   font-weight: 900;
   text-align: center;
+  line-height: 1.15;
 }
 
 .view-invoices .invoice-op-stage {
-  min-height: 26px;
-  padding: 0 5px;
-  font-size: 10px;
+  min-height: 30px;
+  padding: 3px 5px;
+  font-size: 11px;
 }
 
 .invoice-op-stage.done {
