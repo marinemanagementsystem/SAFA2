@@ -10,7 +10,7 @@ const siteId = process.env.FIREBASE_SITE || projectId;
 const publicDir = resolve(process.env.FIREBASE_PUBLIC_DIR || "apps/web/out");
 const runServiceId = process.env.CLOUD_RUN_SERVICE || "safa-api";
 const runRegion = process.env.CLOUD_RUN_REGION || "europe-west1";
-const message = process.env.FIREBASE_RELEASE_MESSAGE || "Deploy SAFA static web and /api Cloud Run rewrite";
+const message = process.env.FIREBASE_RELEASE_MESSAGE || "Deploy SAFA static web and Cloud Run rewrites";
 const apiBase = "https://firebasehosting.googleapis.com/v1beta1";
 
 function accessToken() {
@@ -106,6 +106,13 @@ function versionConfig() {
       },
     ],
     rewrites: [
+      {
+        glob: "/earsiv-services/**",
+        run: {
+          serviceId: runServiceId,
+          region: runRegion,
+        },
+      },
       {
         glob: "/api/**",
         run: {

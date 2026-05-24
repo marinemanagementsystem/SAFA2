@@ -34,6 +34,16 @@ function settings() {
   } satisfies Partial<SettingsService>;
 }
 
+function mockProxyResponse() {
+  const response = {
+    setHeader: vi.fn().mockReturnThis(),
+    status: vi.fn().mockReturnThis(),
+    send: vi.fn().mockReturnThis(),
+    end: vi.fn().mockReturnThis()
+  };
+  return response;
+}
+
 const payload: GibPortalInvoiceDraftPayload = {
   faturaUuid: "11111111-1111-4111-8111-111111111111",
   belgeNumarasi: "",
@@ -266,6 +276,132 @@ describe("EarsivPortalService", () => {
           headers: {}
         } as never,
         {} as never
+      )
+    ).rejects.toThrow("kayitli GIB portal adresine");
+
+    expect(proxyRequest).not.toHaveBeenCalled();
+  });
+
+  it("returns 410 when escaped e-Arsiv download fallback has no valid proxy session", async () => {
+    const settingsMock = settings();
+    vi.mocked(settingsMock.readEncryptedSetting).mockResolvedValueOnce(undefined);
+    const response = mockProxyResponse();
+
+    const service = new EarsivPortalService(settingsMock as unknown as SettingsService);
+    await service.proxyEscapedPortalRequest(
+      {
+        method: "GET",
+        originalUrl: "/earsiv-services/download?token=pdf-token",
+        headers: {}
+      } as never,
+      response as never
+    );
+
+    expect(response.status).toHaveBeenCalledWith(410);
+    expect(response.send).toHaveBeenCalledWith(expect.stringContaining("SAFA'dan e-Arsiv ac"));
+    expect(proxyRequest).not.toHaveBeenCalled();
+  });
+
+  it("forwards escaped e-Arsiv download fallback through the latest valid proxy session", async () => {
+    const settingsMock = settings();
+    vi.mocked(settingsMock.readEncryptedSetting).mockImplementation(async (key: string) => {
+      if (key === latestProxySessionKey) {
+        return {
+          sessionId: "session-1",
+          portalUrl: "https://earsivportal.efatura.gov.tr/intragiris.html",
+          expiresAt: new Date(Date.now() + 60_000).toISOString()
+        };
+      }
+
+      if (key === "session.gibPortal.proxy.session-1") {
+        return {
+          sessionId: "session-1",
+          portalUrl: "https://earsivportal.efatura.gov.tr/intragiris.html",
+          portalOrigin: "https://earsivportal.efatura.gov.tr",
+          launchUrl: "https://earsivportal.efatura.gov.tr/intragiris.html?token=portal-token",
+          token: "portal-token",
+          cookieJar: { GIBSESSION: "abc123" },
+          openedAt: new Date().toISOString(),
+          expiresAt: new Date(Date.now() + 60_000).toISOString(),
+          lastTargetUrl: "https://earsivportal.efatura.gov.tr/intragiris.html?token=portal-token"
+        };
+      }
+
+      return undefined;
+    });
+    proxyRequest.mockResolvedValueOnce({
+      status: 200,
+      headers: {
+        "content-type": "application/pdf"
+      },
+      data: Buffer.from("%PDF-1.4")
+    });
+    const response = mockProxyResponse();
+
+    const service = new EarsivPortalService(settingsMock as unknown as SettingsService);
+    await service.proxyEscapedPortalRequest(
+      {
+        method: "GET",
+        originalUrl: "/earsiv-services/download?token=pdf-token",
+        headers: {}
+      } as never,
+      response as never
+    );
+
+    expect(proxyRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: "GET",
+        url: "https://earsivportal.efatura.gov.tr/earsiv-services/download?token=pdf-token",
+        headers: expect.objectContaining({
+          Cookie: "GIBSESSION=abc123"
+        })
+      })
+    );
+    expect(settingsMock.writeEncryptedSetting).toHaveBeenCalledWith(
+      "session.gibPortal.proxy.session-1",
+      expect.objectContaining({
+        lastTargetUrl: "https://earsivportal.efatura.gov.tr/earsiv-services/download?token=pdf-token"
+      })
+    );
+    expect(response.status).toHaveBeenCalledWith(200);
+    expect(response.end).toHaveBeenCalledWith(Buffer.from("%PDF-1.4"));
+  });
+
+  it("rejects escaped e-Arsiv fallback paths that try to leave the GIB origin", async () => {
+    const settingsMock = settings();
+    vi.mocked(settingsMock.readEncryptedSetting).mockImplementation(async (key: string) => {
+      if (key === latestProxySessionKey) {
+        return {
+          sessionId: "session-1",
+          portalUrl: "https://earsivportal.efatura.gov.tr/intragiris.html",
+          expiresAt: new Date(Date.now() + 60_000).toISOString()
+        };
+      }
+
+      if (key === "session.gibPortal.proxy.session-1") {
+        return {
+          sessionId: "session-1",
+          portalUrl: "https://earsivportal.efatura.gov.tr/intragiris.html",
+          portalOrigin: "https://earsivportal.efatura.gov.tr",
+          launchUrl: "https://earsivportal.efatura.gov.tr/intragiris.html?token=portal-token",
+          cookieJar: {},
+          openedAt: new Date().toISOString(),
+          expiresAt: new Date(Date.now() + 60_000).toISOString()
+        };
+      }
+
+      return undefined;
+    });
+
+    const service = new EarsivPortalService(settingsMock as unknown as SettingsService);
+    await expect(
+      service.proxyEscapedPortalRequest(
+        {
+          method: "GET",
+          originalUrl: "//example.com/secret",
+          headers: {}
+        } as never,
+        mockProxyResponse() as never
       )
     ).rejects.toThrow("kayitli GIB portal adresine");
 

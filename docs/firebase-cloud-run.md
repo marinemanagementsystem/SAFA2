@@ -5,7 +5,7 @@ This is the permanent production path for `https://safa-8f76e.web.app`.
 ## What runs where
 
 - Firebase Hosting serves the static Next.js panel.
-- Firebase Hosting rewrites `/api/**` to Cloud Run service `safa-api` in `europe-west1`.
+- Firebase Hosting rewrites `/api/**` and escaped GIB portal `/earsiv-services/**` requests to Cloud Run service `safa-api` in `europe-west1`.
 - Cloud Run runs the real Nest API from `apps/api`.
 - Firestore Native mode stores orders, drafts, invoices, jobs, and encrypted integration settings.
 - Production can run in low-cost `QUEUE_MODE=sync`, which skips Memorystore Redis and processes invoice jobs in the request path. Use Redis only when background queue reliability is worth the extra monthly cost.
@@ -47,9 +47,11 @@ CONFIRM_DEPLOY=1 \
 ./scripts/deploy-cloud-run-api.sh
 ```
 
-The script builds `Dockerfile.cloudrun`, deploys Cloud Run in low-cost scale-to-zero mode with `DATA_BACKEND=firestore`, mounts the Cloud Storage bucket, creates the default Firestore database if needed, creates/updates the `safa-gib-followup` Cloud Scheduler job, and deploys Firebase Hosting with the `/api/**` rewrite.
+The script builds `Dockerfile.cloudrun`, deploys Cloud Run in low-cost scale-to-zero mode with `DATA_BACKEND=firestore`, mounts the Cloud Storage bucket, creates the default Firestore database if needed, creates/updates the `safa-gib-followup` Cloud Scheduler job, and deploys Firebase Hosting with the `/api/**` and `/earsiv-services/**` rewrites.
 
-The deploy script uses Cloud Run's `--no-invoker-iam-check` because this project blocks public `allUsers` IAM bindings through organization policy. Firebase Hosting still reaches the service through the `/api/**` rewrite.
+The deploy script uses Cloud Run's `--no-invoker-iam-check` because this project blocks public `allUsers` IAM bindings through organization policy. Firebase Hosting still reaches the service through the `/api/**` and `/earsiv-services/**` rewrites.
+
+If Firebase CLI finalization fails while pinning Cloud Run rewrites, the script falls back to `scripts/deploy-firebase-hosting-rest.sh`. Keep this REST fallback config in sync with `firebase.json`; it must include both rewrites. The `/earsiv-services/**` rewrite is not public file access: the API auth middleware requires a valid SAFA session, returns `401` without auth, returns `410` when the last GIB proxy session is missing or expired, and only forwards to the configured GIB portal origin.
 
 ## 400 TRY hard cap
 
@@ -91,6 +93,14 @@ curl -i https://safa-8f76e.web.app/api/settings
 ```
 
 Expected result before login: `401 Unauthorized`.
+
+Also verify the escaped e-Arsiv fallback does not render a Next static 404:
+
+```bash
+curl -i 'https://safa-8f76e.web.app/earsiv-services/download?token=probe'
+```
+
+Expected result before login: `401 Unauthorized` JSON from Cloud Run. A Next.js `404: This page could not be found` means the Hosting rewrite is missing or stale.
 
 Then open `https://safa-8f76e.web.app`, log in, and verify:
 

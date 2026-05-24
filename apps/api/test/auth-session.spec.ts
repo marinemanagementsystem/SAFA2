@@ -90,6 +90,17 @@ describe("auth session", () => {
     expect(next).not.toHaveBeenCalled();
   });
 
+  it("rejects escaped e-Arsiv portal paths without a session", () => {
+    const response = mockResponse();
+    const next = vi.fn() as NextFunction;
+
+    apiAuthMiddleware(mockApiRequest("/earsiv-services/download"), response, next);
+
+    expect(response.status).toHaveBeenCalledWith(401);
+    expect(response.json).toHaveBeenCalledWith(expect.objectContaining({ error: "Unauthorized" }));
+    expect(next).not.toHaveBeenCalled();
+  });
+
   it("allows public auth session checks without a session", () => {
     const response = mockResponse();
     const next = vi.fn() as NextFunction;

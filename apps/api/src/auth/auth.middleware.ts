@@ -11,7 +11,7 @@ function requestPath(request: Request) {
 
 function isProtectedApiRequest(request: Request) {
   const path = requestPath(request);
-  return path === "/api" || path.startsWith("/api/");
+  return path === "/api" || path.startsWith("/api/") || path === "/earsiv-services" || path.startsWith("/earsiv-services/");
 }
 
 function isPublicApiRequest(request: Request) {

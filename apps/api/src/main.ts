@@ -1,5 +1,5 @@
 import "reflect-metadata";
-import { Logger } from "@nestjs/common";
+import { Logger, RequestMethod } from "@nestjs/common";
 import { NestFactory } from "@nestjs/core";
 import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
 import type { NextFunction, Request, Response } from "express";
@@ -145,7 +145,12 @@ async function bootstrap() {
   const configuredCorsOrigins = process.env.CORS_ORIGIN?.split(",").map((origin) => origin.trim()).filter(Boolean);
   const enablePrivateNetworkCors = shouldEnablePrivateNetworkCors();
 
-  app.setGlobalPrefix("api");
+  app.setGlobalPrefix("api", {
+    exclude: [
+      { path: "earsiv-services", method: RequestMethod.ALL },
+      { path: "earsiv-services/{*proxyPath}", method: RequestMethod.ALL }
+    ]
+  });
   app.enableCors({
     origin: configuredCorsOrigins?.length ? [...configuredCorsOrigins, ...defaultCorsOrigins] : defaultCorsOrigins,
     credentials: true,

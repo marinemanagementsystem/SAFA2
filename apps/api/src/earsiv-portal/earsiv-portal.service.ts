@@ -695,6 +695,21 @@ export class EarsivPortalService {
     }
 
     const targetUrl = this.targetUrlFromProxyRequest(session, request);
+    return this.forwardProxyRequest(session, request, response, targetUrl);
+  }
+
+  async proxyEscapedPortalRequest(request: Request, response: Response) {
+    const session = await this.readLatestValidProxySession();
+    if (!session) {
+      response.status(410).send("e-Arsiv proxy oturumunun suresi doldu. SAFA'dan e-Arsiv ac ile tekrar deneyin.");
+      return;
+    }
+
+    const targetUrl = this.targetUrlFromEscapedPortalRequest(session, request);
+    return this.forwardProxyRequest(session, request, response, targetUrl);
+  }
+
+  private async forwardProxyRequest(session: CachedPortalProxySession, request: Request, response: Response, targetUrl: URL) {
     const proxyHeaders = this.proxyRequestHeaders(session, request, targetUrl);
     const proxyResponse = await axios.request<ArrayBuffer | Buffer>({
       method: request.method,
@@ -1019,13 +1034,27 @@ export class EarsivPortalService {
     const requestUrl = new URL(request.originalUrl, session.portalOrigin);
     const proxyPrefix = `/api/earsiv-portal/proxy/${encodeURIComponent(session.sessionId)}`;
     let targetPath = requestUrl.pathname.slice(proxyPrefix.length);
+    return this.targetUrlFromPortalPath(session, targetPath, requestUrl.search);
+  }
+
+  private targetUrlFromEscapedPortalRequest(session: CachedPortalProxySession, request: Request) {
+    const rawOriginalUrl = request.originalUrl || request.url || "/";
+    if (rawOriginalUrl.startsWith("//")) {
+      throw new BadRequestException("e-Arsiv proxy sadece kayitli GIB portal adresine istek atabilir.");
+    }
+
+    const requestUrl = new URL(rawOriginalUrl, session.portalOrigin);
+    return this.targetUrlFromPortalPath(session, requestUrl.pathname, requestUrl.search);
+  }
+
+  private targetUrlFromPortalPath(session: CachedPortalProxySession, targetPath: string, search: string) {
     if (!targetPath) targetPath = "/";
     if (!targetPath.startsWith("/")) targetPath = `/${targetPath}`;
     if (targetPath.startsWith("//")) {
       throw new BadRequestException("e-Arsiv proxy sadece kayitli GIB portal adresine istek atabilir.");
     }
 
-    const target = new URL(`${targetPath}${requestUrl.search}`, session.portalOrigin);
+    const target = new URL(`${targetPath}${search}`, session.portalOrigin);
     if (target.origin !== session.portalOrigin) {
       throw new BadRequestException("e-Arsiv proxy sadece kayitli GIB portal adresine istek atabilir.");
     }
@@ -1067,6 +1096,21 @@ export class EarsivPortalService {
       if (!cached?.sessionId || cached.sessionId !== sessionId || !cached.portalOrigin) return undefined;
       const expiresAt = new Date(cached.expiresAt).getTime();
       if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) return undefined;
+      return cached;
+    } catch {
+      return undefined;
+    }
+  }
+
+  private async readLatestValidProxySession(): Promise<CachedPortalProxySession | undefined> {
+    try {
+      const latest = await this.settings.readEncryptedSetting<CachedPortalProxyIndex>(GIB_PORTAL_PROXY_LATEST_SESSION_KEY);
+      if (!latest?.sessionId) return undefined;
+      const expiresAt = new Date(latest.expiresAt).getTime();
+      if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) return undefined;
+
+      const cached = await this.readValidProxySession(latest.sessionId);
+      if (!cached || cached.portalUrl !== latest.portalUrl) return undefined;
       return cached;
     } catch {
       return undefined;

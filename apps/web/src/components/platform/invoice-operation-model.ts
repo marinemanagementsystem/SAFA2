@@ -1,5 +1,6 @@
 import type {
   ExternalInvoiceListItem,
+  GibPortalTimelineEvent,
   IntegrationJobListItem,
   InvoiceDraftListItem,
   InvoiceListItem
@@ -181,7 +182,8 @@ function buildInvoiceOperationRow(input: {
   const amountCents = draft?.totalPayableCents ?? externalInvoice?.totalPayableCents ?? 0;
   const currency = draft?.currency ?? externalInvoice?.currency ?? "TRY";
   const historical = isOutsideOperationWindow(draft, invoice, externalInvoice);
-  const baseStages = buildStages(draft, invoice, externalInvoice, visibleJob);
+  const followupEvents = draft?.portalFollowupEvents ?? [];
+  const baseStages = buildStages(draft, invoice, externalInvoice, visibleJob, followupEvents);
   const stages = historical ? maskHistoricalStages(baseStages) : baseStages;
   const nextAction = historical
     ? historicalNextAction(draft, invoice, externalInvoice)
@@ -229,6 +231,7 @@ function buildInvoiceOperationRow(input: {
         externalInvoice?.source,
         externalInvoice?.buyerIdentifier,
         externalInvoice?.matchReason,
+        ...followupEvents.flatMap((event) => [event.invoiceNumber, event.message, event.type]),
         nextAction.label,
         statusLabel
       ]
@@ -242,13 +245,14 @@ function buildStages(
   draft?: InvoiceDraftListItem,
   invoice?: InvoiceListItem,
   externalInvoice?: ExternalInvoiceListItem,
-  job?: IntegrationJobListItem
+  job?: IntegrationJobListItem,
+  followupEvents: GibPortalTimelineEvent[] = draft?.portalFollowupEvents ?? []
 ): Record<InvoiceOperationStageKey, InvoiceOperationStage> {
   return {
     draft: buildDraftStage(draft, invoice, externalInvoice, job),
-    gib: buildGibStage(draft, invoice, externalInvoice, job),
-    pdf: buildPdfStage(draft, invoice, externalInvoice),
-    marketplace: buildMarketplaceStage(invoice, externalInvoice)
+    gib: buildGibStage(draft, invoice, externalInvoice, job, followupEvents),
+    pdf: buildPdfStage(draft, invoice, externalInvoice, followupEvents),
+    marketplace: buildMarketplaceStage(invoice, externalInvoice, followupEvents)
   };
 }
 
@@ -301,6 +305,13 @@ function historicalTone(invoice: InvoiceListItem | undefined, stages: Record<Inv
   return "neutral";
 }
 
+function latestFollowupEvent(events: GibPortalTimelineEvent[], types: GibPortalTimelineEvent["type"][]) {
+  const wanted = new Set(types);
+  return events
+    .filter((event) => wanted.has(event.type))
+    .sort((left, right) => new Date(right.at).getTime() - new Date(left.at).getTime())[0];
+}
+
 function buildDraftStage(
   draft?: InvoiceDraftListItem,
   invoice?: InvoiceListItem,
@@ -321,11 +332,20 @@ function buildGibStage(
   draft?: InvoiceDraftListItem,
   invoice?: InvoiceListItem,
   externalInvoice?: ExternalInvoiceListItem,
-  job?: IntegrationJobListItem
+  job?: IntegrationJobListItem,
+  followupEvents: GibPortalTimelineEvent[] = draft?.portalFollowupEvents ?? []
 ): InvoiceOperationStage {
   if (job?.status === "FAILED") return stage("gib", "failed", job.lastError ?? "GIB akisi hata verdi.");
   if (invoice) return stage("gib", "done", invoice.invoiceNumber ? `${invoice.invoiceNumber} resmi fatura.` : "Resmi fatura olustu.");
   if (externalInvoice?.invoiceNumber) return stage("gib", "done", `${externalInvoice.invoiceNumber} harici e-Arsiv kaydi bulundu.`);
+  const signedEvent = latestFollowupEvent(followupEvents, ["archived", "signed_found", "pdf_missing", "pdf_saved"]);
+  if (signedEvent) {
+    return stage("gib", "done", `${signedEvent.invoiceNumber ?? "GIB kaydi"} imzali e-Arsiv olarak goruldu.`);
+  }
+  const manualMatchEvent = latestFollowupEvent(followupEvents, ["needs_manual_match"]);
+  if (manualMatchEvent) {
+    return stage("gib", "waiting", `${manualMatchEvent.invoiceNumber ?? "Imzali kayit"} bulundu; manuel eslesme bekliyor.`);
+  }
   if (draft?.status === "PORTAL_DRAFTED") return stage("gib", "waiting", "Portalda manuel imza bekliyor.");
   if (draft?.status === "APPROVED") return stage("gib", "waiting", "GIB portalina yukleme bekliyor.");
   if (draft?.status === "ISSUING") return stage("gib", "waiting", "Fatura islemi kuyrukta/isleniyor.");
@@ -337,25 +357,36 @@ function buildGibStage(
 function buildPdfStage(
   draft?: InvoiceDraftListItem,
   invoice?: InvoiceListItem,
-  externalInvoice?: ExternalInvoiceListItem
+  externalInvoice?: ExternalInvoiceListItem,
+  followupEvents: GibPortalTimelineEvent[] = draft?.portalFollowupEvents ?? []
 ): InvoiceOperationStage {
   if (invoice?.pdfAvailable) return stage("pdf", "done", "Resmi PDF arsivde.");
   if (invoice && !invoice.pdfAvailable) return stage("pdf", "missing", "Resmi fatura var ama PDF baglantisi yok.");
   if (externalInvoice?.requiresPdfUpload) return stage("pdf", "missing", "Portal imzali fatura icin resmi PDF yuklenmeli.");
   if (externalInvoice?.pdfUrl) return stage("pdf", "done", "Harici PDF kaynagi bulundu.");
   if (externalInvoice?.invoiceNumber) return stage("pdf", "missing", "Fatura bulundu, PDF arsiv baglantisi eksik.");
+  const pdfSavedEvent = latestFollowupEvent(followupEvents, ["pdf_saved"]);
+  if (pdfSavedEvent) return stage("pdf", "done", "Resmi PDF GIB portalindan alindi.");
+  const signedEvent = latestFollowupEvent(followupEvents, ["pdf_missing", "archived", "signed_found"]);
+  if (signedEvent) return stage("pdf", "missing", "Imzali kayit bulundu; resmi PDF bekleniyor.");
   if (draft?.status === "PORTAL_DRAFTED") return stage("pdf", "missing", "Imza ve resmi PDF bekleniyor.");
   if (draft) return stage("pdf", "idle", "Fatura kesilince PDF durumu gorunecek.");
   return stage("pdf", "idle", "PDF kaydi yok.");
 }
 
-function buildMarketplaceStage(invoice?: InvoiceListItem, externalInvoice?: ExternalInvoiceListItem): InvoiceOperationStage {
+function buildMarketplaceStage(
+  invoice?: InvoiceListItem,
+  externalInvoice?: ExternalInvoiceListItem,
+  followupEvents: GibPortalTimelineEvent[] = []
+): InvoiceOperationStage {
   if (invoice?.status === "TRENDYOL_SEND_FAILED") return stage("marketplace", "failed", invoice.error ?? "Trendyol gonderimi basarisiz.");
   if (invoice?.status === "TRENDYOL_SENT" || invoice?.trendyolStatus === "SENT" || invoice?.trendyolStatus === "ALREADY_SENT") {
     return stage("marketplace", "done", "Trendyol'a gonderildi.");
   }
   if (invoice?.pdfAvailable) return stage("marketplace", "waiting", "PDF hazir, Trendyol gonderimi bekliyor.");
   if (externalInvoice?.promotedInvoiceStatus === "TRENDYOL_SENT") return stage("marketplace", "done", "Harici fatura Trendyol'a gonderildi.");
+  if (latestFollowupEvent(followupEvents, ["trendyol_sent"])) return stage("marketplace", "done", "Trendyol'a gonderildi.");
+  if (latestFollowupEvent(followupEvents, ["trendyol_failed"])) return stage("marketplace", "failed", "Trendyol dosya gonderimi basarisiz.");
   if (externalInvoice?.promotedInvoiceId && !externalInvoice.requiresPdfUpload) {
     return stage("marketplace", "waiting", "Arsiv kaydi hazir, pazaryeri gonderimi bekliyor.");
   }
@@ -483,7 +514,7 @@ function buildStatusLabel(
 ) {
   if (job?.status === "FAILED" || draft?.status === "ERROR") return "Hata / tekrar dene";
   if (invoice?.status === "TRENDYOL_SEND_FAILED") return "Pazaryeri hatasi";
-  if (draft?.status === "PORTAL_DRAFTED") return "Portal imza bekliyor";
+  if (draft?.status === "PORTAL_DRAFTED" && stages.gib.state !== "done") return "Portal imza bekliyor";
   if (externalInvoice?.matchedOrderId && !externalInvoice.promotedInvoiceId) return "Harici bulundu";
   if (stages.pdf.state === "missing") return "PDF eksik";
   if (stages.marketplace.state === "waiting") return "Pazaryeri bekliyor";
@@ -601,5 +632,8 @@ function dateKeyInOperationTimeZone(value: string | Date) {
 }
 
 function normalizeSearch(value: string) {
-  return value.toLocaleLowerCase("tr-TR").trim();
+  return value
+    .toLocaleLowerCase("tr-TR")
+    .replace(/ı/g, "i")
+    .trim();
 }

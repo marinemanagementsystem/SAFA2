@@ -51,6 +51,26 @@ function portalProxyRuntimeScript(context: PortalProxyRewriteContext) {
     return input;
   }
 
+  function proxifyElementAttribute(element, attribute) {
+    if (!element || !element.getAttribute || !element.setAttribute) return;
+    var current = element.getAttribute(attribute);
+    var next = proxifyUrl(current || (attribute === "action" ? window.location.href : ""));
+    if (next && next !== current) element.setAttribute(attribute, next);
+  }
+
+  document.addEventListener("click", function (event) {
+    var target = event.target;
+    var link = target && target.closest ? target.closest("a[href], area[href]") : null;
+    if (!link) return;
+    proxifyElementAttribute(link, "href");
+  }, true);
+
+  document.addEventListener("submit", function (event) {
+    var form = event.target;
+    if (!form || !form.getAttribute) return;
+    proxifyElementAttribute(form, "action");
+  }, true);
+
   var nativeXhrOpen = window.XMLHttpRequest && window.XMLHttpRequest.prototype.open;
   if (nativeXhrOpen) {
     window.XMLHttpRequest.prototype.open = function (method, url) {
@@ -90,6 +110,38 @@ function portalProxyRuntimeScript(context: PortalProxyRewriteContext) {
   if (nativeReplace) {
     window.Location.prototype.replace = function (url) {
       return nativeReplace.call(this, proxifyUrl(url));
+    };
+  }
+
+  var nativeFormSubmit = window.HTMLFormElement && window.HTMLFormElement.prototype.submit;
+  if (nativeFormSubmit) {
+    window.HTMLFormElement.prototype.submit = function () {
+      proxifyElementAttribute(this, "action");
+      return nativeFormSubmit.apply(this, arguments);
+    };
+  }
+
+  var nativeRequestSubmit = window.HTMLFormElement && window.HTMLFormElement.prototype.requestSubmit;
+  if (nativeRequestSubmit) {
+    window.HTMLFormElement.prototype.requestSubmit = function () {
+      proxifyElementAttribute(this, "action");
+      return nativeRequestSubmit.apply(this, arguments);
+    };
+  }
+
+  var nativePushState = window.history && window.history.pushState;
+  if (nativePushState) {
+    window.history.pushState = function (state, title, url) {
+      if (typeof url === "string") arguments[2] = proxifyUrl(url);
+      return nativePushState.apply(this, arguments);
+    };
+  }
+
+  var nativeReplaceState = window.history && window.history.replaceState;
+  if (nativeReplaceState) {
+    window.history.replaceState = function (state, title, url) {
+      if (typeof url === "string") arguments[2] = proxifyUrl(url);
+      return nativeReplaceState.apply(this, arguments);
     };
   }
 })();`.trim();

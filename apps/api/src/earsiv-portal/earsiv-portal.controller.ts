@@ -31,3 +31,18 @@ export class EarsivPortalController {
     return this.earsivPortal.proxyPortalRequest(sessionId, request, response);
   }
 }
+
+@Controller()
+export class EarsivPortalEscapedController {
+  constructor(@Inject(EarsivPortalService) private readonly earsivPortal: EarsivPortalService) {}
+
+  @All("earsiv-services")
+  proxyEscapedRoot(@Req() request: Request, @Res() response: Response) {
+    return this.earsivPortal.proxyEscapedPortalRequest(request, response);
+  }
+
+  @All("earsiv-services/{*proxyPath}")
+  proxyEscapedPath(@Req() request: Request, @Res() response: Response) {
+    return this.earsivPortal.proxyEscapedPortalRequest(request, response);
+  }
+}

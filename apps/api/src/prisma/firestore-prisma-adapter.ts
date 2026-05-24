@@ -626,6 +626,10 @@ class IntegrationJobDelegate extends BaseDelegate {
 }
 
 class AuditLogDelegate extends BaseDelegate {
+  async findMany(args: AnyRecord = {}) {
+    return this.records(firestoreCollections.auditLogs, args);
+  }
+
   async create(args: { data: AnyRecord }) {
     const id = args.data.id ?? newId();
     const created = {

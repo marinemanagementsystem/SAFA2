@@ -74,6 +74,31 @@ function invoiceSourceLabel(provider?: string | null) {
   return "SAFA";
 }
 
+const portalFollowupActions = [
+  "external-invoice.gib.signed_found",
+  "external-invoice.gib.pdf_missing",
+  "external-invoice.gib.pdf_saved",
+  "external-invoice.gib.archived",
+  "external-invoice.gib.trendyol_sent",
+  "external-invoice.gib.trendyol_failed",
+  "external-invoice.gib.needs_manual_match"
+];
+
+function objectValue(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+}
+
+function isoDateValue(value: unknown) {
+  if (value instanceof Date) return value.toISOString();
+  if (typeof value === "string") return value;
+  return undefined;
+}
+
+function safeEventType(value: unknown) {
+  const type = stringValue(value);
+  return type || undefined;
+}
+
 @Injectable()
 export class InvoiceService {
   constructor(
@@ -99,6 +124,7 @@ export class InvoiceService {
       },
       take: 500
     });
+    const followupEventsByDraftId = await this.portalFollowupEventsByDraftId(drafts);
 
     return drafts
       .map((draft) => {
@@ -127,13 +153,61 @@ export class InvoiceService {
           externalInvoiceCount: draft.order._count.externalInvoices,
           externalInvoiceSources: Array.from(new Set(draft.order.externalInvoices.map((invoice: any) => invoice.source))),
           externalInvoiceNumber: draft.order.externalInvoices[0]?.invoiceNumber ?? undefined,
-          externalInvoiceDate: draft.order.externalInvoices[0]?.invoiceDate?.toISOString()
+          externalInvoiceDate: draft.order.externalInvoices[0]?.invoiceDate?.toISOString(),
+          portalFollowupEvents: followupEventsByDraftId.get(draft.id) ?? []
         };
       })
       .sort(
         (left, right) =>
           deliveredSortTime(right.deliveredAt ?? right.approvedAt) - deliveredSortTime(left.deliveredAt ?? left.approvedAt)
       );
+  }
+
+  private async portalFollowupEventsByDraftId(drafts: any[]) {
+    if (drafts.length === 0) return new Map<string, unknown[]>();
+
+    const draftIds = new Set(drafts.map((draft) => draft.id));
+    const draftByOrderKey = new Map<string, string>();
+    for (const draft of drafts) {
+      draftByOrderKey.set(`${draft.order.orderNumber}|${draft.order.shipmentPackageId}`, draft.id);
+    }
+
+    const logs = await (this.prisma as any).auditLog.findMany({
+      where: { action: { in: portalFollowupActions } },
+      orderBy: [{ createdAt: "desc" }],
+      take: 1000
+    });
+
+    const byDraftId = new Map<string, unknown[]>();
+    for (const log of logs as any[]) {
+      const metadata = objectValue(log.metadata);
+      const draftId = stringValue(metadata.draftId);
+      const orderNumber = stringValue(metadata.orderNumber);
+      const shipmentPackageId = stringValue(metadata.shipmentPackageId);
+      const resolvedDraftId = draftIds.has(draftId) ? draftId : draftByOrderKey.get(`${orderNumber}|${shipmentPackageId}`);
+      if (!resolvedDraftId) continue;
+
+      const event = {
+        type: safeEventType(metadata.type) ?? log.action?.replace("external-invoice.gib.", ""),
+        severity: safeEventType(metadata.severity) ?? "info",
+        message: log.message,
+        at: isoDateValue(metadata.at) ?? isoDateValue(log.createdAt) ?? new Date().toISOString(),
+        externalInvoiceId: stringValue(metadata.externalInvoiceId) || undefined,
+        invoiceNumber: stringValue(metadata.invoiceNumber) || undefined,
+        orderNumber: orderNumber || undefined,
+        shipmentPackageId: shipmentPackageId || undefined,
+        draftId: resolvedDraftId,
+        nextAction: stringValue(metadata.nextAction) || undefined,
+        metadata
+      };
+      const current = byDraftId.get(resolvedDraftId) ?? [];
+      if (current.length < 5) {
+        current.push(event);
+        byDraftId.set(resolvedDraftId, current);
+      }
+    }
+
+    return byDraftId;
   }
 
   async listInvoices() {

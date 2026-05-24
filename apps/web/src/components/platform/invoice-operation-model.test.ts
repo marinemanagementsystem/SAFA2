@@ -119,6 +119,51 @@ describe("buildInvoiceOperationRows", () => {
     expect(row.nextAction.detail).not.toContain("yapilacak is yok");
   });
 
+  it("keeps persisted signed portal follow-up visible after leaving and returning to the archive", () => {
+    const [row] = buildInvoiceOperationRows({
+      drafts: [
+        draft({
+          status: "PORTAL_DRAFTED",
+          portalDraftUploadedAt: deliveredAt,
+          portalFollowupEvents: [
+            {
+              type: "signed_found",
+              severity: "success",
+              message: "GIB202600001 GIB portalda imzali bulundu.",
+              at: "2026-05-23T00:54:00.000Z",
+              invoiceNumber: "GIB202600001",
+              orderNumber: "11232094353",
+              shipmentPackageId: "3847145278",
+              draftId: "draft-1"
+            },
+            {
+              type: "pdf_missing",
+              severity: "warning",
+              message: "GIB202600001 imzali ve arsivde; resmi PDF henuz yok, Trendyol'a gonderilmedi.",
+              at: "2026-05-23T00:55:00.000Z",
+              invoiceNumber: "GIB202600001",
+              orderNumber: "11232094353",
+              shipmentPackageId: "3847145278",
+              draftId: "draft-1"
+            }
+          ]
+        })
+      ],
+      invoices: [],
+      externalInvoices: [],
+      jobs: []
+    });
+
+    expect(row.stages.gib.state).toBe("done");
+    expect(row.stages.gib.detail).toContain("GIB202600001");
+    expect(row.stages.gib.detail).not.toContain("manuel imza bekliyor");
+    expect(row.stages.pdf.state).toBe("missing");
+    expect(row.stages.pdf.detail).toContain("PDF");
+    expect(row.nextAction.kind).toBe("preview-signed");
+    expect(row.statusLabel).toBe("PDF eksik");
+    expect(row.searchText).toContain("gib202600001");
+  });
+
   it("marks Trendyol-sent invoices as complete", () => {
     const [row] = buildInvoiceOperationRows({
       drafts: [draft({ status: "ISSUED" })],

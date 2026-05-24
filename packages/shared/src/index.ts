@@ -266,6 +266,7 @@ export interface InvoiceDraftListItem {
   externalInvoiceSources: ExternalInvoiceSource[];
   externalInvoiceNumber?: string;
   externalInvoiceDate?: string;
+  portalFollowupEvents?: GibPortalTimelineEvent[];
 }
 
 export interface InvoiceListItem {

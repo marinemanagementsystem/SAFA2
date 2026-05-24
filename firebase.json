@@ -33,6 +33,14 @@
     ],
     "rewrites": [
       {
+        "source": "/earsiv-services/**",
+        "run": {
+          "serviceId": "safa-api",
+          "region": "europe-west1",
+          "pinTag": true
+        }
+      },
+      {
         "source": "/api/**",
         "run": {
           "serviceId": "safa-api",

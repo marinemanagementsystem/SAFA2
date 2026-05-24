@@ -37,6 +37,11 @@ describe("portal proxy rewrite", () => {
     expect(rewritten).toContain('fetch("/earsiv-services/dispatch")');
     expect(rewritten).toContain('data-safa-proxy-runtime="true"');
     expect(rewritten).toContain("XMLHttpRequest.prototype.open");
+    expect(rewritten).toContain('document.addEventListener("click"');
+    expect(rewritten).toContain('document.addEventListener("submit"');
+    expect(rewritten).toContain("HTMLFormElement.prototype.submit");
+    expect(rewritten).toContain("HTMLFormElement.prototype.requestSubmit");
+    expect(rewritten).toContain("history.pushState");
   });
 
   it("rewrites CSS urls inside text responses", () => {
