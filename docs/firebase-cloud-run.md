@@ -10,8 +10,8 @@ This is the permanent production path for `https://safa-8f76e.web.app`.
 - Firestore Native mode stores orders, drafts, invoices, jobs, and encrypted integration settings.
 - Production can run in low-cost `QUEUE_MODE=sync`, which skips Memorystore Redis and processes invoice jobs in the request path. Use Redis only when background queue reliability is worth the extra monthly cost.
 - Cloud Storage is mounted at `/mnt/safa-storage` so invoice PDFs survive Cloud Run restarts.
-- Cloud Scheduler calls the secured `/api/jobs/scheduled/gib-followup/run-next` endpoint every 10 minutes so today's GIB signed invoice, missing PDF, and Trendyol follow-up can progress even when the web panel is closed. The scheduled job intentionally does not reprocess invoices from previous days.
-- A Pub/Sub-triggered Cloud Run Function can disable project billing when the 400 TRY budget notification reaches the cap. This is intentionally disruptive: Firebase Hosting, Cloud Run, Firestore, and Storage may stop until billing is linked again.
+- Cloud Scheduler calls the secured `/api/jobs/scheduled/gib-followup/run-next` endpoint at 09:00, 13:00, 17:00, and 21:00 Europe/Istanbul. The API keeps unfinished follow-up jobs resumable for 48 hours, avoids duplicate work, and exposes manual catch-up through `/api/automation/run-now`.
+- Budget protection is app-level throttling, not billing unlink. `SAFA_AUTOMATION_DAILY_AUTO_RUN_LIMIT` defaults to `4`; if automatic runs are exhausted, scheduled work stays pending and the UI shows that manual update is still available. A hard billing cap is intentionally not part of the live path because it can stop Firebase Hosting, Cloud Run, Firestore, and Storage.
 
 ## Required secrets
 
@@ -47,31 +47,17 @@ CONFIRM_DEPLOY=1 \
 ./scripts/deploy-cloud-run-api.sh
 ```
 
-The script builds `Dockerfile.cloudrun`, deploys Cloud Run in low-cost scale-to-zero mode with `DATA_BACKEND=firestore`, mounts the Cloud Storage bucket, creates the default Firestore database if needed, creates/updates the `safa-gib-followup` Cloud Scheduler job, and deploys Firebase Hosting with the `/api/**` and `/earsiv-services/**` rewrites.
+The script builds `Dockerfile.cloudrun`, deploys Cloud Run in low-cost scale-to-zero mode with `DATA_BACKEND=firestore`, mounts the Cloud Storage bucket, applies the Artifact Registry cleanup policy in `ops/artifact-registry-cleanup-policy.json`, creates the default Firestore database if needed, creates/updates the `safa-gib-followup` Cloud Scheduler job, and deploys Firebase Hosting with the `/api/**` and `/earsiv-services/**` rewrites.
 
 The deploy script uses Cloud Run's `--no-invoker-iam-check` because this project blocks public `allUsers` IAM bindings through organization policy. Firebase Hosting still reaches the service through the `/api/**` and `/earsiv-services/**` rewrites.
 
 If Firebase CLI finalization fails while pinning Cloud Run rewrites, the script falls back to `scripts/deploy-firebase-hosting-rest.sh`. Keep this REST fallback config in sync with `firebase.json`; it must include both rewrites. The `/earsiv-services/**` rewrite is not public file access: the API auth middleware requires a valid SAFA session, returns `401` without auth, returns `410` when the last GIB proxy session is missing or expired, and only forwards to the configured GIB portal origin.
 
-## 400 TRY hard cap
+## Budget guard
 
-The 400 TRY budget alert is not a hard cap by itself. To make it disruptive, deploy the budget notification function:
+The production default is `free-tier-guard`: Cloud Run stays scale-to-zero, Cloud Scheduler runs four times per day, and the app records automation freshness in `/api/automation/status`. Manual catch-up stays available from the UI and runs as a durable job, so a closed browser does not lose the work.
 
-```bash
-CONFIRM_BILLING_CAP=1 \
-DRY_RUN=true \
-./scripts/deploy-billing-hard-cap.sh
-```
-
-After dry-run Pub/Sub tests confirm `would-disable-billing` at 100% and no action at 50/80%, deploy live mode:
-
-```bash
-CONFIRM_BILLING_CAP=1 \
-DRY_RUN=false \
-./scripts/deploy-billing-hard-cap.sh
-```
-
-When the budget message reports `costAmount >= 400` and `currencyCode == TRY`, the function unlinks billing from project `safa-8f76e`. Reported billing can lag, so this reduces risk but cannot guarantee the final invoice lands exactly at 400 TRY.
+Do not deploy a billing-unlink hard cap for normal production. It prevents surprise spend only by stopping paid Google Cloud resources, which conflicts with the no-loss automation requirement. Use Google Cloud Budget email alerts for human notification, app-level throttling for automation volume, and Artifact Registry cleanup for image buildup.
 
 ## Cloud SQL retirement
 

@@ -1,0 +1,19 @@
+[
+  {
+    "name": "delete-old-safa-api-images",
+    "action": { "type": "Delete" },
+    "condition": {
+      "tagState": "any",
+      "packageNamePrefixes": ["safa-api"],
+      "olderThan": "14d"
+    }
+  },
+  {
+    "name": "keep-recent-safa-api-images",
+    "action": { "type": "Keep" },
+    "mostRecentVersions": {
+      "packageNamePrefixes": ["safa-api"],
+      "keepCount": 8
+    }
+  }
+]

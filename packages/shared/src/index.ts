@@ -161,6 +161,18 @@ export interface ExternalInvoiceSyncResult {
   invoices: ExternalInvoiceListItem[];
 }
 
+export interface AutomationStatusSnapshot {
+  budgetGuardMode: "free-tier-guard";
+  lastGibFollowupAt?: string;
+  lastTrendyolSyncAt?: string;
+  nextGibFollowupAt: string;
+  isStale: boolean;
+  staleReason: string | null;
+  autoRunsToday: number;
+  dailyAutoRunLimit: number;
+  manualRunAllowed: boolean;
+}
+
 export interface OrderListItem {
   id: string;
   shipmentPackageId: string;

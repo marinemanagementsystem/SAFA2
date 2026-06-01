@@ -64,6 +64,7 @@ export function PlatformApp({ view }: PlatformAppProps) {
               externalInvoices={snapshot.externalInvoices}
               jobs={snapshot.jobs}
               settings={snapshot.settings}
+              automationStatus={snapshot.automationStatus}
               busyAction={platform.busyAction}
               onApprove={platform.approveDrafts}
               onIssue={platform.issueDrafts}
@@ -72,6 +73,7 @@ export function PlatformApp({ view }: PlatformAppProps) {
               onPreviewGibExternalInvoices={platform.previewGibExternalInvoices}
               onApplyGibExternalInvoices={platform.applyGibExternalInvoices}
               onSyncTrendyolExternalInvoices={() => void platform.syncTrendyolExternalInvoices()}
+              onRunAutomationNow={() => void platform.runAutomationNow()}
               onReconcileExternalInvoices={() => void platform.reconcileExternalInvoices()}
               onMatchExternalInvoice={(id, target) => void platform.matchExternalInvoice(id, target)}
               onPromoteExternalInvoice={(id, sendToTrendyol) => void platform.promoteExternalInvoice(id, sendToTrendyol)}
@@ -88,6 +90,7 @@ export function PlatformApp({ view }: PlatformAppProps) {
               ownerUsername={session.username}
               connections={snapshot.connections}
               settings={snapshot.settings}
+              automationStatus={snapshot.automationStatus}
               busyAction={platform.busyAction}
               apiAvailable={platform.apiAvailable}
               trendyolForm={platform.trendyolForm}
@@ -117,6 +120,7 @@ export function PlatformApp({ view }: PlatformAppProps) {
               onOpenGibPortal={() => void platform.openGibPortal()}
               onCloseGibPortalSession={() => void platform.logoutGibPortalSession()}
               onOpenTrendyolPartner={platform.openTrendyolPartner}
+              onRunAutomationNow={() => void platform.runAutomationNow()}
               setMessage={platform.setMessage}
             />
           ) : null}

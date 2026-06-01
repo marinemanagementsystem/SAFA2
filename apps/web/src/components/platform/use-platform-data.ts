@@ -1,6 +1,7 @@
 "use client";
 
 import type {
+  AutomationStatusSnapshot,
   ExternalInvoiceListItem,
   ExternalInvoiceSource,
   ExternalInvoiceSyncResult,
@@ -39,6 +40,7 @@ export interface PlatformSnapshot {
   jobs: IntegrationJobListItem[];
   settings: Record<string, unknown>;
   connections: ConnectionsSnapshot | null;
+  automationStatus: AutomationStatusSnapshot | null;
 }
 
 const emptySnapshot: PlatformSnapshot = {
@@ -50,7 +52,8 @@ const emptySnapshot: PlatformSnapshot = {
   hepsiburadaOrderLines: [],
   jobs: [],
   settings: {},
-  connections: null
+  connections: null,
+  automationStatus: null
 };
 
 const initialTrendyolForm: TrendyolConnectionInput = {
@@ -510,7 +513,8 @@ export function usePlatformData() {
       setSnapshot({
         ...emptySnapshot,
         settings: { localConnectionDrafts: true },
-        connections: localDraftConnections(storedTrendyol, storedHepsiburada, storedGibPortal, storedGibDirect)
+        connections: localDraftConnections(storedTrendyol, storedHepsiburada, storedGibPortal, storedGibDirect),
+        automationStatus: null
       });
       setLoadState("idle");
       setMessage(apiOfflineMessage);
@@ -528,7 +532,7 @@ export function usePlatformData() {
     setLoadState(options.preferCache && platformSnapshotCache ? "idle" : "loading");
 
     try {
-      const [orders, hepsiburadaProducts, hepsiburadaOrderLines, drafts, invoices, externalInvoices, jobs, settings, connections] = await Promise.all([
+      const [orders, hepsiburadaProducts, hepsiburadaOrderLines, drafts, invoices, externalInvoices, jobs, settings, connections, automationStatus] = await Promise.all([
         api.orders(),
         api.products(),
         api.hepsiburadaOrderLines(),
@@ -537,7 +541,8 @@ export function usePlatformData() {
         api.externalInvoices(),
         api.jobs(),
         api.settings(),
-        api.connections()
+        api.connections(),
+        api.automationStatus()
       ]);
 
       const normalizedConnections = normalizeConnectionsSnapshot(connections);
@@ -550,7 +555,8 @@ export function usePlatformData() {
         externalInvoices,
         jobs,
         settings: settings.runtime ?? {},
-        connections: normalizedConnections
+        connections: normalizedConnections,
+        automationStatus
       };
       const nextTrendyolForm = {
         sellerId: normalizedConnections.trendyol.sellerId,
@@ -1198,6 +1204,20 @@ export function usePlatformData() {
     }
   }, [runIntegrationJob]);
 
+  const runAutomationNow = useCallback(async () => {
+    if (!API_AVAILABLE) {
+      setMessage(apiOfflineMessage);
+      return;
+    }
+
+    const job = await runIntegrationJob("Otomasyon guncellemesi", "automation-run-now", api.startAutomationRunNowJob, [
+      "automation.catchup"
+    ]);
+    if (job?.status === "SUCCESS") {
+      setMessage("Otomasyon guncellemesi tamamlandi: Trendyol izi ve GIB takip adimlari calisti.");
+    }
+  }, [runIntegrationJob]);
+
   const reconcileExternalInvoices = useCallback(async () => {
     if (!API_AVAILABLE) {
       setMessage(apiOfflineMessage);
@@ -1556,6 +1576,7 @@ export function usePlatformData() {
     applyGibExternalInvoices,
     syncGibExternalInvoices,
     syncTrendyolExternalInvoices,
+    runAutomationNow,
     reconcileExternalInvoices,
     matchExternalInvoice,
     promoteExternalInvoice,

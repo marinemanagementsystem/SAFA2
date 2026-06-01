@@ -1,6 +1,7 @@
 "use client";
 
 import type {
+  AutomationStatusSnapshot,
   ExternalInvoiceListItem,
   ExternalInvoiceSource,
   ExternalInvoiceSyncResult,
@@ -36,6 +37,7 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { api } from "../../lib/api";
 import { cx, dateMatches, formatDateTime, money, numberValue, startOfToday, statusLabel, statusTone, stringValue } from "../../lib/platform/format";
+import { buildAutomationStatusView } from "./automation-status-model";
 import { isInRecentGibPortalSyncWindow, recentGibPortalSyncRequest } from "./gib-portal-sync-window";
 import { approvedSelectedDraftIds, toggleDraftSelection, toggleVisibleDraftSelection } from "./invoice-bulk-selection";
 import {
@@ -94,6 +96,7 @@ interface InvoicesViewProps {
   externalInvoices: ExternalInvoiceListItem[];
   jobs: IntegrationJobListItem[];
   settings: Record<string, unknown>;
+  automationStatus: AutomationStatusSnapshot | null;
   busyAction: string | null;
   onApprove: (ids: string[]) => Promise<string>;
   onIssue: (ids: string[]) => Promise<string>;
@@ -106,6 +109,7 @@ interface InvoicesViewProps {
     input: number | { days?: number; startDate?: string; endDate?: string; repairMissingDrafts?: boolean; repairOrderNumber?: string }
   ) => Promise<ExternalInvoiceSyncResult | null>;
   onSyncTrendyolExternalInvoices: () => void;
+  onRunAutomationNow: () => void;
   onReconcileExternalInvoices: () => void;
   onMatchExternalInvoice: (id: string, target: string) => void;
   onPromoteExternalInvoice: (id: string, sendToTrendyol: boolean) => void;
@@ -676,8 +680,8 @@ function nextFollowupCheckLabel(result: ExternalInvoiceSyncResult | null) {
     .map((event) => new Date(event.at).getTime())
     .filter(Number.isFinite)
     .sort((left, right) => right - left)[0];
-  if (!latest) return "Otomatik takip aciksa backend 10 dakikada bir kontrol eder.";
-  return `Son kontrol: ${formatDateTime(new Date(latest).toISOString())}. Otomatik takip aciksa sonraki kontrol yaklasik 10 dakika icinde.`;
+  if (!latest) return "Otomatik takip free-tier modunda gunde 4 kez calisir; manuel guncelleme her zaman aciktir.";
+  return `Son kontrol: ${formatDateTime(new Date(latest).toISOString())}. Otomatik takip free-tier modunda gunde 4 kez calisir.`;
 }
 
 function GibFollowupPanel({ result }: { result: ExternalInvoiceSyncResult | null }) {
@@ -727,8 +731,10 @@ function GibFollowupPanel({ result }: { result: ExternalInvoiceSyncResult | null
 }
 
 function longJobTitle(job: IntegrationJobListItem) {
+  if (job.type === "automation.catchup") return "Manuel otomasyon guncellemesi";
   if (job.type === "trendyol.sync") return "Trendyol yenileme ve fatura izi";
   if (job.type === "gib-portal.apply") return "e-Arsiv guvenli uygulama";
+  if (job.type === "gib-portal.followup") return "GIB portal imza/PDF/Trendyol takibi";
   return job.type;
 }
 
@@ -748,7 +754,9 @@ function longJobMessage(job: IntegrationJobListItem) {
 }
 
 function LongJobPanel({ jobs }: { jobs: IntegrationJobListItem[] }) {
-  const visibleJobs = jobs.filter((job) => job.type === "trendyol.sync" || job.type === "gib-portal.apply").slice(0, 3);
+  const visibleJobs = jobs
+    .filter((job) => job.type === "automation.catchup" || job.type === "trendyol.sync" || job.type === "gib-portal.apply" || job.type === "gib-portal.followup")
+    .slice(0, 3);
   if (visibleJobs.length === 0) return null;
 
   return (
@@ -768,6 +776,42 @@ function LongJobPanel({ jobs }: { jobs: IntegrationJobListItem[] }) {
             <span className={cx("status-pill", longJobTone(job))}>{job.attempts} parca</span>
           </div>
         ))}
+      </div>
+    </div>
+  );
+}
+
+function AutomationGuardPanel({
+  status,
+  busyAction,
+  onRunNow
+}: {
+  status: AutomationStatusSnapshot | null;
+  busyAction: string | null;
+  onRunNow: () => void;
+}) {
+  const view = buildAutomationStatusView(status);
+  const busy = busyAction === "automation-run-now";
+  return (
+    <div className={cx("automation-guard-panel", view.tone)} role="status">
+      <div className="automation-guard-status">
+        <span className={cx("mode-pill", view.tone)}>{view.statusLabel}</span>
+        <div>
+          <strong>Free-tier otomasyon korumasi</strong>
+          <small>{view.budgetDetail}</small>
+        </div>
+      </div>
+      <div className="automation-guard-lines">
+        {view.lines.map((item) => (
+          <span key={item}>{item}</span>
+        ))}
+      </div>
+      <div className="automation-guard-actions">
+        <span>{view.budgetLabel}</span>
+        <button className="ui-button primary compact" type="button" onClick={onRunNow} disabled={busy || view.manualActionDisabled}>
+          {busy ? <Loader2 size={16} className="spin" /> : <RefreshCw size={16} />}
+          {view.manualActionLabel}
+        </button>
       </div>
     </div>
   );
@@ -875,6 +919,7 @@ export function InvoicesView({
   invoices,
   externalInvoices,
   jobs,
+  automationStatus,
   busyAction,
   onApprove,
   onIssue,
@@ -883,6 +928,7 @@ export function InvoicesView({
   onPreviewGibExternalInvoices,
   onApplyGibExternalInvoices,
   onSyncTrendyolExternalInvoices,
+  onRunAutomationNow,
   onReconcileExternalInvoices,
   onMatchExternalInvoice,
   onPromoteExternalInvoice,
@@ -1332,6 +1378,7 @@ export function InvoicesView({
         signedUnarchivedPortalInvoices={recentSignedUnarchivedPortalInvoices.length}
         pdfWaitingInvoices={recentPdfWaitingInvoices.length}
         gibFollowupResult={gibFollowupResult}
+        automationStatus={automationStatus}
         onQueryChange={setOperationQuery}
         onQueueChange={setOperationQueue}
         onSelectRow={(row) => {
@@ -1352,6 +1399,7 @@ export function InvoicesView({
         onPreviewSignedPortalInvoices={previewSignedPortalInvoices}
         onApplySignedPortalInvoices={applySignedPortalInvoices}
         onSyncTrendyolExternalInvoices={onSyncTrendyolExternalInvoices}
+        onRunAutomationNow={onRunAutomationNow}
         onReconcileExternalInvoices={onReconcileExternalInvoices}
         onArchiveMonthChange={setMonthlyArchiveMonth}
         onArchiveQueryChange={setArchiveQuery}
@@ -2013,6 +2061,7 @@ function InvoiceOperationsDashboard({
   signedUnarchivedPortalInvoices,
   pdfWaitingInvoices,
   gibFollowupResult,
+  automationStatus,
   onQueryChange,
   onQueueChange,
   onSelectRow,
@@ -2030,6 +2079,7 @@ function InvoiceOperationsDashboard({
   onPreviewSignedPortalInvoices,
   onApplySignedPortalInvoices,
   onSyncTrendyolExternalInvoices,
+  onRunAutomationNow,
   onReconcileExternalInvoices,
   onArchiveMonthChange,
   onArchiveQueryChange,
@@ -2066,6 +2116,7 @@ function InvoiceOperationsDashboard({
   signedUnarchivedPortalInvoices: number;
   pdfWaitingInvoices: number;
   gibFollowupResult: ExternalInvoiceSyncResult | null;
+  automationStatus: AutomationStatusSnapshot | null;
   onQueryChange: (value: string) => void;
   onQueueChange: (value: InvoiceOperationQueueKey) => void;
   onSelectRow: (row: InvoiceOperationRow) => void;
@@ -2083,6 +2134,7 @@ function InvoiceOperationsDashboard({
   onPreviewSignedPortalInvoices: () => Promise<void>;
   onApplySignedPortalInvoices: () => Promise<void>;
   onSyncTrendyolExternalInvoices: () => void;
+  onRunAutomationNow: () => void;
   onReconcileExternalInvoices: () => void;
   onArchiveMonthChange: (value: string) => void;
   onArchiveQueryChange: (value: string) => void;
@@ -2165,6 +2217,8 @@ function InvoiceOperationsDashboard({
           {metrics.portalSignatureCount} imza · {metrics.pdfMissingCount} PDF
         </span>
       </div>
+
+      <AutomationGuardPanel status={automationStatus} busyAction={busyAction} onRunNow={onRunAutomationNow} />
 
       <div className="invoice-ops-metrics">
         {queueCards.map((card) => (

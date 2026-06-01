@@ -54,6 +54,16 @@ export class JobsController {
     return this.jobsService.runScheduledGibFollowup();
   }
 
+  @Get("automation/status")
+  automationStatus() {
+    return this.jobsService.automationStatus();
+  }
+
+  @Post("automation/run-now")
+  startAutomationRunNowJob() {
+    return this.jobsService.startAutomationRunNowJob();
+  }
+
   @Post("invoices/issue")
   issue(@Body() body: unknown) {
     const parsed = issueSchema.parse(body);

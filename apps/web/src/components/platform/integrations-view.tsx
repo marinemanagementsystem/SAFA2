@@ -2,7 +2,7 @@
 
 import type { Dispatch, FormEvent, ReactNode, SetStateAction } from "react";
 import type { LucideIcon } from "lucide-react";
-import { ExternalLink, KeyRound, Loader2, LockKeyhole, LogIn, PlugZap, Send, ShieldOff, X } from "lucide-react";
+import { ExternalLink, KeyRound, Loader2, LockKeyhole, LogIn, PlugZap, RefreshCw, Send, ShieldOff, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import {
   ConnectionsSnapshot,
@@ -12,7 +12,7 @@ import {
   GibPortalConnectionInput,
   TrendyolConnectionInput
 } from "../../lib/api";
-import type { HepsiburadaOrderLineListItem, HepsiburadaProductListItem } from "@safa/shared";
+import type { AutomationStatusSnapshot, HepsiburadaOrderLineListItem, HepsiburadaProductListItem } from "@safa/shared";
 import {
   listRemoteVaults,
   loadRemoteVaultById,
@@ -21,6 +21,7 @@ import {
   type RemoteVaultSummary
 } from "../../lib/firebase/vault-store";
 import { cx, money } from "../../lib/platform/format";
+import { buildAutomationStatusView } from "./automation-status-model";
 import { integrationCatalog } from "../../lib/platform/integration-catalog";
 import {
   defaultVaultName,
@@ -56,6 +57,7 @@ interface IntegrationsViewProps {
   ownerUsername: string;
   connections: ConnectionsSnapshot | null;
   settings: Record<string, unknown>;
+  automationStatus: AutomationStatusSnapshot | null;
   busyAction: string | null;
   apiAvailable: boolean;
   trendyolForm: TrendyolConnectionInput;
@@ -85,13 +87,49 @@ interface IntegrationsViewProps {
   onOpenGibPortal: () => void;
   onCloseGibPortalSession: () => void;
   onOpenTrendyolPartner: () => void;
+  onRunAutomationNow: () => void;
   setMessage: (message: string) => void;
+}
+
+function IntegrationAutomationStatus({
+  status,
+  busyAction,
+  onRunNow
+}: {
+  status: AutomationStatusSnapshot | null;
+  busyAction: string | null;
+  onRunNow: () => void;
+}) {
+  const view = buildAutomationStatusView(status);
+  const busy = busyAction === "automation-run-now";
+  return (
+    <section className={cx("surface-panel integration-automation-status", view.tone)} aria-label="Otomasyon guncellik durumu">
+      <div>
+        <span className={cx("mode-pill", view.tone)}>{view.statusLabel}</span>
+        <h2>Otomasyon guncelligi</h2>
+        <p>{view.budgetDetail}</p>
+      </div>
+      <div className="integration-automation-lines">
+        {view.lines.map((line) => (
+          <span key={line}>{line}</span>
+        ))}
+      </div>
+      <div className="integration-automation-actions">
+        <span>{view.budgetLabel}</span>
+        <button className="ui-button primary compact" type="button" onClick={onRunNow} disabled={busy || view.manualActionDisabled}>
+          {busy ? <Loader2 size={16} className="spin" /> : <RefreshCw size={16} />}
+          {view.manualActionLabel}
+        </button>
+      </div>
+    </section>
+  );
 }
 
 export function IntegrationsView({
   ownerUsername,
   connections,
   settings,
+  automationStatus,
   busyAction,
   apiAvailable,
   trendyolForm,
@@ -121,6 +159,7 @@ export function IntegrationsView({
   onOpenGibPortal,
   onCloseGibPortalSession,
   onOpenTrendyolPartner,
+  onRunAutomationNow,
   setMessage
 }: IntegrationsViewProps) {
   const marketplaces = integrationCatalog.filter((item) => item.category === "marketplace");
@@ -181,6 +220,12 @@ export function IntegrationsView({
         setGibPortalForm={setGibPortalForm}
         setGibDirectForm={setGibDirectForm}
         setMessage={setMessage}
+      />
+
+      <IntegrationAutomationStatus
+        status={automationStatus}
+        busyAction={busyAction}
+        onRunNow={onRunAutomationNow}
       />
 
       <section className="surface-panel">

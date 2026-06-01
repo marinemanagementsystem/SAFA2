@@ -163,7 +163,7 @@ describe("JobsService long-running integration jobs", () => {
     }
   });
 
-  it("stops stale scheduled GIB follow-up jobs and creates a 7-day job", async () => {
+  it("expires 48-hour-old scheduled GIB follow-up jobs and creates a 7-day job", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-05-23T10:00:00+03:00"));
     const staleTodayJob = makeJob({
@@ -181,7 +181,9 @@ describe("JobsService long-running integration jobs", () => {
       },
       response: {
         message: "Bugunluk takip isi."
-      }
+      },
+      createdAt: new Date("2026-05-20T06:00:00.000Z"),
+      updatedAt: new Date("2026-05-20T06:00:00.000Z")
     });
     const staleWideJob = makeJob({
       id: "stale-wide-gib-job",
@@ -195,7 +197,9 @@ describe("JobsService long-running integration jobs", () => {
       },
       response: {
         message: "Eski takip isi."
-      }
+      },
+      createdAt: new Date("2026-05-20T06:00:00.000Z"),
+      updatedAt: new Date("2026-05-20T06:00:00.000Z")
     });
     try {
       const { service, prisma, externalInvoices } = serviceWith(staleTodayJob);
@@ -207,14 +211,14 @@ describe("JobsService long-running integration jobs", () => {
         where: { id: "stale-today-gib-job" },
         data: expect.objectContaining({
           status: JobStatus.FAILED,
-          lastError: expect.stringContaining("scheduler son 7 gunu isler")
+          lastError: expect.stringContaining("48 saatten uzun")
         })
       });
       expect(prisma.integrationJob.update).toHaveBeenCalledWith({
         where: { id: "stale-wide-gib-job" },
         data: expect.objectContaining({
           status: JobStatus.FAILED,
-          lastError: expect.stringContaining("scheduler son 7 gunu isler")
+          lastError: expect.stringContaining("48 saatten uzun")
         })
       });
       expect(prisma.integrationJob.create).toHaveBeenCalledWith({

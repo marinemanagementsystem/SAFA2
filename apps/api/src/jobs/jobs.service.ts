@@ -12,6 +12,15 @@ type JsonRecord = Record<string, any>;
 
 const GIB_FOLLOWUP_WINDOW_DAYS = 7;
 const DAY_MS = 24 * 60 * 60 * 1000;
+const HOUR_MS = 60 * 60 * 1000;
+const SCHEDULED_GIB_FOLLOWUP_TARGET = "scheduled-gib-followup";
+const MANUAL_GIB_FOLLOWUP_TARGET = "manual-gib-followup";
+const MANUAL_CATCHUP_TARGET = "manual-catchup";
+const AUTOMATION_BUDGET_GUARD_MODE = "free-tier-guard";
+const DEFAULT_DAILY_AUTO_RUN_LIMIT = 4;
+const GIB_FOLLOWUP_ACTIVE_RETENTION_HOURS = 48;
+const GIB_FOLLOWUP_STALE_HOURS = 8;
+const SCHEDULED_GIB_FOLLOWUP_HOURS = [9, 13, 17, 21];
 
 function jsonRecord(value: unknown): JsonRecord {
   return value && typeof value === "object" && !Array.isArray(value) ? (value as JsonRecord) : {};
@@ -36,6 +45,55 @@ function istanbulDateKey(date = new Date()) {
   }).format(date);
 }
 
+function istanbulTimeParts(date = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Istanbul",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23"
+  }).formatToParts(date);
+  return {
+    hour: Number(parts.find((part) => part.type === "hour")?.value ?? 0),
+    minute: Number(parts.find((part) => part.type === "minute")?.value ?? 0)
+  };
+}
+
+function addIstanbulDays(dateKey: string, days: number) {
+  const start = new Date(`${dateKey}T00:00:00+03:00`);
+  return istanbulDateKey(new Date(start.getTime() + days * DAY_MS));
+}
+
+function nextScheduledGibFollowupAt(date = new Date()) {
+  const todayKey = istanbulDateKey(date);
+  const { hour, minute } = istanbulTimeParts(date);
+  const currentMinute = hour * 60 + minute;
+  const nextHour = SCHEDULED_GIB_FOLLOWUP_HOURS.find((item) => currentMinute < item * 60);
+  const dateKey = nextHour === undefined ? addIstanbulDays(todayKey, 1) : todayKey;
+  const hourValue = nextHour ?? SCHEDULED_GIB_FOLLOWUP_HOURS[0];
+  return `${dateKey}T${String(hourValue).padStart(2, "0")}:00:00+03:00`;
+}
+
+function nonNegativeIntEnv(key: string, fallback: number) {
+  const raw = process.env[key];
+  if (raw === undefined || raw.trim() === "") return fallback;
+  const value = Number(raw);
+  return Number.isInteger(value) && value >= 0 ? value : fallback;
+}
+
+function dateMs(value: unknown) {
+  if (value instanceof Date) return value.getTime();
+  if (typeof value === "string" || typeof value === "number") {
+    const time = new Date(value).getTime();
+    return Number.isFinite(time) ? time : 0;
+  }
+  return 0;
+}
+
+function isoDate(value: unknown) {
+  const time = dateMs(value);
+  return time > 0 ? new Date(time).toISOString() : undefined;
+}
+
 function scheduledGibFollowupInput(date = new Date()) {
   const endDateKey = istanbulDateKey(date);
   const endStart = new Date(`${endDateKey}T00:00:00+03:00`);
@@ -58,6 +116,11 @@ function gibFollowupInput(payload: unknown) {
 function isCurrentGibFollowupJob(job: any, input: { startDate: string; endDate: string }) {
   const current = gibFollowupInput(job?.payload);
   return current.startDate === input.startDate && current.endDate === input.endDate;
+}
+
+function isRecentActiveJob(job: any, now = new Date()) {
+  const updatedAt = dateMs(job?.updatedAt ?? job?.createdAt);
+  return updatedAt > 0 && now.getTime() - updatedAt <= GIB_FOLLOWUP_ACTIVE_RETENTION_HOURS * HOUR_MS;
 }
 
 function mapJob(job: any) {
@@ -264,6 +327,69 @@ export class JobsService implements OnModuleDestroy {
     return mapJob(job);
   }
 
+  async startAutomationRunNowJob() {
+    const [activeJob] = await this.prisma.integrationJob.findMany({
+      where: {
+        type: "automation.catchup",
+        target: MANUAL_CATCHUP_TARGET,
+        status: { in: [JobStatus.PENDING, JobStatus.PROCESSING] }
+      },
+      orderBy: [{ updatedAt: "desc" }],
+      take: 1
+    });
+
+    if (activeJob) return mapJob(activeJob);
+
+    const job = await this.prisma.integrationJob.create({
+      data: {
+        type: "automation.catchup",
+        target: MANUAL_CATCHUP_TARGET,
+        status: JobStatus.PENDING,
+        payload: {
+          kind: "automation-catchup",
+          phase: "trendyol-sync",
+          scope: "all"
+        } as Prisma.InputJsonValue,
+        response: {
+          message: "Manuel otomasyon guncellemesi baslatildi; once Trendyol, sonra GIB takip calisacak."
+        } as Prisma.InputJsonValue
+      }
+    });
+    return mapJob(job);
+  }
+
+  async automationStatus() {
+    const now = new Date();
+    const jobs = await this.prisma.integrationJob.findMany({
+      where: {
+        OR: [
+          { type: "gib-portal.followup" },
+          { type: "trendyol.sync" },
+          { type: "automation.catchup" }
+        ]
+      },
+      orderBy: [{ updatedAt: "desc" }],
+      take: 500
+    });
+    const latestGib = this.latestSuccessfulJob(jobs, (job) => job.type === "gib-portal.followup");
+    const latestTrendyol = this.latestSuccessfulJob(jobs, (job) => job.type === "trendyol.sync");
+    const lastGibFollowupAt = isoDate(latestGib?.updatedAt);
+    const lastTrendyolSyncAt = isoDate(latestTrendyol?.updatedAt);
+    const staleReason = this.automationStaleReason(now, latestGib, latestTrendyol);
+
+    return {
+      budgetGuardMode: AUTOMATION_BUDGET_GUARD_MODE,
+      lastGibFollowupAt,
+      lastTrendyolSyncAt,
+      nextGibFollowupAt: nextScheduledGibFollowupAt(now),
+      isStale: Boolean(staleReason),
+      staleReason,
+      autoRunsToday: this.autoRunsTodayFromJobs(jobs, now),
+      dailyAutoRunLimit: this.dailyAutoRunLimit(),
+      manualRunAllowed: true
+    };
+  }
+
   async runNextJob(id: string) {
     const job = await this.prisma.integrationJob.findUnique({ where: { id } });
     if (!job) throw new NotFoundException("Islem bulunamadi.");
@@ -273,6 +399,7 @@ export class JobsService implements OnModuleDestroy {
       if (job.type === "trendyol.sync") return this.runNextTrendyolJob(job);
       if (job.type === "gib-portal.apply") return this.runNextGibPortalApplyJob(job);
       if (job.type === "gib-portal.followup") return this.runNextGibPortalFollowupJob(job);
+      if (job.type === "automation.catchup") return this.runNextAutomationCatchupJob(job);
       throw new BadRequestException("Bu islem tipi parca parca calistirilamaz.");
     } catch (error) {
       const message = error instanceof Error ? error.message : "Islem tamamlanamadi.";
@@ -394,50 +521,139 @@ export class JobsService implements OnModuleDestroy {
     return mapJob(updated);
   }
 
-  async runScheduledGibFollowup() {
-    const followupInput = scheduledGibFollowupInput();
+  private dailyAutoRunLimit() {
+    return nonNegativeIntEnv("SAFA_AUTOMATION_DAILY_AUTO_RUN_LIMIT", DEFAULT_DAILY_AUTO_RUN_LIMIT);
+  }
+
+  private autoRunsTodayFromJobs(jobs: any[], now = new Date()) {
+    const todayKey = istanbulDateKey(now);
+    return jobs
+      .filter((job) => job.type === "gib-portal.followup" && job.target === SCHEDULED_GIB_FOLLOWUP_TARGET)
+      .filter((job) => istanbulDateKey(new Date(dateMs(job.updatedAt ?? job.createdAt))) === todayKey)
+      .reduce((sum, job) => sum + Math.max(0, Number(job.attempts ?? 0)), 0);
+  }
+
+  private async scheduledAutoRunsToday(now = new Date()) {
+    const jobs = await this.prisma.integrationJob.findMany({
+      where: {
+        type: "gib-portal.followup",
+        target: SCHEDULED_GIB_FOLLOWUP_TARGET
+      },
+      orderBy: [{ updatedAt: "desc" }],
+      take: 200
+    });
+    return this.autoRunsTodayFromJobs(jobs, now);
+  }
+
+  private async automationBudgetGuard(now = new Date()) {
+    const dailyAutoRunLimit = this.dailyAutoRunLimit();
+    const autoRunsToday = dailyAutoRunLimit <= 0 ? 0 : await this.scheduledAutoRunsToday(now);
+    return {
+      paused: autoRunsToday >= dailyAutoRunLimit,
+      budgetGuardMode: AUTOMATION_BUDGET_GUARD_MODE,
+      autoRunsToday,
+      dailyAutoRunLimit,
+      manualRunAllowed: true
+    };
+  }
+
+  private selectReusableGibFollowupJob(activeJobs: any[], input: { startDate: string; endDate: string }, now = new Date()) {
+    return activeJobs.find((job) => isCurrentGibFollowupJob(job, input)) ?? activeJobs.find((job) => isRecentActiveJob(job, now)) ?? null;
+  }
+
+  private async markExpiredGibFollowupJobs(activeJobs: any[], reusableJobId: string | undefined, now = new Date()) {
+    const expiredJobs = activeJobs.filter((job) => job.id !== reusableJobId && !isRecentActiveJob(job, now));
+    for (const expiredJob of expiredJobs) {
+      await this.prisma.integrationJob.update({
+        where: { id: expiredJob.id },
+        data: {
+          status: JobStatus.FAILED,
+          lastError: "GIB takip isi 48 saatten uzun suredir tamamlanamadi; yeni is beklemeden ilerleyecek.",
+          response: {
+            ...stripLargeJobResponse(jsonRecord(expiredJob.response)),
+            message: "Eski GIB takip isi 48 saatten uzun suredir tamamlanamadi; veri silinmedi, yeni takip isi devam edebilir."
+          } as Prisma.InputJsonValue
+        }
+      });
+    }
+  }
+
+  private async findOrCreateGibFollowupJob(target: string, input: { startDate: string; endDate: string }, message: string, now = new Date()) {
     const activeJobs = await this.prisma.integrationJob.findMany({
       where: {
         type: "gib-portal.followup",
-        target: "scheduled-gib-followup",
+        target,
         status: { in: [JobStatus.PENDING, JobStatus.PROCESSING] }
       },
       orderBy: [{ updatedAt: "desc" }],
       take: 10
     });
-    const activeJob = activeJobs.find((job) => isCurrentGibFollowupJob(job, followupInput));
-    const staleJobs = activeJobs.filter((job) => !isCurrentGibFollowupJob(job, followupInput));
-    for (const staleJob of staleJobs) {
-      await this.prisma.integrationJob.update({
-        where: { id: staleJob.id },
-        data: {
-          status: JobStatus.FAILED,
-          lastError: "GIB takip isi durduruldu; scheduler son 7 gunu isler.",
-          response: {
-            ...stripLargeJobResponse(jsonRecord(staleJob.response)),
-            message: "Eski GIB takip isi durduruldu; yeni is son 7 gunu isleyecek."
-          } as Prisma.InputJsonValue
-        }
-      });
-    }
+    const reusableJob = this.selectReusableGibFollowupJob(activeJobs, input, now);
+    await this.markExpiredGibFollowupJobs(activeJobs, reusableJob?.id, now);
+    if (reusableJob) return reusableJob;
 
-    const job =
-      activeJob ??
-      (await this.prisma.integrationJob.create({
-        data: {
-          type: "gib-portal.followup",
-          target: "scheduled-gib-followup",
-          status: JobStatus.PENDING,
-          payload: {
-            kind: "gib-portal-followup",
-            phase: "gib-apply",
-            input: followupInput
-          } as Prisma.InputJsonValue,
-          response: {
-            message: "Son 7 gun GIB portal imza/PDF/Trendyol takibi baslatildi."
-          } as Prisma.InputJsonValue
-        }
-      }));
+    return this.prisma.integrationJob.create({
+      data: {
+        type: "gib-portal.followup",
+        target,
+        status: JobStatus.PENDING,
+        payload: {
+          kind: "gib-portal-followup",
+          phase: "gib-apply",
+          input
+        } as Prisma.InputJsonValue,
+        response: {
+          message
+        } as Prisma.InputJsonValue
+      }
+    });
+  }
+
+  private async pauseGibFollowupJob(job: any, guard: JsonRecord) {
+    const updated = await this.prisma.integrationJob.update({
+      where: { id: job.id },
+      data: {
+        status: JobStatus.PENDING,
+        lastError: null,
+        response: {
+          ...stripLargeJobResponse(jsonRecord(job.response)),
+          budgetGuard: guard,
+          message: "Butce koruma nedeniyle otomatik GIB takibi beklemede. Veri silinmedi; manuel guncelleme kullanilabilir."
+        } as Prisma.InputJsonValue
+      }
+    });
+    return mapJob(updated);
+  }
+
+  private latestSuccessfulJob(jobs: any[], predicate: (job: any) => boolean) {
+    return jobs
+      .filter((job) => job.status === JobStatus.SUCCESS && predicate(job))
+      .sort((left, right) => dateMs(right.updatedAt) - dateMs(left.updatedAt))[0];
+  }
+
+  private automationStaleReason(now: Date, latestGib: any | undefined, latestTrendyol: any | undefined) {
+    if (!latestGib) return "GIB otomatik takip henuz basarili tamamlanmadi.";
+    if (!latestTrendyol) return "Trendyol fatura izi henuz basarili yenilenmedi.";
+
+    const staleAfterMs = GIB_FOLLOWUP_STALE_HOURS * HOUR_MS;
+    const gibAge = now.getTime() - dateMs(latestGib.updatedAt);
+    const trendyolAge = now.getTime() - dateMs(latestTrendyol.updatedAt);
+    if (gibAge > staleAfterMs) return "Son GIB otomatik takip kontrolu 8 saatten eski.";
+    if (trendyolAge > staleAfterMs) return "Son Trendyol fatura izi kontrolu 8 saatten eski.";
+    return null;
+  }
+
+  async runScheduledGibFollowup() {
+    const now = new Date();
+    const followupInput = scheduledGibFollowupInput(now);
+    const job = await this.findOrCreateGibFollowupJob(
+      SCHEDULED_GIB_FOLLOWUP_TARGET,
+      followupInput,
+      "Son 7 gun GIB portal imza/PDF/Trendyol takibi baslatildi.",
+      now
+    );
+    const guard = await this.automationBudgetGuard(now);
+    if (guard.paused) return this.pauseGibFollowupJob(job, guard);
 
     return this.runNextJob(job.id);
   }
@@ -457,6 +673,186 @@ export class JobsService implements OnModuleDestroy {
       }
     });
     return mapJob(updated);
+  }
+
+  private async runNextAutomationCatchupJob(job: any) {
+    const payload = jsonRecord(job.payload);
+    const response = stripLargeJobResponse(jsonRecord(job.response));
+    const phase = typeof payload.phase === "string" ? payload.phase : "trendyol-sync";
+
+    if (phase === "trendyol-sync") {
+      const trendyolJobId = typeof payload.trendyolJobId === "string" ? payload.trendyolJobId : undefined;
+
+      if (!trendyolJobId) {
+        const trendyolJob = await this.startTrendyolSyncJob();
+        const updated = await this.prisma.integrationJob.update({
+          where: { id: job.id },
+          data: {
+            status: JobStatus.PROCESSING,
+            attempts: job.attempts + 1,
+            payload: {
+              ...payload,
+              phase: "trendyol-sync",
+              trendyolJobId: trendyolJob.id
+            } as Prisma.InputJsonValue,
+            response: {
+              ...response,
+              trendyolJobId: trendyolJob.id,
+              message: "Trendyol fatura izi guncellemesi baslatildi; islem kaybi olmadan devam edecek."
+            } as Prisma.InputJsonValue
+          }
+        });
+        return mapJob(updated);
+      }
+
+      const trendyolJob = await this.runNextJob(trendyolJobId);
+      if (trendyolJob.status === JobStatus.FAILED) {
+        const failed = await this.prisma.integrationJob.update({
+          where: { id: job.id },
+          data: {
+            status: JobStatus.FAILED,
+            attempts: job.attempts + 1,
+            lastError: trendyolJob.lastError ?? "Trendyol fatura izi guncellemesi tamamlanamadi.",
+            response: {
+              ...response,
+              trendyolJobId,
+              trendyolStatus: trendyolJob.status,
+              message: trendyolJob.lastError ?? "Trendyol fatura izi guncellemesi tamamlanamadi."
+            } as Prisma.InputJsonValue
+          }
+        });
+        return mapJob(failed);
+      }
+
+      if (trendyolJob.status !== JobStatus.SUCCESS) {
+        const updated = await this.prisma.integrationJob.update({
+          where: { id: job.id },
+          data: {
+            status: JobStatus.PROCESSING,
+            attempts: job.attempts + 1,
+            response: {
+              ...response,
+              trendyolJobId,
+              trendyolStatus: trendyolJob.status,
+              message: "Trendyol fatura izi guncelleniyor; manuel otomasyon job'i kayitli kalacak."
+            } as Prisma.InputJsonValue
+          }
+        });
+        return mapJob(updated);
+      }
+
+      const updated = await this.prisma.integrationJob.update({
+        where: { id: job.id },
+        data: {
+          status: JobStatus.PROCESSING,
+          attempts: job.attempts + 1,
+          payload: {
+            ...payload,
+            phase: "gib-followup",
+            trendyolJobId,
+            gibJobId: undefined
+          } as Prisma.InputJsonValue,
+          response: {
+            ...response,
+            trendyolJobId,
+            trendyolStatus: trendyolJob.status,
+            externalInvoicesImported: trendyolJob.response?.externalInvoicesImported,
+            externalInvoicesMatched: trendyolJob.response?.externalInvoicesMatched,
+            message: "Trendyol fatura izi tamamlandi; GIB son 7 gun takip adimina geciliyor."
+          } as Prisma.InputJsonValue
+        }
+      });
+      return mapJob(updated);
+    }
+
+    if (phase === "gib-followup") {
+      const gibJobId = typeof payload.gibJobId === "string" ? payload.gibJobId : undefined;
+
+      if (!gibJobId) {
+        const gibJob = await this.findOrCreateGibFollowupJob(
+          MANUAL_GIB_FOLLOWUP_TARGET,
+          scheduledGibFollowupInput(),
+          "Manuel guncelleme icin son 7 gun GIB portal takibi baslatildi."
+        );
+        const updated = await this.prisma.integrationJob.update({
+          where: { id: job.id },
+          data: {
+            status: JobStatus.PROCESSING,
+            attempts: job.attempts + 1,
+            payload: {
+              ...payload,
+              phase: "gib-followup",
+              gibJobId: gibJob.id
+            } as Prisma.InputJsonValue,
+            response: {
+              ...response,
+              gibJobId: gibJob.id,
+              message: "GIB son 7 gun takip/promote adimi baslatildi."
+            } as Prisma.InputJsonValue
+          }
+        });
+        return mapJob(updated);
+      }
+
+      const gibJob = await this.runNextJob(gibJobId);
+      if (gibJob.status === JobStatus.FAILED) {
+        const failed = await this.prisma.integrationJob.update({
+          where: { id: job.id },
+          data: {
+            status: JobStatus.FAILED,
+            attempts: job.attempts + 1,
+            lastError: gibJob.lastError ?? "GIB takip adimi tamamlanamadi.",
+            response: {
+              ...response,
+              gibJobId,
+              gibStatus: gibJob.status,
+              message: gibJob.lastError ?? "GIB takip adimi tamamlanamadi."
+            } as Prisma.InputJsonValue
+          }
+        });
+        return mapJob(failed);
+      }
+
+      const done = gibJob.status === JobStatus.SUCCESS;
+      const updated = await this.prisma.integrationJob.update({
+        where: { id: job.id },
+        data: {
+          status: done ? JobStatus.SUCCESS : JobStatus.PROCESSING,
+          attempts: job.attempts + 1,
+          payload: {
+            ...payload,
+            phase: done ? "done" : "gib-followup",
+            gibJobId
+          } as Prisma.InputJsonValue,
+          response: {
+            ...response,
+            ...stripLargeJobResponse(jsonRecord(gibJob.response)),
+            gibJobId,
+            gibStatus: gibJob.status,
+            message: done
+              ? "Manuel otomasyon guncellemesi tamamlandi: Trendyol izi ve GIB takip adimlari calisti."
+              : "GIB takip/promote adimi devam ediyor; job kayitli kalacak."
+          } as Prisma.InputJsonValue
+        }
+      });
+      return mapJob(updated);
+    }
+
+    const completed = await this.prisma.integrationJob.update({
+      where: { id: job.id },
+      data: {
+        status: JobStatus.SUCCESS,
+        payload: {
+          ...payload,
+          phase: "done"
+        } as Prisma.InputJsonValue,
+        response: {
+          ...response,
+          message: "Manuel otomasyon guncellemesi tamamlandi."
+        } as Prisma.InputJsonValue
+      }
+    });
+    return mapJob(completed);
   }
 
   async onModuleDestroy() {

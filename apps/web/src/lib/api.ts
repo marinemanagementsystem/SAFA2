@@ -1,4 +1,5 @@
 import type {
+  AutomationStatusSnapshot,
   ExternalInvoiceListItem,
   ExternalInvoiceSource,
   ExternalInvoiceSyncResult,
@@ -435,6 +436,11 @@ export const api = {
   externalInvoices: () => request<ExternalInvoiceListItem[]>("/external-invoices"),
   jobs: () => request<IntegrationJobListItem[]>("/jobs"),
   job: (id: string) => request<IntegrationJobListItem>(`/jobs/${encodeURIComponent(id)}`),
+  automationStatus: () => request<AutomationStatusSnapshot>("/automation/status"),
+  startAutomationRunNowJob: () =>
+    request<IntegrationJobListItem>("/automation/run-now", {
+      method: "POST"
+    }),
   runJobNext: (id: string) =>
     request<IntegrationJobListItem>(`/jobs/${encodeURIComponent(id)}/run-next`, {
       method: "POST"

@@ -871,6 +871,67 @@ a {
   font-size: 12px;
 }
 
+.automation-guard-panel {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.85fr) minmax(280px, 1.5fr) auto;
+  gap: 12px;
+  align-items: center;
+  min-height: 86px;
+  padding: 14px;
+  border: 1px solid #d7e2df;
+  border-radius: 7px;
+  background:
+    linear-gradient(90deg, rgba(20, 88, 76, 0.08), rgba(255, 255, 255, 0) 42%),
+    var(--surface);
+}
+
+.automation-guard-panel.warning {
+  border-color: #efcf92;
+  background:
+    linear-gradient(90deg, rgba(173, 107, 0, 0.12), rgba(255, 255, 255, 0) 44%),
+    #fffaf0;
+}
+
+.automation-guard-status,
+.automation-guard-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.automation-guard-status > div,
+.automation-guard-lines {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.automation-guard-status strong,
+.automation-guard-status small,
+.automation-guard-lines span,
+.automation-guard-actions span {
+  overflow-wrap: anywhere;
+  line-height: 1.35;
+}
+
+.automation-guard-status strong {
+  font-size: 14px;
+}
+
+.automation-guard-status small,
+.automation-guard-lines span,
+.automation-guard-actions span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.automation-guard-actions {
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
 .invoice-ops-metrics {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
@@ -1858,6 +1919,45 @@ a {
   border: 1px solid var(--line);
   border-radius: 7px;
   background: var(--surface);
+}
+
+.integration-automation-status {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.9fr) minmax(260px, 1.2fr) auto;
+  gap: 12px;
+  align-items: center;
+}
+
+.integration-automation-status.warning {
+  border-color: #efcf92;
+}
+
+.integration-automation-status h2 {
+  margin: 8px 0 4px;
+  font-size: 22px;
+}
+
+.integration-automation-status p,
+.integration-automation-lines span,
+.integration-automation-actions span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.integration-automation-lines {
+  display: grid;
+  min-width: 0;
+  gap: 5px;
+}
+
+.integration-automation-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 .integration-control-grid {
@@ -3910,6 +4010,16 @@ a {
   .section-head {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .automation-guard-panel,
+  .integration-automation-status {
+    grid-template-columns: 1fr;
+  }
+
+  .automation-guard-actions,
+  .integration-automation-actions {
+    justify-content: flex-start;
   }
 
   .command-actions,
