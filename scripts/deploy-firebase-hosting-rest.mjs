@@ -8,7 +8,7 @@ import { gzipSync } from "node:zlib";
 const projectId = process.env.PROJECT_ID || "safa-8f76e";
 const siteId = process.env.FIREBASE_SITE || projectId;
 const publicDir = resolve(process.env.FIREBASE_PUBLIC_DIR || "apps/web/out");
-const runServiceId = process.env.CLOUD_RUN_SERVICE || "safa-api";
+const runServiceId = process.env.CLOUD_RUN_SERVICE || "safa-api-live";
 const runRegion = process.env.CLOUD_RUN_REGION || "europe-west1";
 const message = process.env.FIREBASE_RELEASE_MESSAGE || "Deploy SAFA static web and Cloud Run rewrites";
 const apiBase = "https://firebasehosting.googleapis.com/v1beta1";

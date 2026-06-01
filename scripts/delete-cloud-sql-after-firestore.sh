@@ -3,7 +3,7 @@ set -euo pipefail
 
 PROJECT_ID="${PROJECT_ID:-safa-8f76e}"
 REGION="${REGION:-europe-west1}"
-SERVICE="${SERVICE:-safa-api}"
+SERVICE="${SERVICE:-safa-api-live}"
 SQL_INSTANCE="${SQL_INSTANCE:-safa-db}"
 
 if [[ "${CONFIRM_DELETE_CLOUD_SQL:-}" != "1" ]]; then

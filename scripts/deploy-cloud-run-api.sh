@@ -3,7 +3,7 @@ set -euo pipefail
 
 PROJECT_ID="${PROJECT_ID:-safa-8f76e}"
 REGION="${REGION:-europe-west1}"
-SERVICE="${SERVICE:-safa-api}"
+SERVICE="${SERVICE:-safa-api-live}"
 REPOSITORY="${REPOSITORY:-safa}"
 IMAGE_NAME="${IMAGE_NAME:-safa-api}"
 TAG="${TAG:-$(date +%Y%m%d%H%M%S)}"
@@ -90,7 +90,7 @@ gcloud run deploy "${SERVICE}" \
   --cpu 1 \
   --memory 1Gi \
   --min-instances 0 \
-  --max-instances 1 \
+  --max-instances 3 \
   --cpu-throttling \
   --service-account "${RUNTIME_SERVICE_ACCOUNT}" \
   --add-volume "name=${VOLUME_NAME},type=cloud-storage,bucket=${STORAGE_BUCKET}" \

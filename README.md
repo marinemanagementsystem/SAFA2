@@ -72,7 +72,7 @@ pnpm start:web
 Repo kokunde `render.yaml` bulunur. Bu dosya Render uzerinde su kaynaklari olusturacak sekilde hazirlandi:
 
 - `safa-web`: Next.js panel
-- `safa-api`: NestJS API
+- `safa-api-live`: NestJS API
 - `safa-db`: PostgreSQL
 - `safa-redis`: Redis uyumlu Render Key Value
 
@@ -88,7 +88,7 @@ Render ile yayinlama:
 
 ## Firebase Hosting + Cloud Run
 
-Kalici canli yayin hedefi Firebase Hosting arkasinda Cloud Run API'dir. Panel ayni Firebase linkinden acilir, `/api/**` istekleri ve GIB portalindan proxy disina kacabilecek `/earsiv-services/**` istekleri Cloud Run'daki gercek Nest API servisi `safa-api` uzerinden calisir:
+Kalici canli yayin hedefi Firebase Hosting arkasinda Cloud Run API'dir. Panel ayni Firebase linkinden acilir, `/api/**` istekleri ve GIB portalindan proxy disina kacabilecek `/earsiv-services/**` istekleri Cloud Run'daki gercek Nest API servisi `safa-api-live` uzerinden calisir:
 
 ```bash
 pnpm --filter @safa/web build:firebase

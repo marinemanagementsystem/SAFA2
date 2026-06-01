@@ -35,17 +35,15 @@
       {
         "source": "/earsiv-services/**",
         "run": {
-          "serviceId": "safa-api",
-          "region": "europe-west1",
-          "pinTag": true
+          "serviceId": "safa-api-live",
+          "region": "europe-west1"
         }
       },
       {
         "source": "/api/**",
         "run": {
-          "serviceId": "safa-api",
-          "region": "europe-west1",
-          "pinTag": true
+          "serviceId": "safa-api-live",
+          "region": "europe-west1"
         }
       }
     ]

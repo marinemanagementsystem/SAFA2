@@ -5,7 +5,7 @@ This is the permanent production path for `https://safa-8f76e.web.app`.
 ## What runs where
 
 - Firebase Hosting serves the static Next.js panel.
-- Firebase Hosting rewrites `/api/**` and escaped GIB portal `/earsiv-services/**` requests to Cloud Run service `safa-api` in `europe-west1`.
+- Firebase Hosting rewrites `/api/**` and escaped GIB portal `/earsiv-services/**` requests to Cloud Run service `safa-api-live` in `europe-west1`.
 - Cloud Run runs the real Nest API from `apps/api`.
 - Firestore Native mode stores orders, drafts, invoices, jobs, and encrypted integration settings.
 - Production can run in low-cost `QUEUE_MODE=sync`, which skips Memorystore Redis and processes invoice jobs in the request path. Use Redis only when background queue reliability is worth the extra monthly cost.
