@@ -112,6 +112,7 @@ const hepsiburadaDraftStorageKey = "safa.hepsiburadaConnectionDraft.v1";
 const gibPortalDraftStorageKey = "safa.gibPortalConnectionDraft.v1";
 const gibDirectDraftStorageKey = "safa.gibDirectConnectionDraft.v1";
 const platformSnapshotCacheFreshMs = 5_000;
+const reconstructedPdfFallbackSettingKey = "feature.gibPortal.reconstructedPdfFallback";
 
 interface PlatformSnapshotCache {
   snapshot: PlatformSnapshot;
@@ -996,6 +997,36 @@ export function usePlatformData() {
     }
   }, [gibDirectForm, gibPortalForm, hepsiburadaForm, load, trendyolForm]);
 
+  const saveReconstructedPdfFallback = useCallback(
+    async (enabled: boolean) => {
+      if (!API_AVAILABLE) {
+        setMessage(apiOfflineMessage);
+        return;
+      }
+
+      setBusyAction("save-reconstructed-pdf-fallback");
+
+      try {
+        await api.saveSetting(reconstructedPdfFallbackSettingKey, { enabled });
+        setSnapshot((current) => ({
+          ...current,
+          settings: { ...current.settings, gibPortalReconstructedPdfFallbackEnabled: enabled }
+        }));
+        setMessage(
+          enabled
+            ? "GIB PDF alinamazsa imzali kayittan pazaryeri PDF kopyasi uretme acildi."
+            : "GIB imzali kayittan pazaryeri PDF kopyasi uretme kapatildi."
+        );
+        await load();
+      } catch (error) {
+        setMessage(errorMessage(error, "PDF fallback ayari kaydedilemedi."));
+      } finally {
+        setBusyAction(null);
+      }
+    },
+    [load]
+  );
+
   const openGibPortal = useCallback(async () => {
     const portalTab = window.open("about:blank", "_blank");
     if (!portalTab) {
@@ -1516,6 +1547,7 @@ export function usePlatformData() {
     saveHepsiburada,
     saveGibPortal,
     saveGibDirect,
+    saveReconstructedPdfFallback,
     openGibPortal,
     logoutGibPortalSession,
     openTrendyolPartner,

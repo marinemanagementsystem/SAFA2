@@ -38,4 +38,42 @@ describe("TrendyolService", () => {
       alreadySent: true
     });
   });
+
+  it("treats Trendyol's 400 already-sent invoice response as already sent", async () => {
+    post.mockResolvedValueOnce({
+      status: 400,
+      data: {
+        errors: [
+          {
+            statusCode: 400,
+            message: "3858845068 numaralı pakete ait fatura önceden gönderilmiş"
+          }
+        ]
+      }
+    });
+
+    const service = new TrendyolService({
+      getTrendyolConnection: vi.fn(async () => ({
+        sellerId: "seller",
+        apiKey: "key",
+        apiSecret: "secret",
+        baseUrl: "https://apigw.trendyol.com",
+        storefrontCode: "TR",
+        lookbackDays: 14,
+        userAgent: "SAFA test"
+      }))
+    } as any);
+
+    const result = await service.sendInvoiceFile({
+      shipmentPackageId: "3858845068",
+      invoiceNumber: "GIB2026000001894",
+      invoiceDate: new Date("2026-05-22T00:00:00.000Z"),
+      pdfPath: __filename
+    });
+
+    expect(result).toMatchObject({
+      ok: true,
+      alreadySent: true
+    });
+  });
 });

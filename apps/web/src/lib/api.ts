@@ -440,6 +440,11 @@ export const api = {
       method: "POST"
     }),
   settings: () => request<{ runtime: Record<string, unknown> }>("/settings"),
+  saveSetting: (key: string, value: unknown) =>
+    request<{ key: string; value: unknown; updatedAt: string }>("/settings", {
+      method: "PUT",
+      body: JSON.stringify({ key, value })
+    }),
   connections: () => request<ConnectionsSnapshot>("/settings/connections"),
   saveTrendyolConnection: (input: TrendyolConnectionInput) =>
     request<ConnectionsSnapshot>("/settings/connections/trendyol", {

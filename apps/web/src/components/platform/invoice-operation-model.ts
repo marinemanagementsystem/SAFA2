@@ -360,9 +360,17 @@ function buildPdfStage(
   externalInvoice?: ExternalInvoiceListItem,
   followupEvents: GibPortalTimelineEvent[] = draft?.portalFollowupEvents ?? []
 ): InvoiceOperationStage {
+  const generatedPdf =
+    invoice?.pdfUrl?.startsWith("generated://gib-portal-reconstructed/") ||
+    externalInvoice?.pdfUrl?.startsWith("generated://gib-portal-reconstructed/");
+  if (invoice?.pdfAvailable && generatedPdf) return stage("pdf", "done", "GIB imzali kayittan PDF kopyasi uretildi.");
   if (invoice?.pdfAvailable) return stage("pdf", "done", "Resmi PDF arsivde.");
   if (invoice && !invoice.pdfAvailable) return stage("pdf", "missing", "Resmi fatura var ama PDF baglantisi yok.");
+  if (externalInvoice?.pdfDiagnostic && !externalInvoice.pdfUrl) return stage("pdf", "missing", externalInvoice.pdfDiagnostic);
   if (externalInvoice?.requiresPdfUpload) return stage("pdf", "missing", "Portal imzali fatura icin resmi PDF yuklenmeli.");
+  if (externalInvoice?.pdfUrl?.startsWith("generated://gib-portal-reconstructed/")) {
+    return stage("pdf", "done", "GIB imzali kayittan PDF kopyasi uretildi.");
+  }
   if (externalInvoice?.pdfUrl) return stage("pdf", "done", "Harici PDF kaynagi bulundu.");
   if (externalInvoice?.invoiceNumber) return stage("pdf", "missing", "Fatura bulundu, PDF arsiv baglantisi eksik.");
   const pdfSavedEvent = latestFollowupEvent(followupEvents, ["pdf_saved"]);

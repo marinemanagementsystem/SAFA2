@@ -1331,6 +1331,7 @@ export function InvoicesView({
         visibleSelectedDraftCount={visibleSelectedOperationDraftCount}
         signedUnarchivedPortalInvoices={recentSignedUnarchivedPortalInvoices.length}
         pdfWaitingInvoices={recentPdfWaitingInvoices.length}
+        gibFollowupResult={gibFollowupResult}
         onQueryChange={setOperationQuery}
         onQueueChange={setOperationQueue}
         onSelectRow={(row) => {
@@ -1600,7 +1601,6 @@ export function InvoicesView({
               </div>
             ) : null}
             <LongJobPanel jobs={jobs} />
-            <GibFollowupPanel result={gibFollowupResult} />
             {filteredDrafts.map((draft) => {
               const latestJob = latestInvoiceJob(jobs, draft.id);
               const visibleJob = visibleInvoiceJob(draft, latestJob);
@@ -2012,6 +2012,7 @@ function InvoiceOperationsDashboard({
   visibleSelectedDraftCount,
   signedUnarchivedPortalInvoices,
   pdfWaitingInvoices,
+  gibFollowupResult,
   onQueryChange,
   onQueueChange,
   onSelectRow,
@@ -2064,6 +2065,7 @@ function InvoiceOperationsDashboard({
   visibleSelectedDraftCount: number;
   signedUnarchivedPortalInvoices: number;
   pdfWaitingInvoices: number;
+  gibFollowupResult: ExternalInvoiceSyncResult | null;
   onQueryChange: (value: string) => void;
   onQueueChange: (value: InvoiceOperationQueueKey) => void;
   onSelectRow: (row: InvoiceOperationRow) => void;
@@ -2261,6 +2263,8 @@ function InvoiceOperationsDashboard({
               </button>
             </div>
           </div>
+
+          <GibFollowupPanel result={gibFollowupResult} />
 
           <div className="invoice-ops-table-toolbar">
             <label className="field search-field">

@@ -113,6 +113,7 @@ export function PlatformApp({ view }: PlatformAppProps) {
               onPackageHepsiburadaOrderLine={(id) => void platform.packageHepsiburadaOrderLine(id)}
               onSaveGibPortal={() => void platform.saveGibPortal()}
               onSaveGibDirect={() => void platform.saveGibDirect()}
+              onSetReconstructedPdfFallback={(enabled) => void platform.saveReconstructedPdfFallback(enabled)}
               onOpenGibPortal={() => void platform.openGibPortal()}
               onCloseGibPortalSession={() => void platform.logoutGibPortalSession()}
               onOpenTrendyolPartner={platform.openTrendyolPartner}

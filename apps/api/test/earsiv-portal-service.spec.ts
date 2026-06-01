@@ -6,11 +6,13 @@ import type { SettingsService } from "../src/settings/settings.service";
 
 vi.mock("axios", () => ({
   default: {
+    get: vi.fn(),
     post: vi.fn(),
     request: vi.fn()
   }
 }));
 
+const get = vi.mocked(axios.get);
 const post = vi.mocked(axios.post);
 const proxyRequest = vi.mocked(axios.request);
 const launchSessionKey = "session.gibPortal.launch";
@@ -154,6 +156,7 @@ const payload: GibPortalInvoiceDraftPayload = {
 
 describe("EarsivPortalService", () => {
   beforeEach(() => {
+    get.mockReset();
     post.mockReset();
     proxyRequest.mockReset();
   });
@@ -698,6 +701,109 @@ describe("EarsivPortalService", () => {
       durum: "Onaylandı",
       kaynakKomut: "EARSIV_PORTAL_ADIMA_KESILEN_BELGELERI_GETIR"
     });
+  });
+
+  it("uses portal login cookies and referer when downloading direct official PDF URLs", async () => {
+    post.mockResolvedValueOnce({
+      status: 200,
+      headers: {
+        "set-cookie": ["GIBSESSION=abc123; Path=/; HttpOnly"]
+      },
+      data: {
+        token: "portal-token",
+        redirectUrl: "/intragiris.html"
+      }
+    });
+    get.mockResolvedValueOnce({
+      status: 200,
+      headers: {
+        "content-type": "application/pdf"
+      },
+      data: Buffer.from("%PDF-1.4 official")
+    });
+
+    const service = new EarsivPortalService(settings() as unknown as SettingsService);
+    const result = await service.downloadIssuedInvoicePdf({
+      externalKey: "77777777-7777-4777-8777-777777777777",
+      invoiceNumber: "GIB202600007",
+      pdfUrl: "/earsiv-services/download/pdf/oid-777",
+      raw: {}
+    });
+
+    expect(result?.buffer?.subarray(0, 5).toString("utf8")).toBe("%PDF-");
+    expect(result?.source).toBe("direct-pdf-url");
+    expect(result?.attempts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          source: "direct-pdf-url",
+          outcome: "downloaded_pdf",
+          status: 200,
+          contentType: "application/pdf"
+        })
+      ])
+    );
+    expect(get).toHaveBeenCalledWith(
+      "https://earsivportal.efatura.gov.tr/earsiv-services/download/pdf/oid-777",
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Accept: "application/pdf,*/*",
+          Cookie: "GIBSESSION=abc123",
+          Referer: expect.stringContaining("token=portal-token")
+        })
+      })
+    );
+  });
+
+  it("returns sanitized official PDF attempts and tries raw portal row payload variants when no PDF is produced", async () => {
+    post
+      .mockResolvedValueOnce({
+        status: 200,
+        headers: {
+          "set-cookie": ["GIBSESSION=abc123; Path=/; HttpOnly"]
+        },
+        data: {
+          token: "portal-token",
+          redirectUrl: "/intragiris.html"
+        }
+      })
+      .mockResolvedValue({
+        status: 200,
+        data: {
+          data: { html: "<html>no pdf</html>" }
+        }
+      });
+
+    const service = new EarsivPortalService(settings() as unknown as SettingsService);
+    const result = await service.downloadIssuedInvoicePdf({
+      externalKey: "77777777-7777-4777-8777-777777777777",
+      invoiceNumber: "GIB202600007",
+      invoiceDate: new Date("2026-05-24T09:00:00.000Z"),
+      raw: {
+        uuid: "77777777-7777-4777-8777-777777777777",
+        belgeOid: "oid-777",
+        rowToken: "portal-row-token",
+        kaynakKomut: "EARSIV_PORTAL_ADIMA_KESILEN_BELGELERI_GETIR"
+      }
+    });
+
+    expect(result?.buffer).toBeUndefined();
+    expect(result?.attempts?.length).toBeGreaterThan(0);
+    expect(result?.attempts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          cmd: "EARSIV_PORTAL_FATURA_PDF_INDIR",
+          pageName: "RG_TASLAKLAR",
+          outcome: "no_pdf_payload",
+          payloadKeys: expect.arrayContaining(["faturaUuid", "belgeOid", "faturaNo", "faturaTarihi"])
+        })
+      ])
+    );
+    expect(JSON.stringify(result?.attempts)).not.toContain("portal-token");
+    expect(JSON.stringify(result?.attempts)).not.toContain("GIBSESSION");
+
+    const payloads = post.mock.calls.slice(1).map((call) => JSON.parse(new URLSearchParams(String(call[1])).get("jp") ?? "{}"));
+    expect(payloads).toEqual(expect.arrayContaining([expect.objectContaining({ seciliFatura: expect.objectContaining({ rowToken: "portal-row-token" }) })]));
+    expect(payloads).toEqual(expect.arrayContaining([expect.objectContaining({ fatura: expect.objectContaining({ rowToken: "portal-row-token" }) })]));
   });
 
   it("lets the 5000/30000 portal create request generate its own ETTN", async () => {

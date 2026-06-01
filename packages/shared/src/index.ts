@@ -100,6 +100,8 @@ export interface ExternalInvoiceListItem {
   promotedInvoiceNumber?: string;
   promotedInvoiceStatus?: InvoiceStatus;
   requiresPdfUpload?: boolean;
+  pdfSource?: string;
+  pdfDiagnostic?: string;
   createdAt: string;
   updatedAt: string;
 }

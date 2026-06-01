@@ -12,6 +12,8 @@ interface InvoicePdfOptions {
   title: string;
   documentNumber: string;
   documentDate: Date;
+  ettn?: string;
+  qrPayload?: string;
 }
 
 interface InvoiceLineView {
@@ -121,6 +123,15 @@ function formatDate(date: Date) {
     .replace(",", "");
 }
 
+function formatDateOnly(date: Date) {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Istanbul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).format(date);
+}
+
 function formatBrowserHeaderDate(date: Date) {
   return new Intl.DateTimeFormat("en-US", {
     year: "2-digit",
@@ -200,23 +211,44 @@ function sellerInfo() {
   };
 }
 
+function amountValue(cents: number) {
+  return (cents / 100).toFixed(2);
+}
+
+export function buildGibEArchiveQrPayload(
+  payload: ArchiveInvoicePayload,
+  options: { documentNumber: string; documentDate: Date; ettn: string }
+) {
+  const seller = sellerInfo();
+  const rows = lineViews(payload);
+  const totalNetCents = rows.reduce((sum, line) => sum + line.netCents, 0);
+  const totalVatCents = rows.reduce((sum, line) => sum + line.vatCents, 0);
+
+  return JSON.stringify({
+    vkntckn: seller.taxId,
+    avkntckn: payload.buyerIdentifier,
+    senaryo: "EARSIVFATURA",
+    tip: "SATIS",
+    tarih: formatDateOnly(options.documentDate),
+    no: options.documentNumber,
+    ettn: options.ettn,
+    parabirimi: payload.totals.currency,
+    malhizmettoplam: amountValue(totalNetCents),
+    kdvmatrah: amountValue(totalNetCents),
+    hesaplanankdv: amountValue(totalVatCents),
+    vergidahil: amountValue(payload.totals.payableCents),
+    odenecek: amountValue(payload.totals.payableCents)
+  });
+}
+
 function buildHtml(payload: ArchiveInvoicePayload, options: InvoicePdfOptions) {
   const seller = sellerInfo();
   const currency = payload.totals.currency;
   const rows = lineViews(payload);
   const emptyRowCount = Math.max(0, 18 - rows.length);
   const buyerAddressLines = wrapText(payload.address.addressLine, 54, 6);
-  const ettn = deterministicUuid(`${options.documentNumber}:${payload.orderNumber}:${payload.shipmentPackageId}`);
-  const qrValue = JSON.stringify({
-    documentNumber: options.documentNumber,
-    issueDate: options.documentDate.toISOString(),
-    ettn,
-    buyerIdentifier: payload.buyerIdentifier,
-    orderNumber: payload.orderNumber,
-    shipmentPackageId: payload.shipmentPackageId,
-    payableCents: payload.totals.payableCents,
-    currency
-  });
+  const ettn = options.ettn ?? deterministicUuid(`${options.documentNumber}:${payload.orderNumber}:${payload.shipmentPackageId}`);
+  const qrValue = options.qrPayload ?? buildGibEArchiveQrPayload(payload, { ...options, ettn });
   const qrDataUri = toDataUriSvg(makeQrSvg(qrValue));
   const totalNetCents = rows.reduce((sum, line) => sum + line.netCents, 0);
   const totalVatCents = rows.reduce((sum, line) => sum + line.vatCents, 0);
@@ -372,6 +404,10 @@ function buildHtml(payload: ArchiveInvoicePayload, options: InvoicePdfOptions) {
   </main>
 </body>
 </html>`;
+}
+
+export function buildInvoiceHtmlForTest(payload: ArchiveInvoicePayload, options: InvoicePdfOptions) {
+  return buildHtml(payload, options);
 }
 
 export function buildInvoicePdf(payload: ArchiveInvoicePayload, options: InvoicePdfOptions) {

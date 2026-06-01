@@ -18,6 +18,31 @@ interface DeliveredPackagePageInput {
   size?: number;
 }
 
+function responseText(value: unknown): string {
+  if (typeof value === "string") return value;
+  if (Array.isArray(value)) return value.map((item) => responseText(item)).join(" ");
+  if (value && typeof value === "object") return Object.values(value).map((item) => responseText(item)).join(" ");
+  return "";
+}
+
+function normalizeMessage(value: string) {
+  return value
+    .toLocaleLowerCase("tr-TR")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/ı/g, "i");
+}
+
+function isAlreadySentInvoiceResponse(status: number, data: unknown) {
+  if (status === 409) return true;
+  if (status !== 400) return false;
+
+  const text = normalizeMessage(responseText(data));
+  const packageInvoice = (text.includes("pakete ait fatura") || text.includes("shipmentpackage")) && text.includes("fatura");
+  const alreadySent = text.includes("onceden gonderil") || text.includes("zaten gonderil") || text.includes("already sent");
+  return packageInvoice && alreadySent;
+}
+
 function dateMillis(value: string | number | Date | undefined, fallback: number) {
   if (value instanceof Date) return value.getTime();
   if (typeof value === "number") return value;
@@ -135,7 +160,7 @@ export class TrendyolService {
       validateStatus: () => true
     });
 
-    if (response.status === 409) {
+    if (isAlreadySentInvoiceResponse(response.status, response.data)) {
       return { ok: true, mode: "api", alreadySent: true, response: response.data };
     }
 

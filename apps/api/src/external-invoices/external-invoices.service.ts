@@ -4,11 +4,13 @@ import axios from "axios";
 import { createHash } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { EarsivPortalService } from "../earsiv-portal/earsiv-portal.service";
+import { EarsivPortalService, type PortalOfficialPdfAttempt } from "../earsiv-portal/earsiv-portal.service";
 import { buildGibPortalInvoiceDraftPayload, normalizePortalEttn } from "../earsiv-portal/portal-draft-payload";
 import type { ArchiveInvoicePayload } from "../invoice/invoice-provider";
+import { buildGibEArchiveQrPayload, buildInvoicePdf } from "../invoice/pdf/simple-invoice-pdf";
 import { buildDraft } from "../orders/invoice-draft-builder";
 import { PrismaService } from "../prisma/prisma.service";
+import { GIB_RECONSTRUCTED_PDF_FALLBACK_SETTING_KEY } from "../settings/settings.service";
 import { TrendyolService } from "../trendyol/trendyol.service";
 import { extractTrendyolDeliveryDate, normalizeTrendyolPackage, type NormalizedOrder } from "../trendyol/trendyol-normalizer";
 
@@ -46,6 +48,19 @@ interface PortalDraftMatchCandidate {
   orderId: string;
   orderNumber: string;
   shipmentPackageId: string;
+  order?: {
+    orderNumber: string;
+    shipmentPackageId: string;
+    customerName: string;
+    customerIdentifier?: string | null;
+    invoiceAddress?: Prisma.JsonValue;
+    totalGrossCents: number;
+    totalDiscountCents: number;
+    totalPayableCents: number;
+    currency: string;
+  } | null;
+  lines?: Prisma.JsonValue;
+  totals?: Prisma.JsonValue;
   status: DraftStatus;
   portalDraftUuid?: string | null;
   portalDraftNumber?: string | null;
@@ -279,6 +294,7 @@ function istanbulDayWindow(date = new Date()) {
 
 const GIB_FOLLOWUP_WINDOW_DAYS = 7;
 const DAY_MS = 24 * 60 * 60 * 1000;
+const RECONSTRUCTED_PDF_SOURCE = "GIB_PORTAL_RECONSTRUCTED_FROM_SIGNED_RECORD";
 
 function istanbulRecentDayWindow(days = GIB_FOLLOWUP_WINDOW_DAYS, date = new Date()) {
   const endDateKey = istanbulDateKey(date);
@@ -445,6 +461,46 @@ function extractExternalUuid(invoice: ExternalInvoice) {
   return undefined;
 }
 
+function cleanQrPayloadCandidate(value: unknown) {
+  if (typeof value !== "string") return undefined;
+  const text = value.trim();
+  if (!text || text.length > 4096) return undefined;
+  if (/^(data:image\/|<svg\b)/i.test(text)) return undefined;
+  return text;
+}
+
+function extractSignedQrPayload(raw: Prisma.JsonValue) {
+  const record = rawRecord(raw);
+  const directKeys = [
+    "qrPayload",
+    "qrCodePayload",
+    "qrData",
+    "qrCode",
+    "qr",
+    "karekodPayload",
+    "karekodIcerigi",
+    "karekodIcerik",
+    "karekod",
+    "kareKod"
+  ];
+  for (const key of directKeys) {
+    const payload = cleanQrPayloadCandidate(record[key]);
+    if (payload) return payload;
+  }
+
+  const nestedKeys = ["qr", "qrCode", "karekod", "kareKod", "karekodBilgisi"];
+  const nestedValueKeys = ["payload", "value", "content", "icerik", "data"];
+  for (const key of nestedKeys) {
+    const nested = rawRecord(record[key]);
+    for (const nestedValueKey of nestedValueKeys) {
+      const payload = cleanQrPayloadCandidate(nested[nestedValueKey]);
+      if (payload) return payload;
+    }
+  }
+
+  return undefined;
+}
+
 function safeFileStem(value: string) {
   return value.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 120) || "invoice";
 }
@@ -461,16 +517,105 @@ function mergeRawWithUpload(raw: Prisma.JsonValue, uploadedPdfPath: string) {
 
 function mergeRawWithOfficialPdf(
   raw: Prisma.JsonValue,
-  input: { uploadedPdfPath: string; pdfUrl?: string | null; source?: string; raw?: unknown }
+  input: { uploadedPdfPath: string; pdfUrl?: string | null; source?: string; raw?: unknown; attempts?: PortalOfficialPdfAttempt[] }
 ) {
   const base = raw && typeof raw === "object" && !Array.isArray(raw) ? (raw as RawRecord) : {};
+  const attempts = sanitizeOfficialPdfAttempts(input.attempts);
   return json({
     ...base,
     uploadedPdfPath: input.uploadedPdfPath,
     ...(input.pdfUrl ? { officialPdfUrl: input.pdfUrl } : {}),
     ...(input.source ? { officialPdfSource: input.source } : {}),
     ...(input.raw ? { officialPdfResponse: input.raw } : {}),
+    ...(attempts.length > 0 ? { officialPdfAttempts: attempts } : {}),
     officialPdfFetchedAt: new Date().toISOString()
+  });
+}
+
+function isOfficialPdfAttemptOutcome(value: string): value is PortalOfficialPdfAttempt["outcome"] {
+  return [
+    "downloaded_pdf",
+    "http_error",
+    "non_pdf",
+    "download_error",
+    "portal_error",
+    "no_pdf_payload",
+    "pdf_url_found",
+    "dispatch_exception"
+  ].includes(value);
+}
+
+function sanitizeOfficialPdfAttempts(value: unknown): PortalOfficialPdfAttempt[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => rawRecord(item))
+    .filter((item) => textValue(item.source) || textValue(item.outcome))
+    .map((item) => {
+      const source = textValue(item.source) || "unknown";
+      const rawOutcome = textValue(item.outcome) || "no_pdf_payload";
+      const outcome = isOfficialPdfAttemptOutcome(rawOutcome) ? rawOutcome : "no_pdf_payload";
+      return {
+        source,
+        outcome,
+        ...(textValue(item.cmd) ? { cmd: textValue(item.cmd) } : {}),
+        ...(textValue(item.pageName) ? { pageName: textValue(item.pageName) } : {}),
+        ...(typeof item.status === "number" ? { status: item.status } : {}),
+        ...(textValue(item.contentType) ? { contentType: textValue(item.contentType) } : {}),
+        ...(textValue(item.errorClass) ? { errorClass: textValue(item.errorClass) } : {}),
+        ...(Array.isArray(item.payloadKeys) ? { payloadKeys: item.payloadKeys.map(String).slice(0, 30) } : {})
+      };
+    });
+}
+
+function mergeRawWithOfficialPdfAttempts(raw: Prisma.JsonValue, attempts: unknown) {
+  const sanitized = sanitizeOfficialPdfAttempts(attempts);
+  if (sanitized.length === 0) return raw;
+  const base = raw && typeof raw === "object" && !Array.isArray(raw) ? (raw as RawRecord) : {};
+  return json({
+    ...base,
+    officialPdfAttempts: sanitized,
+    officialPdfAttemptedAt: new Date().toISOString()
+  });
+}
+
+function officialPdfDiagnostic(attempts: unknown) {
+  const sanitized = sanitizeOfficialPdfAttempts(attempts);
+  if (sanitized.length === 0) return undefined;
+  const outcomes = new Set(sanitized.map((attempt) => textValue(attempt.outcome)).filter(Boolean));
+  if (outcomes.has("non_pdf")) return "GIB PDF denemeleri basarisiz: gercek PDF donmedi.";
+  if (outcomes.has("portal_error")) return "GIB PDF denemeleri basarisiz: portal hata cevabi dondu.";
+  if (outcomes.has("http_error")) return "GIB PDF denemeleri basarisiz: PDF linki HTTP hatasi dondu.";
+  if (outcomes.has("download_error") || outcomes.has("dispatch_exception")) return "GIB PDF denemeleri basarisiz: portal erisimi tamamlanamadi.";
+  return "GIB PDF denemeleri basarisiz: indirilebilir PDF kaynagi bulunamadi.";
+}
+
+function mergeRawWithGeneratedPdf(
+  raw: Prisma.JsonValue,
+  input: {
+    uploadedPdfPath: string;
+    pdfUrl: string;
+    invoiceNumber: string;
+    invoiceDate: Date;
+    ettn: string;
+    qrPayload: string;
+    officialPdfAttempts?: PortalOfficialPdfAttempt[];
+  }
+) {
+  const base = raw && typeof raw === "object" && !Array.isArray(raw) ? (raw as RawRecord) : {};
+  const attempts = sanitizeOfficialPdfAttempts(input.officialPdfAttempts);
+  return json({
+    ...base,
+    uploadedPdfPath: input.uploadedPdfPath,
+    ...(attempts.length > 0 ? { officialPdfAttempts: attempts } : {}),
+    generatedPdfSource: RECONSTRUCTED_PDF_SOURCE,
+    generatedPdfAt: new Date().toISOString(),
+    generatedPdfInputs: {
+      ettn: input.ettn,
+      invoiceNumber: input.invoiceNumber,
+      invoiceDate: input.invoiceDate.toISOString(),
+      qrPayload: input.qrPayload,
+      pdfUrl: input.pdfUrl
+    }
   });
 }
 
@@ -694,6 +839,9 @@ function mapExternalInvoice(
 ) {
   const promoted = promotedByExternalKey.get(invoice.externalKey);
   const suggestion = matchSuggestionFromRaw(invoice.raw);
+  const raw = rawRecord(invoice.raw);
+  const pdfSource = textValue(raw.generatedPdfSource) || textValue(raw.officialPdfSource) || (textValue(raw.uploadedPdfPath) ? "UPLOADED_PDF" : undefined);
+  const pdfDiagnostic = officialPdfDiagnostic(raw.officialPdfAttempts);
   return {
     id: invoice.id,
     source: invoice.source,
@@ -721,6 +869,8 @@ function mapExternalInvoice(
     promotedInvoiceNumber: promoted?.invoiceNumber,
     promotedInvoiceStatus: promoted?.status,
     requiresPdfUpload: Boolean(promoted && !promoted.pdfPath),
+    pdfSource,
+    pdfDiagnostic,
     createdAt: invoice.createdAt.toISOString(),
     updatedAt: invoice.updatedAt.toISOString()
   };
@@ -1270,6 +1420,21 @@ export class ExternalInvoicesService {
         orderId: draft.orderId,
         orderNumber: draft.order?.orderNumber,
         shipmentPackageId: draft.order?.shipmentPackageId,
+        order: draft.order
+          ? {
+              orderNumber: draft.order.orderNumber,
+              shipmentPackageId: draft.order.shipmentPackageId,
+              customerName: draft.order.customerName,
+              customerIdentifier: draft.order.customerIdentifier,
+              invoiceAddress: draft.order.invoiceAddress,
+              totalGrossCents: draft.order.totalGrossCents,
+              totalDiscountCents: draft.order.totalDiscountCents,
+              totalPayableCents: draft.order.totalPayableCents,
+              currency: draft.order.currency
+            }
+          : null,
+        lines: draft.lines,
+        totals: draft.totals,
         status: draft.status,
         portalDraftUuid: draft.portalDraftUuid,
         portalDraftNumber: draft.portalDraftNumber,
@@ -1411,11 +1576,16 @@ export class ExternalInvoicesService {
       const shouldAcquirePdf = !options.forcedPdfPath && !existingForDraft?.pdfPath && !uploadedPdfPath;
       const downloadedPdfPath =
         shouldAcquirePdf && externalInvoice.pdfUrl ? await this.tryDownloadOfficialPdf(externalInvoice.invoiceNumber, externalInvoice.pdfUrl) : undefined;
-      const portalPdf = shouldAcquirePdf && !downloadedPdfPath ? await this.tryDownloadPortalOfficialPdf(externalInvoice) : undefined;
-      const pdfPath = options.forcedPdfPath ?? existingForDraft?.pdfPath ?? uploadedPdfPath ?? downloadedPdfPath ?? portalPdf?.pdfPath;
-      const resolvedPdfUrl = portalPdf?.pdfUrl ?? externalInvoice.pdfUrl;
+      const portalPdfLookup = shouldAcquirePdf && !downloadedPdfPath ? await this.tryDownloadPortalOfficialPdf(externalInvoice) : undefined;
+      const portalPdf = portalPdfLookup?.pdfPath ? portalPdfLookup : undefined;
+      const officialPdfAttempts = portalPdfLookup?.attempts;
+      const generatedPdf =
+        shouldAcquirePdf && !downloadedPdfPath && !portalPdf ? await this.tryBuildReconstructedPdf(externalInvoice, match) : undefined;
+      const pdfPath =
+        options.forcedPdfPath ?? existingForDraft?.pdfPath ?? uploadedPdfPath ?? downloadedPdfPath ?? portalPdf?.pdfPath ?? generatedPdf?.pdfPath;
+      const resolvedPdfUrl = portalPdf?.pdfUrl ?? generatedPdf?.pdfUrl ?? externalInvoice.pdfUrl;
 
-      if ((options.forcedPdfPath || downloadedPdfPath || portalPdf) && pdfPath && !uploadedPdfPath) {
+      if ((options.forcedPdfPath || downloadedPdfPath || portalPdf || generatedPdf) && pdfPath && !uploadedPdfPath) {
         await this.prisma.externalInvoice.update({
           where: { id: externalInvoice.id },
           data: {
@@ -1424,8 +1594,19 @@ export class ExternalInvoicesService {
                   uploadedPdfPath: pdfPath,
                   pdfUrl: portalPdf.pdfUrl,
                   source: portalPdf.source,
-                  raw: portalPdf.raw
+                  raw: portalPdf.raw,
+                  attempts: officialPdfAttempts
                 })
+              : generatedPdf
+                ? mergeRawWithGeneratedPdf(externalInvoice.raw, {
+                    uploadedPdfPath: pdfPath,
+                    pdfUrl: generatedPdf.pdfUrl,
+                    invoiceNumber: externalInvoice.invoiceNumber,
+                    invoiceDate: externalInvoice.invoiceDate,
+                    ettn: generatedPdf.ettn,
+                    qrPayload: generatedPdf.qrPayload,
+                    officialPdfAttempts
+                  })
               : mergeRawWithUpload(externalInvoice.raw, pdfPath),
             ...(resolvedPdfUrl ? { pdfUrl: resolvedPdfUrl } : {})
           }
@@ -1446,6 +1627,31 @@ export class ExternalInvoicesService {
           followup.timelineEvents.push(event);
           await this.writeFollowupAudit(event);
         }
+        if (generatedPdf) {
+          const event = eventFor({
+            type: "pdf_saved",
+            severity: "success",
+            externalInvoiceId: externalInvoice.id,
+            invoiceNumber: externalInvoice.invoiceNumber,
+            orderNumber: match.orderNumber,
+            shipmentPackageId: match.shipmentPackageId,
+            draftId: match.id,
+            message: `${externalInvoice.invoiceNumber} icin GIB imzali kayittan pazaryeri PDF kopyasi uretildi.`,
+            nextAction: "PDF kopyasi hazir; Trendyol dosya gonderimi kontrol ediliyor.",
+            metadata: { source: RECONSTRUCTED_PDF_SOURCE, pdfUrl: generatedPdf.pdfUrl }
+          });
+          followup.timelineEvents.push(event);
+          await this.writeFollowupAudit(event);
+        }
+      }
+
+      if (!pdfPath && officialPdfAttempts?.length) {
+        await this.prisma.externalInvoice.update({
+          where: { id: externalInvoice.id },
+          data: {
+            raw: mergeRawWithOfficialPdfAttempts(externalInvoice.raw, officialPdfAttempts)
+          }
+        });
       }
 
       const invoice =
@@ -1536,7 +1742,9 @@ export class ExternalInvoicesService {
           shipmentPackageId: match.shipmentPackageId,
           draftId: match.id,
           message: `${externalInvoice.invoiceNumber} imzali ve arsivde; resmi PDF henuz yok, Trendyol'a gonderilmedi.`,
-          nextAction: "GIB portal resmi PDF baglantisi gelince otomatik kontrol veya manuel PDF yukleme sonrasi Trendyol gonderimi calisir."
+          nextAction:
+            officialPdfDiagnostic(officialPdfAttempts) ??
+            "GIB portal resmi PDF baglantisi gelince otomatik kontrol veya manuel PDF yukleme sonrasi Trendyol gonderimi calisir."
         });
         followup.timelineEvents.push(event);
         await this.writeFollowupAudit(event);
@@ -2219,7 +2427,7 @@ export class ExternalInvoicesService {
         invoiceDate?: Date | null;
         pdfUrl?: string | null;
         raw?: Prisma.JsonValue;
-      }) => Promise<{ buffer: Buffer; pdfUrl?: string; source?: string; raw?: unknown } | undefined>;
+      }) => Promise<{ buffer?: Buffer; pdfUrl?: string; source?: string; raw?: unknown; attempts?: PortalOfficialPdfAttempt[] } | undefined>;
     }).downloadIssuedInvoicePdf;
     if (typeof downloader !== "function" || !invoice.invoiceNumber) return undefined;
 
@@ -2231,17 +2439,111 @@ export class ExternalInvoicesService {
         pdfUrl: invoice.pdfUrl,
         raw: invoice.raw
       });
-      if (!result?.buffer?.length || result.buffer.length > 10 * 1024 * 1024) return undefined;
+      const attempts = sanitizeOfficialPdfAttempts(result?.attempts);
+      if (!result?.buffer?.length || result.buffer.length > 10 * 1024 * 1024) {
+        return attempts.length > 0 ? { attempts } : undefined;
+      }
       const pdfPath = await this.writeInvoicePdf(invoice.invoiceNumber, result.buffer);
       return {
         pdfPath,
         pdfUrl: result.pdfUrl,
         source: result.source ?? "GIB_PORTAL_OFFICIAL_PDF",
-        raw: result.raw
+        raw: result.raw,
+        attempts
       };
     } catch {
       return undefined;
     }
+  }
+
+  private async reconstructedPdfFallbackEnabled() {
+    const delegate = (this.prisma as unknown as { setting?: { findUnique?: (args: { where: { key: string } }) => Promise<{ value?: unknown } | null> } }).setting;
+    if (!delegate?.findUnique) return false;
+    const record = await delegate.findUnique({ where: { key: GIB_RECONSTRUCTED_PDF_FALLBACK_SETTING_KEY } });
+    const value = record?.value;
+    if (typeof value === "boolean") return value;
+    if (value && typeof value === "object" && !Array.isArray(value)) return Boolean((value as RawRecord).enabled);
+    return false;
+  }
+
+  private providerPayloadFromPortalMatch(match: PortalDraftMatchCandidate): ArchiveInvoicePayload | undefined {
+    if (!match.order) return undefined;
+    const totals = rawRecord(match.totals);
+    const address = rawRecord(match.order.invoiceAddress);
+    const lines = Array.isArray(match.lines) ? (match.lines as ArchiveInvoicePayload["lines"]) : [];
+    if (lines.length === 0) return undefined;
+
+    return {
+      orderNumber: match.order.orderNumber,
+      shipmentPackageId: match.order.shipmentPackageId,
+      buyerName: match.order.customerName,
+      buyerIdentifier: String(totals.buyerIdentifier ?? match.order.customerIdentifier ?? "11111111111"),
+      buyerType: totals.buyerType === "company" || totals.buyerType === "person" ? totals.buyerType : undefined,
+      address: {
+        addressLine: textValue(address.addressLine),
+        district: textValue(address.district) || undefined,
+        city: textValue(address.city),
+        countryCode: textValue(address.countryCode) || "TR",
+        taxOffice: textValue(address.taxOffice) || undefined
+      },
+      lines,
+      totals: {
+        grossCents: Number(totals.grossCents ?? match.order.totalGrossCents),
+        discountCents: Number(totals.discountCents ?? match.order.totalDiscountCents),
+        payableCents: Number(totals.payableCents ?? match.order.totalPayableCents),
+        currency: String(totals.currency ?? match.order.currency)
+      }
+    };
+  }
+
+  private canUseSignedRecordForPdf(externalInvoice: ExternalInvoice, match: PortalDraftMatchCandidate, payload: ArchiveInvoicePayload) {
+    if (!externalInvoice.invoiceNumber || !externalInvoice.invoiceDate) return false;
+    const ettn = extractExternalUuid(externalInvoice);
+    if (!ettn) return false;
+
+    if (externalInvoice.totalPayableCents !== null && externalInvoice.totalPayableCents !== undefined) {
+      if (externalInvoice.totalPayableCents !== payload.totals.payableCents) return false;
+    }
+
+    const externalBuyer = digits(externalInvoice.buyerIdentifier);
+    const payloadBuyer = digits(payload.buyerIdentifier);
+    if (externalBuyer && payloadBuyer && externalBuyer !== payloadBuyer) return false;
+
+    if (match.order?.totalPayableCents !== undefined && match.order.totalPayableCents !== payload.totals.payableCents) return false;
+    return true;
+  }
+
+  private async tryBuildReconstructedPdf(externalInvoice: ExternalInvoice, match: PortalDraftMatchCandidate) {
+    if (!(await this.reconstructedPdfFallbackEnabled())) return undefined;
+
+    const ettn = extractExternalUuid(externalInvoice);
+    if (!ettn || !externalInvoice.invoiceNumber || !externalInvoice.invoiceDate) return undefined;
+
+    const payload = this.providerPayloadFromPortalMatch(match);
+    if (!payload || !this.canUseSignedRecordForPdf(externalInvoice, match, payload)) return undefined;
+
+    const qrPayload =
+      extractSignedQrPayload(externalInvoice.raw) ??
+      buildGibEArchiveQrPayload(payload, {
+        documentNumber: externalInvoice.invoiceNumber,
+        documentDate: externalInvoice.invoiceDate,
+        ettn
+      });
+    const pdf = buildInvoicePdf(payload, {
+      title: "e-Arşiv Fatura",
+      documentNumber: externalInvoice.invoiceNumber,
+      documentDate: externalInvoice.invoiceDate,
+      ettn,
+      qrPayload
+    });
+    const pdfPath = await this.writeInvoicePdf(externalInvoice.invoiceNumber, pdf);
+
+    return {
+      pdfPath,
+      pdfUrl: `generated://gib-portal-reconstructed/${safeFileStem(externalInvoice.invoiceNumber)}.pdf`,
+      ettn,
+      qrPayload
+    };
   }
 
   private async writeInvoicePdf(invoiceNumber: string, pdf: Buffer) {

@@ -4,6 +4,12 @@ import os from "node:os";
 import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { ExternalInvoicesService } from "../src/external-invoices/external-invoices.service";
+import { buildInvoicePdf } from "../src/invoice/pdf/simple-invoice-pdf";
+
+vi.mock("../src/invoice/pdf/simple-invoice-pdf", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../src/invoice/pdf/simple-invoice-pdf")>()),
+  buildInvoicePdf: vi.fn(() => Buffer.from("%PDF-1.4 reconstructed"))
+}));
 
 function makeSignedExternal(overrides: Record<string, unknown> = {}) {
   return {
@@ -466,6 +472,295 @@ describe("ExternalInvoicesService", () => {
       else process.env.STORAGE_DIR = previousStorageDir;
       await fs.rm(storageRoot, { recursive: true, force: true });
     }
+  });
+
+  it("reconstructs a marketplace PDF from signed GIB record data when official PDF is unavailable and fallback is enabled", async () => {
+    const storageRoot = await fs.mkdtemp(path.join(os.tmpdir(), "safa-gib-reconstructed-"));
+    const previousStorageDir = process.env.STORAGE_DIR;
+    process.env.STORAGE_DIR = storageRoot;
+    const signed = makeSignedExternal({
+      id: "external-reconstructed",
+      externalKey: "77777777-7777-4777-8777-777777777777",
+      invoiceNumber: "GIB202600007",
+      invoiceDate: new Date("2026-05-24T09:00:00.000Z"),
+      buyerIdentifier: "12345678901",
+      totalPayableCents: 38336,
+      pdfUrl: null,
+      raw: {
+        uuid: "77777777-7777-4777-8777-777777777777",
+        karekodPayload: "signed-gib-qr-payload",
+        kaynakKomut: "EARSIV_PORTAL_ADIMA_KESILEN_BELGELERI_GETIR"
+      }
+    });
+    const draft = {
+      id: "draft-reconstructed",
+      orderId: "order-1",
+      status: DraftStatus.PORTAL_DRAFTED,
+      validation: { errors: [], warnings: [] },
+      lines: [
+        {
+          description: "Urun",
+          quantity: 1,
+          grossCents: 38336,
+          discountCents: 0,
+          payableCents: 38336,
+          vatRate: 20
+        }
+      ],
+      totals: {
+        grossCents: 38336,
+        discountCents: 0,
+        payableCents: 38336,
+        currency: "TRY",
+        buyerIdentifier: "12345678901"
+      },
+      portalDraftUuid: "77777777-7777-4777-8777-777777777777",
+      portalDraftNumber: "GIB202600007",
+      order: {
+        id: "order-1",
+        orderNumber: "11227170653",
+        shipmentPackageId: "pkg-1",
+        customerName: "Sarper Test",
+        customerIdentifier: "12345678901",
+        invoiceAddress: {
+          addressLine: "Adres",
+          district: "Kadikoy",
+          city: "Istanbul",
+          countryCode: "TR"
+        },
+        totalGrossCents: 38336,
+        totalDiscountCents: 0,
+        totalPayableCents: 38336,
+        currency: "TRY"
+      },
+      invoice: null
+    };
+    const createdInvoice = {
+      id: "invoice-reconstructed",
+      draftId: "draft-reconstructed",
+      provider: "gib-portal-manual",
+      providerInvoiceId: "77777777-7777-4777-8777-777777777777",
+      invoiceNumber: "GIB202600007",
+      invoiceDate: new Date("2026-05-24T09:00:00.000Z"),
+      status: InvoiceStatus.ISSUED,
+      pdfPath: path.join(storageRoot, "invoices", "GIB202600007.pdf"),
+      pdfUrl: "generated://gib-portal-reconstructed/GIB202600007.pdf",
+      trendyolStatus: null
+    };
+    const prisma = {
+      setting: {
+        findUnique: vi.fn(async () => ({ key: "feature.gibPortal.reconstructedPdfFallback", value: { enabled: true } }))
+      },
+      externalInvoice: {
+        findMany: vi.fn(async () => [signed]),
+        update: vi.fn(async (args) => ({ ...signed, ...args.data }))
+      },
+      invoiceDraft: {
+        findMany: vi.fn(async () => [draft]),
+        update: vi.fn(async (args) => ({ ...draft, ...args.data }))
+      },
+      invoice: {
+        findMany: vi.fn().mockResolvedValueOnce([]).mockResolvedValue([createdInvoice]),
+        create: vi.fn(async (args) => ({ id: "invoice-reconstructed", ...args.data, trendyolStatus: null })),
+        update: vi.fn(async (args) => ({ id: args.where.id, ...args.data }))
+      },
+      auditLog: {
+        create: vi.fn()
+      }
+    };
+    const earsivPortal = {
+      downloadIssuedInvoicePdf: vi.fn(async () => ({
+        attempts: [
+          {
+            source: "EARSIV_PORTAL_FATURA_PDF_INDIR",
+            cmd: "EARSIV_PORTAL_FATURA_PDF_INDIR",
+            pageName: "RG_TASLAKLAR",
+            outcome: "no_pdf_payload",
+            payloadKeys: ["faturaUuid", "faturaNo"]
+          }
+        ]
+      }))
+    };
+    const trendyol = {
+      sendInvoiceFile: vi.fn(async () => ({ ok: true, alreadySent: false }))
+    };
+    const service = new ExternalInvoicesService(prisma as never, earsivPortal as never, trendyol as never);
+
+    try {
+      const result = await service.promoteSignedGibInvoices({ autoSendTrendyol: true });
+
+      expect(buildInvoicePdf).toHaveBeenCalledWith(
+        expect.any(Object),
+        expect.objectContaining({
+          documentNumber: "GIB202600007",
+          ettn: "77777777-7777-4777-8777-777777777777",
+          qrPayload: "signed-gib-qr-payload"
+        })
+      );
+      expect(prisma.externalInvoice.update).toHaveBeenCalledWith({
+        where: { id: "external-reconstructed" },
+        data: expect.objectContaining({
+          raw: expect.objectContaining({
+            uploadedPdfPath: expect.stringContaining("GIB202600007.pdf"),
+            generatedPdfSource: "GIB_PORTAL_RECONSTRUCTED_FROM_SIGNED_RECORD",
+            generatedPdfInputs: expect.objectContaining({
+              ettn: "77777777-7777-4777-8777-777777777777",
+              invoiceNumber: "GIB202600007",
+              qrPayload: "signed-gib-qr-payload"
+            })
+          }),
+          pdfUrl: "generated://gib-portal-reconstructed/GIB202600007.pdf"
+        })
+      });
+      expect(prisma.invoice.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          invoiceNumber: "GIB202600007",
+          pdfPath: expect.stringContaining("GIB202600007.pdf"),
+          pdfUrl: "generated://gib-portal-reconstructed/GIB202600007.pdf",
+          error: null
+        })
+      });
+      expect(trendyol.sendInvoiceFile).toHaveBeenCalledWith(
+        expect.objectContaining({
+          shipmentPackageId: "pkg-1",
+          invoiceNumber: "GIB202600007",
+          pdfPath: expect.stringContaining("GIB202600007.pdf")
+        })
+      );
+      expect(result.trendyolSent).toBe(1);
+    } finally {
+      if (previousStorageDir === undefined) delete process.env.STORAGE_DIR;
+      else process.env.STORAGE_DIR = previousStorageDir;
+      await fs.rm(storageRoot, { recursive: true, force: true });
+      vi.mocked(buildInvoicePdf).mockClear();
+    }
+  });
+
+  it("keeps pdf_missing behavior when reconstructed PDF fallback is disabled", async () => {
+    vi.mocked(buildInvoicePdf).mockClear();
+    const signed = makeSignedExternal({
+      id: "external-fallback-disabled",
+      externalKey: "88888888-8888-4888-8888-888888888888",
+      invoiceNumber: "GIB202600008",
+      invoiceDate: new Date("2026-05-24T09:00:00.000Z"),
+      buyerIdentifier: "12345678901",
+      totalPayableCents: 38336,
+      pdfUrl: null,
+      raw: {
+        uuid: "88888888-8888-4888-8888-888888888888",
+        kaynakKomut: "EARSIV_PORTAL_ADIMA_KESILEN_BELGELERI_GETIR"
+      }
+    });
+    const draft = {
+      id: "draft-fallback-disabled",
+      orderId: "order-1",
+      status: DraftStatus.PORTAL_DRAFTED,
+      validation: { errors: [], warnings: [] },
+      lines: [
+        {
+          description: "Urun",
+          quantity: 1,
+          unitPriceCents: 38336,
+          grossCents: 38336,
+          discountCents: 0,
+          payableCents: 38336,
+          vatRate: 20
+        }
+      ],
+      totals: {
+        grossCents: 38336,
+        discountCents: 0,
+        payableCents: 38336,
+        currency: "TRY",
+        buyerIdentifier: "12345678901"
+      },
+      portalDraftUuid: "88888888-8888-4888-8888-888888888888",
+      portalDraftNumber: "GIB202600008",
+      order: {
+        id: "order-1",
+        orderNumber: "11227170653",
+        shipmentPackageId: "pkg-1",
+        customerName: "Sarper Test",
+        customerIdentifier: "12345678901",
+        invoiceAddress: {
+          addressLine: "Adres",
+          district: "Kadikoy",
+          city: "Istanbul",
+          countryCode: "TR"
+        },
+        totalGrossCents: 38336,
+        totalDiscountCents: 0,
+        totalPayableCents: 38336,
+        currency: "TRY"
+      },
+      invoice: null
+    };
+    const prisma = {
+      setting: {
+        findUnique: vi.fn(async () => ({ key: "feature.gibPortal.reconstructedPdfFallback", value: { enabled: false } }))
+      },
+      externalInvoice: {
+        findMany: vi.fn(async () => [signed]),
+        update: vi.fn(async (args) => ({ ...signed, ...args.data }))
+      },
+      invoiceDraft: {
+        findMany: vi.fn(async () => [draft]),
+        update: vi.fn(async (args) => ({ ...draft, ...args.data }))
+      },
+      invoice: {
+        findMany: vi.fn(async () => []),
+        create: vi.fn(async (args) => ({ id: "invoice-fallback-disabled", ...args.data, trendyolStatus: null })),
+        update: vi.fn(async (args) => ({ id: args.where.id, ...args.data }))
+      },
+      auditLog: {
+        create: vi.fn()
+      }
+    };
+    const earsivPortal = {
+      downloadIssuedInvoicePdf: vi.fn(async () => ({
+        attempts: [
+          {
+            source: "EARSIV_PORTAL_FATURA_PDF_INDIR",
+            cmd: "EARSIV_PORTAL_FATURA_PDF_INDIR",
+            pageName: "RG_TASLAKLAR",
+            outcome: "no_pdf_payload",
+            payloadKeys: ["faturaUuid", "faturaNo"]
+          }
+        ]
+      }))
+    };
+    const trendyol = {
+      sendInvoiceFile: vi.fn()
+    };
+    const service = new ExternalInvoicesService(prisma as never, earsivPortal as never, trendyol as never);
+
+    const result = await service.promoteSignedGibInvoices({ autoSendTrendyol: true });
+
+    expect(buildInvoicePdf).not.toHaveBeenCalled();
+    expect(prisma.externalInvoice.update).toHaveBeenCalledWith({
+      where: { id: "external-fallback-disabled" },
+      data: {
+        raw: expect.objectContaining({
+          officialPdfAttempts: expect.arrayContaining([
+            expect.objectContaining({
+              source: "EARSIV_PORTAL_FATURA_PDF_INDIR",
+              outcome: "no_pdf_payload"
+            })
+          ])
+        })
+      }
+    });
+    expect(prisma.invoice.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        invoiceNumber: "GIB202600008",
+        pdfPath: undefined,
+        pdfUrl: null,
+        error: "Resmi e-Arsiv PDF bekliyor; Trendyol'a gonderilmedi."
+      })
+    });
+    expect(trendyol.sendInvoiceFile).not.toHaveBeenCalled();
+    expect(result.pdfMissing).toBe(1);
+    expect(result.trendyolSent).toBe(0);
   });
 
   it("keeps scheduled GIB follow-up promotion scoped to the requested day", async () => {

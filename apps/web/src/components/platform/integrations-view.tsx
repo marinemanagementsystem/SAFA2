@@ -81,6 +81,7 @@ interface IntegrationsViewProps {
   onPackageHepsiburadaOrderLine: (id: string) => void;
   onSaveGibPortal: () => void;
   onSaveGibDirect: () => void;
+  onSetReconstructedPdfFallback: (enabled: boolean) => void;
   onOpenGibPortal: () => void;
   onCloseGibPortalSession: () => void;
   onOpenTrendyolPartner: () => void;
@@ -116,6 +117,7 @@ export function IntegrationsView({
   onPackageHepsiburadaOrderLine,
   onSaveGibPortal,
   onSaveGibDirect,
+  onSetReconstructedPdfFallback,
   onOpenGibPortal,
   onCloseGibPortalSession,
   onOpenTrendyolPartner,
@@ -237,12 +239,14 @@ export function IntegrationsView({
         {activeIntegration === "gibPortal" ? (
           <GibPortalPanel
             connections={connections}
+            settings={settings}
             busyAction={busyAction}
             gibPortalForm={gibPortalForm}
             setGibPortalForm={setGibPortalForm}
             onOpenGibPortal={onOpenGibPortal}
             onCloseGibPortalSession={onCloseGibPortalSession}
             onSaveGibPortal={onSaveGibPortal}
+            onSetReconstructedPdfFallback={onSetReconstructedPdfFallback}
           />
         ) : null}
         {activeIntegration === "gibDirect" ? (
@@ -437,21 +441,27 @@ function TrendyolPanel({
 
 function GibPortalPanel({
   connections,
+  settings,
   busyAction,
   gibPortalForm,
   setGibPortalForm,
   onOpenGibPortal,
   onCloseGibPortalSession,
-  onSaveGibPortal
+  onSaveGibPortal,
+  onSetReconstructedPdfFallback
 }: {
   connections: ConnectionsSnapshot | null;
+  settings: Record<string, unknown>;
   busyAction: string | null;
   gibPortalForm: GibPortalConnectionInput;
   setGibPortalForm: Dispatch<SetStateAction<GibPortalConnectionInput>>;
   onOpenGibPortal: () => void;
   onCloseGibPortalSession: () => void;
   onSaveGibPortal: () => void;
+  onSetReconstructedPdfFallback: (enabled: boolean) => void;
 }) {
+  const reconstructedPdfFallbackEnabled = Boolean(settings.gibPortalReconstructedPdfFallbackEnabled);
+
   return (
     <form
       className="settings-form"
@@ -482,6 +492,20 @@ function GibPortalPanel({
         <span>Portal URL</span>
         <input value={gibPortalForm.portalUrl} onChange={(event) => setGibPortalForm((current) => ({ ...current, portalUrl: event.target.value }))} />
       </label>
+      <div className="field">
+        <span>PDF fallback</span>
+        <span className="check-row">
+          <label>
+            <input
+              type="checkbox"
+              checked={reconstructedPdfFallbackEnabled}
+              disabled={busyAction === "save-reconstructed-pdf-fallback"}
+              onChange={(event) => onSetReconstructedPdfFallback(event.target.checked)}
+            />
+            GIB PDF alinamazsa imzali kayittan pazaryeri PDF kopyasi uret ve otomatik gonder
+          </label>
+        </span>
+      </div>
       <div className="form-actions">
         <button className="ui-button ghost" type="button" onClick={onOpenGibPortal} disabled={busyAction === "open-gib"}>
           {busyAction === "open-gib" ? <Loader2 size={18} className="spin" /> : <LogIn size={18} />}

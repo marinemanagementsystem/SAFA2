@@ -120,10 +120,22 @@ export interface PortalOfficialPdfLookup {
 }
 
 export interface PortalOfficialPdfResult {
-  buffer: Buffer;
+  buffer?: Buffer;
   pdfUrl?: string;
   source: string;
   raw?: unknown;
+  attempts?: PortalOfficialPdfAttempt[];
+}
+
+export interface PortalOfficialPdfAttempt {
+  source: string;
+  outcome: "downloaded_pdf" | "http_error" | "non_pdf" | "download_error" | "portal_error" | "no_pdf_payload" | "pdf_url_found" | "dispatch_exception";
+  cmd?: string;
+  pageName?: string;
+  payloadKeys?: string[];
+  status?: number;
+  contentType?: string;
+  errorClass?: string;
 }
 
 const GIB_PORTAL_LAUNCH_SESSION_KEY = "session.gibPortal.launch";
@@ -431,13 +443,26 @@ function portalPdfPayloads(input: PortalOfficialPdfLookup) {
     ...(invoiceDate ? { faturaTarihi: invoiceDate, belgeTarihi: invoiceDate, tarih: invoiceDate } : {})
   };
 
-  return [
+  const payloads = [
     base,
     { table: [base] },
     { seciliFatura: base },
     { belge: base },
+    { fatura: base },
     { data: base }
   ];
+
+  if (Object.keys(raw).length > 0) {
+    payloads.push(raw, { table: [raw] }, { seciliFatura: raw }, { belge: raw }, { fatura: raw }, { data: raw });
+  }
+
+  const seen = new Set<string>();
+  return payloads.filter((payload) => {
+    const key = JSON.stringify(payload);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 function stringifyResponseData(response: DispatchResponse) {
@@ -829,6 +854,7 @@ export class EarsivPortalService {
 
   async downloadIssuedInvoicePdf(input: PortalOfficialPdfLookup): Promise<PortalOfficialPdfResult | undefined> {
     const raw = rawRecord(input.raw);
+    const attempts: PortalOfficialPdfAttempt[] = [];
     const directUrl =
       input.pdfUrl ??
       pickRawString(raw, [
@@ -840,13 +866,20 @@ export class EarsivPortalService {
         "faturaLinki"
       ]);
 
-    const { connection, response } = await this.loginForOperation("SAFA live e-arsiv official PDF follow-up");
+    const { connection, response, launchSession, setCookie } = await this.loginForOperation("SAFA live e-arsiv official PDF follow-up");
     if (!response.token) {
       throw new ServiceUnavailableException("e-Arsiv portali oturum tokeni donmedi; resmi PDF sorgusu baslatilamadi.");
     }
 
+    const cookieJar = cookieJarFromSetCookie(setCookie ?? []);
+    const referer = launchSession?.launchUrl;
+
     if (directUrl && (/^https?:\/\//i.test(directUrl) || directUrl.startsWith("/"))) {
-      const direct = await this.downloadPdfUrl(connection.portalUrl, directUrl, "direct-pdf-url");
+      const direct = await this.downloadPdfUrl(connection.portalUrl, directUrl, "direct-pdf-url", {
+        attempts,
+        cookieJar,
+        referer
+      });
       if (direct) return direct;
     }
 
@@ -862,6 +895,7 @@ export class EarsivPortalService {
 
     for (const candidate of candidates) {
       for (const payload of payloads) {
+        const payloadKeys = Object.keys(payload);
         try {
           const dispatch = await this.dispatch(
             connection,
@@ -869,29 +903,77 @@ export class EarsivPortalService {
             candidate.cmd,
             candidate.pageName,
             payload,
-            "SAFA live e-arsiv official PDF follow-up"
+            "SAFA live e-arsiv official PDF follow-up",
+            { cookieJar, referer }
           );
-          if (dispatch.error) continue;
+          if (dispatch.error) {
+            attempts.push({
+              source: candidate.cmd,
+              cmd: candidate.cmd,
+              pageName: candidate.pageName,
+              payloadKeys,
+              outcome: "portal_error"
+            });
+            continue;
+          }
 
           const found = findPdfPayload(dispatch.data ?? dispatch.result ?? dispatch.rows ?? dispatch);
           if (found?.buffer) {
+            attempts.push({
+              source: candidate.cmd,
+              cmd: candidate.cmd,
+              pageName: candidate.pageName,
+              payloadKeys,
+              outcome: "downloaded_pdf"
+            });
             return {
               buffer: found.buffer,
               source: candidate.cmd,
-              raw: found.raw ?? dispatch
+              raw: found.raw ?? dispatch,
+              attempts
             };
           }
           if (found?.url) {
-            const downloaded = await this.downloadPdfUrl(connection.portalUrl, found.url, candidate.cmd);
+            attempts.push({
+              source: candidate.cmd,
+              cmd: candidate.cmd,
+              pageName: candidate.pageName,
+              payloadKeys,
+              outcome: "pdf_url_found"
+            });
+            const downloaded = await this.downloadPdfUrl(connection.portalUrl, found.url, candidate.cmd, {
+              attempts,
+              cookieJar,
+              referer,
+              cmd: candidate.cmd,
+              pageName: candidate.pageName,
+              payloadKeys
+            });
             if (downloaded) return { ...downloaded, raw: found.raw ?? dispatch };
+            continue;
           }
-        } catch {
+          attempts.push({
+            source: candidate.cmd,
+            cmd: candidate.cmd,
+            pageName: candidate.pageName,
+            payloadKeys,
+            outcome: "no_pdf_payload"
+          });
+        } catch (error) {
+          attempts.push({
+            source: candidate.cmd,
+            cmd: candidate.cmd,
+            pageName: candidate.pageName,
+            payloadKeys,
+            outcome: "dispatch_exception",
+            errorClass: error instanceof Error ? error.name : "Error"
+          });
           continue;
         }
       }
     }
 
-    return undefined;
+    return attempts.length > 0 ? { source: "NO_OFFICIAL_PDF", attempts } : undefined;
   }
 
   async createInvoiceDrafts(inputs: PortalDraftUploadInput[]): Promise<PortalDraftUploadResult[]> {
@@ -955,30 +1037,89 @@ export class EarsivPortalService {
     return results;
   }
 
-  private async downloadPdfUrl(portalUrl: string, value: string, source: string): Promise<PortalOfficialPdfResult | undefined> {
+  private async downloadPdfUrl(
+    portalUrl: string,
+    value: string,
+    source: string,
+    context: {
+      attempts?: PortalOfficialPdfAttempt[];
+      cookieJar?: Record<string, string>;
+      referer?: string;
+      cmd?: string;
+      pageName?: string;
+      payloadKeys?: string[];
+    } = {}
+  ): Promise<PortalOfficialPdfResult | undefined> {
     try {
       const target = new URL(value, new URL(portalUrl).origin);
+      const cookies = cookieHeader(context.cookieJar ?? {});
+      const headers: Record<string, string> = {
+        Accept: "application/pdf,*/*",
+        "User-Agent": "SAFA live e-arsiv official PDF follow-up"
+      };
+      if (cookies) headers.Cookie = cookies;
+      if (context.referer) headers.Referer = context.referer;
+
       const response = await axios.get<ArrayBuffer>(target.toString(), {
-        headers: {
-          Accept: "application/pdf,*/*",
-          "User-Agent": "SAFA live e-arsiv official PDF follow-up"
-        },
+        headers,
         responseType: "arraybuffer",
         timeout: 30_000,
         maxContentLength: 10 * 1024 * 1024,
         validateStatus: () => true
       });
-      if (response.status < 200 || response.status >= 300) return undefined;
+      const contentType = safeHeaderValue(response.headers?.["content-type"]);
+      if (response.status < 200 || response.status >= 300) {
+        context.attempts?.push({
+          source,
+          cmd: context.cmd,
+          pageName: context.pageName,
+          payloadKeys: context.payloadKeys,
+          status: response.status,
+          contentType,
+          outcome: "http_error"
+        });
+        return undefined;
+      }
 
       const buffer = Buffer.from(response.data);
-      if (!looksLikePdfBuffer(buffer) || buffer.length > 10 * 1024 * 1024) return undefined;
+      if (!looksLikePdfBuffer(buffer) || buffer.length > 10 * 1024 * 1024) {
+        context.attempts?.push({
+          source,
+          cmd: context.cmd,
+          pageName: context.pageName,
+          payloadKeys: context.payloadKeys,
+          status: response.status,
+          contentType,
+          outcome: "non_pdf"
+        });
+        return undefined;
+      }
+
+      context.attempts?.push({
+        source,
+        cmd: context.cmd,
+        pageName: context.pageName,
+        payloadKeys: context.payloadKeys,
+        status: response.status,
+        contentType,
+        outcome: "downloaded_pdf"
+      });
 
       return {
         buffer,
         pdfUrl: target.toString(),
-        source
+        source,
+        attempts: context.attempts
       };
-    } catch {
+    } catch (error) {
+      context.attempts?.push({
+        source,
+        cmd: context.cmd,
+        pageName: context.pageName,
+        payloadKeys: context.payloadKeys,
+        outcome: "download_error",
+        errorClass: error instanceof Error ? error.name : "Error"
+      });
       return undefined;
     }
   }
@@ -1328,7 +1469,8 @@ export class EarsivPortalService {
     cmd: string,
     pageName: string | undefined,
     jp: Record<string, unknown>,
-    userAgent = "SAFA live e-arsiv invoice query"
+    userAgent = "SAFA live e-arsiv invoice query",
+    options: { cookieJar?: Record<string, string>; referer?: string } = {}
   ) {
     const form = new URLSearchParams({
       cmd,
@@ -1338,8 +1480,8 @@ export class EarsivPortalService {
     });
     if (pageName) form.set("pageName", pageName);
 
-    const response = await axios.post<DispatchResponse>(dispatchEndpoint(connection.portalUrl), form.toString(), {
-      headers: {
+    const cookies = cookieHeader(options.cookieJar ?? {});
+    const headers: Record<string, string> = {
         Accept: "*/*",
         "Accept-Language": "tr,en-US;q=0.9,en;q=0.8",
         "Cache-Control": "no-cache",
@@ -1348,7 +1490,12 @@ export class EarsivPortalService {
         "Sec-Fetch-Mode": "cors",
         "Sec-Fetch-Site": "same-origin",
         "User-Agent": userAgent
-      },
+    };
+    if (cookies) headers.Cookie = cookies;
+    if (options.referer) headers.Referer = options.referer;
+
+    const response = await axios.post<DispatchResponse>(dispatchEndpoint(connection.portalUrl), form.toString(), {
+      headers,
       timeout: 30_000,
       validateStatus: () => true
     });

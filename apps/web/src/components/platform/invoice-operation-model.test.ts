@@ -119,6 +119,53 @@ describe("buildInvoiceOperationRows", () => {
     expect(row.nextAction.detail).not.toContain("yapilacak is yok");
   });
 
+  it("shows official PDF attempt diagnostics for signed portal invoices still waiting for PDF", () => {
+    const [row] = buildInvoiceOperationRows({
+      drafts: [],
+      invoices: [],
+      externalInvoices: [
+        externalInvoice({
+          pdfUrl: undefined,
+          requiresPdfUpload: false,
+          pdfDiagnostic: "GIB PDF denemeleri basarisiz: gercek PDF donmedi."
+        })
+      ],
+      jobs: []
+    });
+
+    expect(row.stages.pdf.state).toBe("missing");
+    expect(row.stages.pdf.detail).toBe("GIB PDF denemeleri basarisiz: gercek PDF donmedi.");
+    expect(row.queueKeys).toContain("pdf-missing");
+  });
+
+  it("marks reconstructed portal PDFs as generated marketplace copies instead of PDF missing", () => {
+    const [row] = buildInvoiceOperationRows({
+      drafts: [],
+      invoices: [
+        invoice({
+          status: "ISSUED",
+          provider: "gib-portal-manual",
+          pdfAvailable: true,
+          pdfUrl: "generated://gib-portal-reconstructed/GIB202600007.pdf"
+        })
+      ],
+      externalInvoices: [
+        externalInvoice({
+          promotedInvoiceId: "invoice-1",
+          promotedInvoiceNumber: "GIB202600007",
+          promotedInvoiceStatus: "ISSUED",
+          requiresPdfUpload: false,
+          pdfUrl: "generated://gib-portal-reconstructed/GIB202600007.pdf"
+        })
+      ],
+      jobs: []
+    });
+
+    expect(row.stages.pdf.state).toBe("done");
+    expect(row.stages.pdf.detail).toContain("PDF kopyasi uretildi");
+    expect(row.queueKeys).not.toContain("pdf-missing");
+  });
+
   it("keeps persisted signed portal follow-up visible after leaving and returning to the archive", () => {
     const [row] = buildInvoiceOperationRows({
       drafts: [

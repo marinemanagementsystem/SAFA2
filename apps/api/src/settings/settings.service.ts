@@ -21,6 +21,7 @@ const HEPSIBURADA_CONNECTION_KEY = "connection.hepsiburada";
 const GIB_PORTAL_CONNECTION_KEY = "connection.gibPortal";
 const GIB_DIRECT_CONNECTION_KEY = "connection.gibDirect";
 const GIB_DIRECT_SEQUENCE_PREFIX = "sequence.gibDirect";
+export const GIB_RECONSTRUCTED_PDF_FALLBACK_SETTING_KEY = "feature.gibPortal.reconstructedPdfFallback";
 
 type JsonObject = Record<string, unknown>;
 
@@ -144,6 +145,14 @@ function isGibConcurrentSessionMessage(message: string) {
   return /birden fazla/i.test(message) && /güvenli|guvenli/i.test(message);
 }
 
+function booleanSettingValue(value: unknown) {
+  if (typeof value === "boolean") return value;
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return Boolean((value as Record<string, unknown>).enabled);
+  }
+  return false;
+}
+
 function envGibDirectConnection(): GibDirectConnection | undefined {
   const taxId = optionalEnv("GIB_EARSIV_TAX_ID");
   const serviceUrl = optionalEnv("GIB_EARSIV_SERVICE_URL");
@@ -236,11 +245,13 @@ export class SettingsService {
     const persisted = await this.prisma.setting.findMany();
     const connections = await this.connections();
     const gibDirect = await this.gibDirectReadiness();
+    const reconstructedPdfFallbackEnabled = await this.isGibReconstructedPdfFallbackEnabled();
     return {
       runtime: {
         liveIntegrationsOnly: true,
         invoiceProvider: "gib-direct",
         autoSyncEnabled: envBool("AUTO_SYNC_ENABLED", false),
+        gibPortalReconstructedPdfFallbackEnabled: reconstructedPdfFallbackEnabled,
         trendyolConfigured: connections.trendyol.configured,
         gibPortalConfigured: connections.gibPortal.configured,
         gibDirectConfigured: gibDirect.ready,
@@ -257,6 +268,11 @@ export class SettingsService {
       update: { value: value as Prisma.InputJsonValue },
       create: { key, value: value as Prisma.InputJsonValue }
     });
+  }
+
+  async isGibReconstructedPdfFallbackEnabled() {
+    const record = await this.prisma.setting.findUnique({ where: { key: GIB_RECONSTRUCTED_PDF_FALLBACK_SETTING_KEY } });
+    return booleanSettingValue(record?.value);
   }
 
   async readEncryptedSetting<T>(key: string): Promise<T | undefined> {
