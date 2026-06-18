@@ -260,4 +260,36 @@ describe("MonthlyInvoiceArchiveService", () => {
       draftXmlAvailable: true
     });
   });
+
+  it("generates a PDF named 'Ad Soyad - FaturaNo.pdf' when no official PDF exists", async () => {
+    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "safa-monthly-archive-"));
+    process.env.STORAGE_DIR = tempDir;
+
+    // Chrome'a bagimli olmamak icin PDF uretimini stub'la.
+    class StubArchiveService extends MonthlyInvoiceArchiveService {
+      generateCalls = 0;
+      protected async generateInvoicePdf(): Promise<Buffer | undefined> {
+        this.generateCalls += 1;
+        return Buffer.from("%PDF-1.4 generated\n");
+      }
+    }
+
+    const prisma = makePrismaMock();
+    prisma.invoice.findMany.mockResolvedValue([makeInvoice()]);
+    prisma.externalInvoice.findMany.mockResolvedValue([makeExternal()]);
+    const service = new StubArchiveService(prisma as never);
+
+    const result = await service.createMonthlyArchive({ year: 2026, month: 5 });
+    const manifest = JSON.parse(await fs.readFile(path.join(tempDir, "monthly-archives", "2026", "05", "manifest.json"), "utf8"));
+
+    expect(service.generateCalls).toBe(1);
+    expect(result.invoiceCount).toBe(1);
+    expect(result.missingPdfCount).toBe(0);
+    expect(manifest.entries[0]).toMatchObject({
+      pdfIncluded: true,
+      pdfMissing: false,
+      pdfSource: "generated",
+      pdfFile: "Sarper Test - SAF202600001.pdf"
+    });
+  });
 });

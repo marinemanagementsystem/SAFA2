@@ -1,5 +1,5 @@
 import QRCode from "qrcode";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
@@ -410,6 +410,21 @@ export function buildInvoiceHtmlForTest(payload: ArchiveInvoicePayload, options:
   return buildHtml(payload, options);
 }
 
+function chromePdfArgs(profileDir: string, htmlPath: string, pdfPath: string) {
+  return [
+    "--headless=new",
+    "--disable-gpu",
+    "--no-sandbox",
+    "--no-first-run",
+    "--no-default-browser-check",
+    `--user-data-dir=${profileDir}`,
+    "--run-all-compositor-stages-before-draw",
+    "--print-to-pdf-no-header",
+    `--print-to-pdf=${pdfPath}`,
+    pathToFileURL(htmlPath).href
+  ];
+}
+
 export function buildInvoicePdf(payload: ArchiveInvoicePayload, options: InvoicePdfOptions) {
   const chromePath = findChromeExecutable();
   const workDir = fs.mkdtempSync(path.join(os.tmpdir(), "safa-invoice-pdf-"));
@@ -421,22 +436,10 @@ export function buildInvoicePdf(payload: ArchiveInvoicePayload, options: Invoice
     fs.mkdirSync(profileDir, { recursive: true });
     fs.writeFileSync(htmlPath, buildHtml(payload, options), "utf8");
 
-    const result = spawnSync(
-      chromePath,
-      [
-        "--headless=new",
-        "--disable-gpu",
-        "--no-sandbox",
-        "--no-first-run",
-        "--no-default-browser-check",
-        `--user-data-dir=${profileDir}`,
-        "--run-all-compositor-stages-before-draw",
-        "--print-to-pdf-no-header",
-        `--print-to-pdf=${pdfPath}`,
-        pathToFileURL(htmlPath).href
-      ],
-      { encoding: "utf8", timeout: 20000 }
-    );
+    const result = spawnSync(chromePath, chromePdfArgs(profileDir, htmlPath, pdfPath), {
+      encoding: "utf8",
+      timeout: 20000
+    });
 
     if (result.status !== 0 || !fs.existsSync(pdfPath)) {
       throw new Error(result.stderr || result.stdout || "Chrome PDF ciktisi olusturulamadi.");
@@ -446,4 +449,47 @@ export function buildInvoicePdf(payload: ArchiveInvoicePayload, options: Invoice
   } finally {
     fs.rmSync(workDir, { recursive: true, force: true });
   }
+}
+
+/**
+ * Async surumu: birden cok faturayi event-loop'u bloklamadan (sinirli
+ * eszamanlilikla) uretebilmek icin spawnSync yerine spawn kullanir.
+ */
+export function buildInvoicePdfAsync(payload: ArchiveInvoicePayload, options: InvoicePdfOptions): Promise<Buffer> {
+  const chromePath = findChromeExecutable();
+  const workDir = fs.mkdtempSync(path.join(os.tmpdir(), "safa-invoice-pdf-"));
+  const profileDir = path.join(workDir, "profile");
+  const htmlPath = path.join(workDir, "invoice.html");
+  const pdfPath = path.join(workDir, "invoice.pdf");
+
+  return new Promise<Buffer>((resolve, reject) => {
+    fs.mkdirSync(profileDir, { recursive: true });
+    fs.writeFileSync(htmlPath, buildHtml(payload, options), "utf8");
+
+    const child = spawn(chromePath, chromePdfArgs(profileDir, htmlPath, pdfPath), { stdio: "ignore" });
+    const timer = setTimeout(() => {
+      child.kill("SIGKILL");
+      reject(new Error("Chrome PDF uretimi zaman asimina ugradi."));
+    }, 20000);
+
+    child.on("error", (error) => {
+      clearTimeout(timer);
+      reject(error);
+    });
+
+    child.on("close", (code) => {
+      clearTimeout(timer);
+      try {
+        if (code !== 0 || !fs.existsSync(pdfPath)) {
+          reject(new Error("Chrome PDF ciktisi olusturulamadi."));
+          return;
+        }
+        resolve(fs.readFileSync(pdfPath));
+      } catch (error) {
+        reject(error as Error);
+      }
+    });
+  }).finally(() => {
+    fs.rmSync(workDir, { recursive: true, force: true });
+  });
 }

@@ -7,6 +7,8 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { PassThrough } from "node:stream";
 import { PrismaService } from "../prisma/prisma.service";
+import { ArchiveInvoicePayload } from "./invoice-provider";
+import { buildInvoicePdfAsync } from "./pdf/simple-invoice-pdf";
 
 type RawRecord = Record<string, unknown>;
 type InvoiceRecord = Prisma.InvoiceGetPayload<{
@@ -80,7 +82,7 @@ interface ManifestEntry {
   xmlMissing: boolean;
   xmlSource?: string;
   draftXmlAvailable: boolean;
-  rawFile: string;
+  pdfFile?: string;
 }
 
 interface ArchiveManifest {
@@ -99,6 +101,7 @@ const TRY_TIMEZONE_OFFSET_HOURS = 3;
 const MAX_REPORT_ROWS = 20_000;
 const ASSET_TIMEOUT_MS = 8_000;
 const MAX_ASSET_BYTES = 20 * 1024 * 1024;
+const PDF_CONCURRENCY = 4;
 
 const rawFieldAliases = {
   vat: [
@@ -248,6 +251,36 @@ function isSignedGibInvoice(invoice: ExternalInvoiceRecord) {
 
 function safeFileStem(value: string) {
   return value.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 120) || "invoice";
+}
+
+// Dosya adinda Turkce harfleri korur; yalnizca dosya sistemi yasakli
+// karakterleri (< > : " | ? * / \) sadelestirir.
+function safeFileName(value: string) {
+  const cleaned = value
+    .replace(/[<>:"|?*\/\\]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 150);
+  return cleaned || "fatura";
+}
+
+// Verilen islevi sinirli eszamanlilikla calistirir (cok sayida Chrome
+// surecini ayni anda baslatip event-loop'u tikamamak icin).
+async function mapWithConcurrency<T, R>(items: T[], limit: number, fn: (item: T, index: number) => Promise<R>): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let cursor = 0;
+
+  async function worker() {
+    while (cursor < items.length) {
+      const index = cursor;
+      cursor += 1;
+      results[index] = await fn(items[index], index);
+    }
+  }
+
+  const workers = Array.from({ length: Math.max(1, Math.min(limit, items.length)) }, () => worker());
+  await Promise.all(workers);
+  return results;
 }
 
 function resolveStoredPath(value?: string | null) {
@@ -601,23 +634,21 @@ export class MonthlyInvoiceArchiveService {
     zip.pipe(stream);
     zip.append(excelBuffer, { name: this.excelFileName(input) });
 
-    for (const entry of entries) {
+    // PDF'ler (gerektiginde fatura verisinden Chrome ile uretilir) pahali
+    // oldugundan sinirli eszamanlilikla cozulur; siralama korunur.
+    const resolved = await mapWithConcurrency(entries, PDF_CONCURRENCY, async (entry) => {
       const fileStem = safeFileStem(entry.invoiceNumber);
-      const pdf = await this.resolvePdfAsset(entry, fileStem);
+      const pdfFileName = `${safeFileName(`${entry.buyerName || "Musteri"} - ${entry.invoiceNumber}`)}.pdf`;
+      const pdf = await this.resolvePdfAsset(entry, pdfFileName);
       const xml = await this.resolveOfficialXmlAsset(entry, fileStem);
-      const rawFile = `raw/${fileStem}.json`;
+      return { entry, pdf, xml };
+    });
+
+    for (const { entry, pdf, xml } of resolved) {
       const draftXmlAvailable = Boolean(entry.invoice?.draft);
 
-      const rawPayload = {
-        source: entry.source,
-        sourceLabel: entry.sourceLabel,
-        invoice: entry.invoice ? this.invoiceRawSnapshot(entry.invoice) : undefined,
-        externalInvoice: entry.external ? this.externalRawSnapshot(entry.external) : undefined
-      };
-
-      if (pdf) zip.append(pdf.buffer, { name: `pdf/${pdf.fileName}` });
+      if (pdf) zip.append(pdf.buffer, { name: pdf.fileName });
       if (xml) zip.append(xml.buffer, { name: `xml/${xml.fileName}` });
-      zip.append(JSON.stringify(rawPayload, null, 2), { name: rawFile });
 
       manifestEntries.push({
         invoiceNumber: entry.invoiceNumber,
@@ -637,7 +668,7 @@ export class MonthlyInvoiceArchiveService {
         xmlMissing: !xml,
         xmlSource: xml?.source,
         draftXmlAvailable,
-        rawFile
+        pdfFile: pdf?.fileName
       });
     }
 
@@ -650,7 +681,7 @@ export class MonthlyInvoiceArchiveService {
       missingXmlCount: manifestEntries.filter((entry) => entry.xmlMissing).length,
       draftXmlAvailableCount: manifestEntries.filter((entry) => entry.draftXmlAvailable).length,
       note:
-        "XML/UBL yalnizca resmi kaynakta bulunduysa eklenir. SAFA taslak XML'i resmi belge gibi ZIP'e eklenmez; yalnizca draftXmlAvailable alaninda isaretlenir.",
+        "PDF'ler 'Ad Soyad - FaturaNo.pdf' olarak adlandirilir. Resmi PDF bulunmayan faturalar icin PDF, SAFA fatura verisinden uretilir (pdfSource=generated); bu resmi imzali GIB belgesi degildir. XML/UBL yalnizca resmi kaynakta bulunduysa eklenir.",
       entries: manifestEntries
     };
 
@@ -660,74 +691,78 @@ export class MonthlyInvoiceArchiveService {
     return { zipBuffer: await streamPromise, manifest };
   }
 
-  private invoiceRawSnapshot(invoice: InvoiceRecord) {
-    return {
-      id: invoice.id,
-      draftId: invoice.draftId,
-      provider: invoice.provider,
-      providerInvoiceId: invoice.providerInvoiceId,
-      invoiceNumber: invoice.invoiceNumber,
-      invoiceDate: invoice.invoiceDate.toISOString(),
-      status: invoice.status,
-      pdfPath: invoice.pdfPath,
-      pdfUrl: invoice.pdfUrl,
-      trendyolSentAt: invoice.trendyolSentAt?.toISOString(),
-      trendyolStatus: invoice.trendyolStatus,
-      order: {
-        id: invoice.draft.order.id,
-        orderNumber: invoice.draft.order.orderNumber,
-        shipmentPackageId: invoice.draft.order.shipmentPackageId,
-        customerName: invoice.draft.order.customerName,
-        customerIdentifier: invoice.draft.order.customerIdentifier,
-        totalPayableCents: invoice.draft.order.totalPayableCents,
-        currency: invoice.draft.order.currency
-      },
-      draft: {
-        id: invoice.draft.id,
-        status: invoice.draft.status,
-        lines: invoice.draft.lines,
-        totals: invoice.draft.totals,
-        portalDraftUuid: invoice.draft.portalDraftUuid,
-        portalDraftNumber: invoice.draft.portalDraftNumber
-      }
-    };
-  }
-
-  private externalRawSnapshot(invoice: ExternalInvoiceRecord) {
-    return {
-      id: invoice.id,
-      source: invoice.source,
-      externalKey: invoice.externalKey,
-      invoiceNumber: invoice.invoiceNumber,
-      invoiceDate: invoice.invoiceDate?.toISOString(),
-      buyerName: invoice.buyerName,
-      buyerIdentifier: invoice.buyerIdentifier,
-      orderNumber: invoice.orderNumber,
-      shipmentPackageId: invoice.shipmentPackageId,
-      totalPayableCents: invoice.totalPayableCents,
-      currency: invoice.currency,
-      status: invoice.status,
-      pdfUrl: invoice.pdfUrl,
-      xmlUrl: invoice.xmlUrl,
-      matchedOrderId: invoice.matchedOrderId,
-      raw: invoice.raw
-    };
-  }
-
-  private async resolvePdfAsset(entry: MonthlyInvoiceEntry, fileStem: string): Promise<ArchiveAsset | undefined> {
+  private async resolvePdfAsset(entry: MonthlyInvoiceEntry, pdfFileName: string): Promise<ArchiveAsset | undefined> {
     const raw = asRecord(entry.external?.raw);
     const storedPath = resolveStoredPath(entry.invoice?.pdfPath ?? getUploadedPdfPath(raw));
     const storedBuffer = await this.readOptionalFile(storedPath);
     if (storedBuffer) {
-      return { fileName: `${fileStem}.pdf`, buffer: storedBuffer, source: storedPath ?? "stored-pdf" };
+      return { fileName: pdfFileName, buffer: storedBuffer, source: storedPath ?? "stored-pdf" };
     }
 
     const downloaded = await this.downloadOptionalAsset(entry.invoice?.pdfUrl ?? entry.external?.pdfUrl, "pdf");
     if (downloaded) {
-      return { fileName: `${fileStem}.pdf`, buffer: downloaded, source: entry.invoice?.pdfUrl ?? entry.external?.pdfUrl ?? "remote-pdf" };
+      return { fileName: pdfFileName, buffer: downloaded, source: entry.invoice?.pdfUrl ?? entry.external?.pdfUrl ?? "remote-pdf" };
+    }
+
+    // Resmi/kayitli PDF yoksa fatura verisinden e-Arsiv gorunumlu PDF uret.
+    const generated = await this.generateInvoicePdf(entry);
+    if (generated) {
+      return { fileName: pdfFileName, buffer: generated, source: "generated" };
     }
 
     return undefined;
+  }
+
+  // ArchiveInvoicePayload kurulabiliyorsa (taslak satir/tutar verisi varsa)
+  // PDF uretir; aksi halde undefined doner. Test edilebilmesi icin sarmalanmistir.
+  protected async generateInvoicePdf(entry: MonthlyInvoiceEntry): Promise<Buffer | undefined> {
+    const payload = this.buildPdfPayload(entry);
+    if (!payload) return undefined;
+
+    try {
+      return await buildInvoicePdfAsync(payload, {
+        title: "e-Arşiv Fatura",
+        documentNumber: entry.invoiceNumber,
+        documentDate: entry.invoiceDate
+      });
+    } catch {
+      return undefined;
+    }
+  }
+
+  private buildPdfPayload(entry: MonthlyInvoiceEntry): ArchiveInvoicePayload | undefined {
+    const order = entry.invoice?.draft.order ?? entry.external?.matchedOrder ?? undefined;
+    const draft = entry.invoice?.draft ?? entry.external?.matchedOrder?.invoiceDraft ?? undefined;
+    if (!order || !draft) return undefined;
+
+    const lines = asArray(draft.lines) as unknown as ArchiveInvoicePayload["lines"];
+    if (!lines.length) return undefined;
+
+    const totals = asRecord(draft.totals);
+    const address = asRecord(order.invoiceAddress) as Record<string, string | undefined>;
+    const buyerType = totals.buyerType === "company" || totals.buyerType === "person" ? totals.buyerType : undefined;
+
+    return {
+      orderNumber: order.orderNumber,
+      shipmentPackageId: order.shipmentPackageId,
+      buyerName: entry.buyerName || order.customerName,
+      buyerIdentifier: String(totals.buyerIdentifier ?? entry.buyerIdentifier ?? order.customerIdentifier ?? "11111111111"),
+      buyerType,
+      address: {
+        addressLine: address.addressLine ?? "",
+        district: address.district,
+        city: address.city ?? "",
+        countryCode: address.countryCode ?? "TR",
+        taxOffice: address.taxOffice
+      },
+      lines,
+      totals: {
+        grossCents: Number(totals.grossCents ?? order.totalGrossCents),
+        discountCents: Number(totals.discountCents ?? order.totalDiscountCents),
+        payableCents: Number(totals.payableCents ?? order.totalPayableCents),
+        currency: String(totals.currency ?? order.currency ?? entry.currency)
+      }
+    };
   }
 
   private async resolveOfficialXmlAsset(entry: MonthlyInvoiceEntry, fileStem: string): Promise<ArchiveAsset | undefined> {

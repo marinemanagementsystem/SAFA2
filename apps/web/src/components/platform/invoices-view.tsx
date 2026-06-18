@@ -1853,8 +1853,9 @@ export function InvoicesView({
 
           {monthlyArchiveResult ? (
             <div className="form-alert table-note">
-              Aylik arsiv hazir: {monthlyArchiveResult.invoiceCount} resmi fatura. Eksik PDF: {monthlyArchiveResult.missingPdfCount}; eksik resmi XML:{" "}
-              {monthlyArchiveResult.missingXmlCount}. Dosya: {monthlyArchiveResult.archiveFileName}
+              Aylik arsiv hazir: {monthlyArchiveResult.invoiceCount} resmi fatura. PDF'ler &quot;Ad Soyad - FaturaNo.pdf&quot; olarak eklendi
+              (uretilemeyen: {monthlyArchiveResult.missingPdfCount}); eksik resmi XML: {monthlyArchiveResult.missingXmlCount}. Dosya:{" "}
+              {monthlyArchiveResult.archiveFileName}
             </div>
           ) : null}
 
@@ -2609,8 +2610,9 @@ function InvoiceOperationsDashboard({
         </div>
         {monthlyArchiveResult ? (
           <div className="form-alert table-note">
-            Aylik arsiv hazir: {monthlyArchiveResult.invoiceCount} resmi fatura. Eksik PDF: {monthlyArchiveResult.missingPdfCount}; eksik resmi XML:{" "}
-            {monthlyArchiveResult.missingXmlCount}. Dosya: {monthlyArchiveResult.archiveFileName}
+            Aylik arsiv hazir: {monthlyArchiveResult.invoiceCount} resmi fatura. PDF'ler &quot;Ad Soyad - FaturaNo.pdf&quot; olarak eklendi
+            (uretilemeyen: {monthlyArchiveResult.missingPdfCount}); eksik resmi XML: {monthlyArchiveResult.missingXmlCount}. Dosya:{" "}
+            {monthlyArchiveResult.archiveFileName}
           </div>
         ) : null}
         {signedUnarchivedPortalInvoices > 0 || pdfWaitingInvoices > 0 ? (
