@@ -65,14 +65,6 @@ const viewTitles: Record<PlatformView, { title: string; subtitle: string }> = {
   }
 };
 
-const invoiceOpsNavItems: Array<{ view: PlatformView; href: string; label: string; description: string; mobileLabel: string }> = [
-  { view: "orders", href: "/orders", label: "Satislar", description: "Siparis ve paketler", mobileLabel: "Satis" },
-  { view: "invoices", href: "/invoices", label: "Faturalar", description: "Fatura operasyonu", mobileLabel: "Fatura" },
-  { view: "integrations", href: "/integrations", label: "Pazaryeri", description: "Kanal baglantilari", mobileLabel: "Pazar" },
-  { view: "operations", href: "/operations", label: "Raporlar", description: "Kuyruk ve durum", mobileLabel: "Rapor" },
-  { view: "settings", href: "/settings", label: "Ayarlar", description: "Runtime ayarlari", mobileLabel: "Ayar" }
-];
-
 interface PlatformShellProps {
   view: PlatformView;
   snapshot: PlatformSnapshot;
@@ -111,7 +103,7 @@ export function PlatformShell({
   const title = viewTitles[view];
   const connected = connectionScore(snapshot);
   const isLiveMode = apiAvailable && snapshot.settings.liveIntegrationsOnly === true;
-  const navItems = view === "invoices" ? invoiceOpsNavItems : NAV_ITEMS;
+  const navItems = NAV_ITEMS;
 
   return (
     <main className={cx("platform-shell", `view-${view}`)}>
