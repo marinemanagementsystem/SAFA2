@@ -1285,6 +1285,14 @@ export function InvoicesView({
     if (result) setGibFollowupResult(result);
   }
 
+  async function checkAndApplySignedPortalInvoices() {
+    const request = recentGibPortalSyncRequest();
+    const previewResult = await onPreviewGibExternalInvoices(request);
+    if (previewResult) setGibFollowupResult(previewResult);
+    const applyResult = await onApplyGibExternalInvoices(request);
+    if (applyResult) setGibFollowupResult(applyResult);
+  }
+
   function retryDraft(id: string) {
     void runDraftOperation("retry", [id], onIssue);
   }
@@ -1400,6 +1408,7 @@ export function InvoicesView({
         onCloseGibPortalSession={onCloseGibPortalSession}
         onPreviewSignedPortalInvoices={previewSignedPortalInvoices}
         onApplySignedPortalInvoices={applySignedPortalInvoices}
+        onCheckAndApplySigned={checkAndApplySignedPortalInvoices}
         onSyncTrendyolExternalInvoices={onSyncTrendyolExternalInvoices}
         onRunAutomationNow={onRunAutomationNow}
         onReconcileExternalInvoices={onReconcileExternalInvoices}
@@ -2084,6 +2093,7 @@ function InvoiceOperationsDashboard({
   onCloseGibPortalSession,
   onPreviewSignedPortalInvoices,
   onApplySignedPortalInvoices,
+  onCheckAndApplySigned,
   onSyncTrendyolExternalInvoices,
   onRunAutomationNow,
   onReconcileExternalInvoices,
@@ -2141,6 +2151,7 @@ function InvoiceOperationsDashboard({
   onCloseGibPortalSession: () => void;
   onPreviewSignedPortalInvoices: () => Promise<void>;
   onApplySignedPortalInvoices: () => Promise<void>;
+  onCheckAndApplySigned: () => Promise<void>;
   onSyncTrendyolExternalInvoices: () => void;
   onRunAutomationNow: () => void;
   onReconcileExternalInvoices: () => void;
@@ -2211,20 +2222,16 @@ function InvoiceOperationsDashboard({
           <button
             className="ui-button primary"
             type="button"
-            onClick={() => void onPreviewSignedPortalInvoices()}
-            disabled={busyAction === "external-gib-preview"}
+            onClick={() => void onCheckAndApplySigned()}
+            disabled={busyAction === "external-gib-preview" || busyAction === "external-gib-apply"}
+            title="Son 7 gun imzalilarini sorgular ve guvenli eslesenleri otomatik uygular"
           >
-            {busyAction === "external-gib-preview" ? <Loader2 size={18} className="spin" /> : <FileSearch size={18} />}
-            Imzalilari sorgula
-          </button>
-          <button
-            className="ui-button ghost"
-            type="button"
-            onClick={() => void onApplySignedPortalInvoices()}
-            disabled={busyAction === "external-gib-apply"}
-          >
-            {busyAction === "external-gib-apply" ? <Loader2 size={18} className="spin" /> : <CheckCircle2 size={18} />}
-            Guvenli olanlari uygula
+            {busyAction === "external-gib-preview" || busyAction === "external-gib-apply" ? (
+              <Loader2 size={18} className="spin" />
+            ) : (
+              <FileSearch size={18} />
+            )}
+            Kontrol et ve uygula
           </button>
         </div>
       </article>
