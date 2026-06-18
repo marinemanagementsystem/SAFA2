@@ -15,6 +15,15 @@ SCHEDULER_SECRET="${SCHEDULER_SECRET:-safa-scheduler-secret}"
 SCHEDULER_CRON="${SCHEDULER_CRON:-0 9,13,17,21 * * *}"
 SAFA_AUTOMATION_DAILY_AUTO_RUN_LIMIT="${SAFA_AUTOMATION_DAILY_AUTO_RUN_LIMIT:-4}"
 ARTIFACT_CLEANUP_POLICY_FILE="${ARTIFACT_CLEANUP_POLICY_FILE:-ops/artifact-registry-cleanup-policy.json}"
+# Static egress so GIB e-Arsiv portal always sees the same clientIP
+# (fixes "Oturum gecersiz (clientIP)"). All Cloud Run egress is routed through a
+# Serverless VPC connector and a Cloud NAT bound to one reserved external IP.
+VPC_NETWORK="${VPC_NETWORK:-default}"
+VPC_CONNECTOR="${VPC_CONNECTOR:-safa-connector}"
+VPC_CONNECTOR_RANGE="${VPC_CONNECTOR_RANGE:-10.8.0.0/28}"
+EGRESS_IP_NAME="${EGRESS_IP_NAME:-safa-earsiv-egress-ip}"
+CLOUD_ROUTER="${CLOUD_ROUTER:-safa-router}"
+CLOUD_NAT="${CLOUD_NAT:-safa-nat}"
 
 if [[ "${CONFIRM_DEPLOY:-}" != "1" ]]; then
   echo "This deploys paid Google Cloud resources. Re-run with CONFIRM_DEPLOY=1 after Firestore, secrets, and billing are ready."
@@ -39,6 +48,7 @@ gcloud services enable \
   cloudscheduler.googleapis.com \
   run.googleapis.com \
   secretmanager.googleapis.com \
+  vpcaccess.googleapis.com \
   --project "${PROJECT_ID}"
 
 if ! gcloud secrets describe "${SCHEDULER_SECRET}" --project "${PROJECT_ID}" >/dev/null 2>&1; then
@@ -82,6 +92,35 @@ if ! gcloud firestore databases describe --database="(default)" --project "${PRO
     --project "${PROJECT_ID}"
 fi
 
+# Reserve a single static external IP for all GIB e-Arsiv traffic.
+gcloud compute addresses describe "${EGRESS_IP_NAME}" --region "${REGION}" --project "${PROJECT_ID}" >/dev/null 2>&1 \
+  || gcloud compute addresses create "${EGRESS_IP_NAME}" \
+    --region "${REGION}" \
+    --project "${PROJECT_ID}"
+
+# Serverless VPC connector so Cloud Run egress leaves through the VPC.
+gcloud compute networks vpc-access connectors describe "${VPC_CONNECTOR}" --region "${REGION}" --project "${PROJECT_ID}" >/dev/null 2>&1 \
+  || gcloud compute networks vpc-access connectors create "${VPC_CONNECTOR}" \
+    --region "${REGION}" \
+    --network "${VPC_NETWORK}" \
+    --range "${VPC_CONNECTOR_RANGE}" \
+    --project "${PROJECT_ID}"
+
+# Cloud Router + Cloud NAT pinned to the reserved IP so the public source IP is stable.
+gcloud compute routers describe "${CLOUD_ROUTER}" --region "${REGION}" --project "${PROJECT_ID}" >/dev/null 2>&1 \
+  || gcloud compute routers create "${CLOUD_ROUTER}" \
+    --region "${REGION}" \
+    --network "${VPC_NETWORK}" \
+    --project "${PROJECT_ID}"
+
+gcloud compute routers nats describe "${CLOUD_NAT}" --router "${CLOUD_ROUTER}" --region "${REGION}" --project "${PROJECT_ID}" >/dev/null 2>&1 \
+  || gcloud compute routers nats create "${CLOUD_NAT}" \
+    --router "${CLOUD_ROUTER}" \
+    --region "${REGION}" \
+    --nat-all-subnet-ip-ranges \
+    --nat-external-ip-pool "${EGRESS_IP_NAME}" \
+    --project "${PROJECT_ID}"
+
 gcloud builds submit \
   --config cloudbuild.safa-api.yaml \
   --substitutions "_IMAGE=${IMAGE}" \
@@ -95,13 +134,13 @@ gcloud run deploy "${SERVICE}" \
   --no-invoker-iam-check \
   --execution-environment gen2 \
   --clear-cloudsql-instances \
-  --clear-vpc-connector \
-  --clear-network \
+  --vpc-connector "${VPC_CONNECTOR}" \
+  --vpc-egress all-traffic \
   --port 8080 \
   --cpu 1 \
   --memory 1Gi \
-  --min-instances 0 \
-  --max-instances 3 \
+  --min-instances 1 \
+  --max-instances 1 \
   --cpu-throttling \
   --service-account "${RUNTIME_SERVICE_ACCOUNT}" \
   --add-volume "name=${VOLUME_NAME},type=cloud-storage,bucket=${STORAGE_BUCKET}" \
@@ -139,4 +178,6 @@ if ! firebase deploy --only hosting --project "${PROJECT_ID}"; then
   ./scripts/deploy-firebase-hosting-rest.sh
 fi
 
+EGRESS_IP_ADDRESS="$(gcloud compute addresses describe "${EGRESS_IP_NAME}" --region "${REGION}" --project "${PROJECT_ID}" --format='value(address)' 2>/dev/null || true)"
 echo "SAFA API deployed to Cloud Run and Firebase Hosting rewrites deployed."
+echo "e-Arsiv static egress IP (GIB clientIP): ${EGRESS_IP_ADDRESS:-<reserve pending>}"
