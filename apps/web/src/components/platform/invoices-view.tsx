@@ -26,6 +26,7 @@ import {
   Link2,
   ListFilter,
   Loader2,
+  ReceiptText,
   RefreshCw,
   RotateCcw,
   Search,
@@ -945,6 +946,7 @@ export function InvoicesView({
   const [operationQueue, setOperationQueue] = useState<InvoiceOperationQueueKey>("all");
   const [selectedOperationId, setSelectedOperationId] = useState("");
   const [operationDetailOpen, setOperationDetailOpen] = useState(false);
+  const [invoiceTab, setInvoiceTab] = useState<"work" | "archive" | "external">("work");
   const [draftQuery, setDraftQuery] = useState(initialDeskQuery);
   const [draftDeskFilter, setDraftDeskFilter] = useState<DraftDeskFilter>(initialDeskQuery ? "all" : "actionable");
   const [draftExternalFilter, setDraftExternalFilter] = useState<DraftExternalFilter>("all");
@@ -1408,6 +1410,8 @@ export function InvoicesView({
         onResetArchiveFilters={resetArchiveFilters}
         onCreateMonthlyArchive={createMonthlyArchive}
         onSendInvoiceToTrendyol={onSendInvoiceToTrendyol}
+        activeTab={invoiceTab}
+        onTabChange={setInvoiceTab}
       />
       {operationDetailOpen && selectedOperation ? (
         <div className="invoice-ops-detail-modal-backdrop" role="presentation" onMouseDown={() => setOperationDetailOpen(false)}>
@@ -1884,7 +1888,8 @@ export function InvoicesView({
         </article>
       </section>
 
-      <section className="surface-panel">
+      {invoiceTab === "external" ? (
+      <section className="surface-panel invoice-ops-external-tab">
         <div className="section-head">
           <div>
             <span className="micro-label">Harici fatura sorgulama</span>
@@ -2029,6 +2034,7 @@ export function InvoicesView({
           </div>
         </div>
       </section>
+      ) : null}
     </div>
   );
 }
@@ -2087,7 +2093,9 @@ function InvoiceOperationsDashboard({
   onArchiveDateChange,
   onResetArchiveFilters,
   onCreateMonthlyArchive,
-  onSendInvoiceToTrendyol
+  onSendInvoiceToTrendyol,
+  activeTab,
+  onTabChange
 }: {
   rows: InvoiceOperationRow[];
   filteredRows: InvoiceOperationRow[];
@@ -2143,6 +2151,8 @@ function InvoiceOperationsDashboard({
   onResetArchiveFilters: () => void;
   onCreateMonthlyArchive: () => Promise<void>;
   onSendInvoiceToTrendyol: (id: string) => void;
+  activeTab: "work" | "archive" | "external";
+  onTabChange: (value: "work" | "archive" | "external") => void;
 }) {
   const queueCards: Array<{ key: InvoiceOperationQueueKey; title: string; count: number; detail: string; tone: NoticeTone }> = [
     { key: "action", title: "Son 7 gun oncelik", count: metrics.actionCount, detail: "Operator aksiyonu bekleyen kayit", tone: "danger" },
@@ -2175,6 +2185,7 @@ function InvoiceOperationsDashboard({
       : selectedPortalReadyCount > 0 && selectedPortalReadyCount < selectedDraftIds.length
         ? `${selectedPortalReadyCount} onayliyi yukle`
         : "Onaylilari GIB'e yukle";
+  const archiveAttentionCount = signedUnarchivedPortalInvoices + pdfWaitingInvoices;
 
   return (
     <section className="invoice-ops-page" aria-label="Fatura operasyon masasi">
@@ -2193,6 +2204,10 @@ function InvoiceOperationsDashboard({
             {busyAction === "open-gib" ? <Loader2 size={18} className="spin" /> : <Link2 size={18} />}
             e-Arsiv ac
           </button>
+          <button className="ui-button ghost" type="button" onClick={onCloseGibPortalSession} disabled={busyAction === "logout-gib"}>
+            {busyAction === "logout-gib" ? <Loader2 size={18} className="spin" /> : <ShieldOff size={18} />}
+            Guvenli cikis
+          </button>
           <button
             className="ui-button primary"
             type="button"
@@ -2201,6 +2216,15 @@ function InvoiceOperationsDashboard({
           >
             {busyAction === "external-gib-preview" ? <Loader2 size={18} className="spin" /> : <FileSearch size={18} />}
             Imzalilari sorgula
+          </button>
+          <button
+            className="ui-button ghost"
+            type="button"
+            onClick={() => void onApplySignedPortalInvoices()}
+            disabled={busyAction === "external-gib-apply"}
+          >
+            {busyAction === "external-gib-apply" ? <Loader2 size={18} className="spin" /> : <CheckCircle2 size={18} />}
+            Guvenli olanlari uygula
           </button>
         </div>
       </article>
@@ -2235,6 +2259,41 @@ function InvoiceOperationsDashboard({
         ))}
       </div>
 
+      <div className="invoice-ops-tabs" role="tablist" aria-label="Fatura ekrani bolumleri">
+        <button
+          className={cx("invoice-ops-tab", activeTab === "work" && "active")}
+          type="button"
+          role="tab"
+          aria-selected={activeTab === "work"}
+          onClick={() => onTabChange("work")}
+        >
+          <ReceiptText size={16} />
+          Liste / Is akisi
+        </button>
+        <button
+          className={cx("invoice-ops-tab", activeTab === "archive" && "active")}
+          type="button"
+          role="tab"
+          aria-selected={activeTab === "archive"}
+          onClick={() => onTabChange("archive")}
+        >
+          <Archive size={16} />
+          Arsiv &amp; Indirmeler
+          {archiveAttentionCount > 0 ? <span className="invoice-ops-tab-badge">{archiveAttentionCount}</span> : null}
+        </button>
+        <button
+          className={cx("invoice-ops-tab", activeTab === "external" && "active")}
+          type="button"
+          role="tab"
+          aria-selected={activeTab === "external"}
+          onClick={() => onTabChange("external")}
+        >
+          <FileSearch size={16} />
+          Dis kaynak faturalar
+        </button>
+      </div>
+
+      {activeTab === "work" ? (
       <div className="invoice-ops-workspace">
         <aside className="surface-panel invoice-ops-queue">
           <div className="section-head">
@@ -2515,7 +2574,10 @@ function InvoiceOperationsDashboard({
           onOpenGibPortal={onOpenGibPortal}
           onCloseGibPortalSession={onCloseGibPortalSession}
         />
+      </div>
+      ) : null}
 
+      {activeTab === "archive" ? (
         <article className="surface-panel invoice-archive-panel">
         <div className="section-head">
           <div>
@@ -2629,7 +2691,7 @@ function InvoiceOperationsDashboard({
           />
         </div>
       </article>
-      </div>
+      ) : null}
     </section>
   );
 }

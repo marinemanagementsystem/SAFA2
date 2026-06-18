@@ -1000,6 +1000,60 @@ a {
   line-height: 1.35;
 }
 
+.invoice-ops-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--surface);
+  box-shadow: var(--shadow-soft);
+}
+
+.invoice-ops-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 900;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.invoice-ops-tab:hover {
+  color: var(--ink);
+  background: rgba(8, 122, 112, 0.06);
+}
+
+.invoice-ops-tab.active {
+  color: var(--brand);
+  background: rgba(8, 122, 112, 0.1);
+  border-color: rgba(8, 122, 112, 0.38);
+}
+
+.invoice-ops-tab-badge {
+  display: inline-grid;
+  place-items: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--danger);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.invoice-ops-external-tab {
+  margin: 0 18px;
+}
+
 .invoice-ops-workspace {
   display: grid;
   grid-template-columns: 280px minmax(620px, 1fr) 360px;
