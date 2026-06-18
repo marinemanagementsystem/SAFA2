@@ -1,7 +1,7 @@
 "use client";
 
 import type { IntegrationJobListItem, InvoiceDraftListItem, InvoiceListItem, OrderListItem } from "@safa/shared";
-import { Activity, AlertTriangle, CheckCircle2, Clock3, PackageCheck } from "lucide-react";
+import { Activity, AlertTriangle, CheckCircle2 } from "lucide-react";
 import { cx, formatDateTime, statusTone } from "../../lib/platform/format";
 import { FailedJobRetryButton, InvoiceProcessBar, JobStatusPill } from "./invoice-process";
 
@@ -26,15 +26,15 @@ export function OperationsView({ jobs, orders, drafts, invoices, onRetryInvoice 
   return (
     <div className="view-stack">
       <section className="metric-grid operations-metrics" aria-label="Operasyon metrikleri">
+        <article className={cx("metric-card", failed.length > 0 && "danger")}>
+          <span className="micro-label">Hata</span>
+          <strong>{failed.length}</strong>
+          <small>Manuel kontrol gerektiren job</small>
+        </article>
         <article className="metric-card">
           <span className="micro-label">Bekleyen is</span>
           <strong>{processing.length}</strong>
           <small>Kuyrukta veya isleniyor</small>
-        </article>
-        <article className="metric-card">
-          <span className="micro-label">Hata</span>
-          <strong>{failed.length}</strong>
-          <small>Manuel kontrol gerektiren job</small>
         </article>
         <article className="metric-card">
           <span className="micro-label">Kontrol gerekli</span>
@@ -51,25 +51,29 @@ export function OperationsView({ jobs, orders, drafts, invoices, onRetryInvoice 
           <strong>{portalFollowupDrafts.length}</strong>
           <small>GIB imza/PDF/Trendyol takibi gereken kayit</small>
         </article>
+        <article className="metric-card">
+          <span className="micro-label">PDF bekleyen</span>
+          <strong>{pdfWaitingInvoices.length}</strong>
+          <small>PDF gelmeden Trendyol'a dosya gonderilmez</small>
+        </article>
       </section>
 
-      <section className="content-grid two-col">
-        <article className="surface-panel">
-          <div className="section-head">
-            <div>
-              <span className="micro-label">Is kuyrugu</span>
-              <h2>Son denemeler</h2>
-            </div>
-            <Activity size={20} />
+      <section className="surface-panel">
+        <div className="section-head">
+          <div>
+            <span className="micro-label">Is kuyrugu</span>
+            <h2>Son denemeler</h2>
           </div>
+          <Activity size={20} />
+        </div>
 
-          <div className="timeline-list">
-            {jobs.slice(0, 16).map((job) => {
-              const draft = draftById.get(job.target);
-              const invoice = invoiceByDraftId.get(job.target);
-              const orderNumber = draft?.orderNumber ?? job.target;
+        <div className="timeline-list">
+          {jobs.slice(0, 16).map((job) => {
+            const draft = draftById.get(job.target);
+            const invoice = invoiceByDraftId.get(job.target);
+            const orderNumber = draft?.orderNumber ?? job.target;
 
-              return (
+            return (
               <div className={cx("timeline-row job-process-row", statusTone(job.status))} key={job.id}>
                 <span className={cx("timeline-marker", statusTone(job.status))} />
                 <div className="job-process-card">
@@ -95,75 +99,27 @@ export function OperationsView({ jobs, orders, drafts, invoices, onRetryInvoice 
                   </small>
                 </div>
               </div>
-              );
-            })}
-            {jobs.length === 0 ? (
-              <div className="empty-state">
-                <CheckCircle2 size={24} />
-                <strong>Kuyruk bos</strong>
-                <p>Fatura kesme veya gonderim isi olustugunda burada gorunur.</p>
-              </div>
-            ) : null}
-          </div>
-        </article>
-
-        <article className="surface-panel">
-          <div className="section-head">
-            <div>
-              <span className="micro-label">Aksiyon radar</span>
-              <h2>Oncelikli sinyaller</h2>
+            );
+          })}
+          {jobs.length === 0 ? (
+            <div className="empty-state">
+              <CheckCircle2 size={24} />
+              <strong>Kuyruk bos</strong>
+              <p>Fatura kesme veya gonderim isi olustugunda burada gorunur.</p>
             </div>
-            <AlertTriangle size={20} />
-          </div>
-
-          <div className="signal-stack">
-            <SignalCard icon={<AlertTriangle size={20} />} title="Basarisiz job" value={failed.length} tone={failed.length > 0 ? "danger" : "success"} />
-            <SignalCard icon={<Clock3 size={20} />} title="Bekleyen job" value={processing.length} tone={processing.length > 0 ? "warning" : "success"} />
-            <SignalCard
-              icon={<PackageCheck size={20} />}
-              title="Bilinen faturasi yok"
-              value={ordersWithoutKnownInvoice.length}
-              tone={ordersWithoutKnownInvoice.length > 0 ? "warning" : "success"}
-            />
-            <SignalCard
-              icon={<Clock3 size={20} />}
-              title="PDF bekleyen"
-              value={pdfWaitingInvoices.length}
-              tone={pdfWaitingInvoices.length > 0 ? "warning" : "success"}
-            />
-          </div>
-
-          <div className="operation-note">
-            <strong>Adapter-hazir operasyon modeli</strong>
-            <p>
-              Yeni pazaryeri ve kargo adaptorleri eklendiginde ayni kuyruk, hata, deneme sayisi ve hedef alanlari bu ekranda
-              ortak operasyon diliyle izlenecek.
-            </p>
-          </div>
-        </article>
+          ) : null}
+        </div>
       </section>
-    </div>
-  );
-}
 
-function SignalCard({
-  icon,
-  title,
-  value,
-  tone
-}: {
-  icon: React.ReactNode;
-  title: string;
-  value: number;
-  tone: "success" | "warning" | "danger";
-}) {
-  return (
-    <div className={cx("signal-card", tone)}>
-      {icon}
-      <div>
-        <strong>{value}</strong>
-        <span>{title}</span>
-      </div>
+      <section className="surface-panel">
+        <div className="operation-note">
+          <strong>Adapter-hazir operasyon modeli</strong>
+          <p>
+            Yeni pazaryeri ve kargo adaptorleri eklendiginde ayni kuyruk, hata, deneme sayisi ve hedef alanlari bu ekranda
+            ortak operasyon diliyle izlenecek.
+          </p>
+        </div>
+      </section>
     </div>
   );
 }
