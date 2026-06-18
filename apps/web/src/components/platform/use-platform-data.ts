@@ -114,7 +114,7 @@ const trendyolDraftStorageKey = "safa.trendyolConnectionDraft.v1";
 const hepsiburadaDraftStorageKey = "safa.hepsiburadaConnectionDraft.v1";
 const gibPortalDraftStorageKey = "safa.gibPortalConnectionDraft.v1";
 const gibDirectDraftStorageKey = "safa.gibDirectConnectionDraft.v1";
-const platformSnapshotCacheFreshMs = 5_000;
+const platformSnapshotCacheFreshMs = 30_000;
 const reconstructedPdfFallbackSettingKey = "feature.gibPortal.reconstructedPdfFallback";
 
 interface PlatformSnapshotCache {
@@ -128,6 +128,8 @@ interface PlatformSnapshotCache {
 }
 
 let platformSnapshotCache: PlatformSnapshotCache | null = null;
+// Eszamanli load() cagrilari ayni ag islemini paylasir (cift istek patlamasini onler).
+let platformLoadInFlight: Promise<void> | null = null;
 
 function gibPortalSyncRequest(input: number | GibPortalSyncRequest): GibPortalSyncRequest {
   return typeof input === "number" ? { days: input } : input;
@@ -529,20 +531,31 @@ export function usePlatformData() {
       }
     }
 
+    if (platformLoadInFlight) {
+      return platformLoadInFlight;
+    }
+
     setLoadState(options.preferCache && platformSnapshotCache ? "idle" : "loading");
 
+    const run = (async () => {
     try {
-      const [orders, hepsiburadaProducts, hepsiburadaOrderLines, drafts, invoices, externalInvoices, jobs, settings, connections, automationStatus] = await Promise.all([
+      // Cloud Run tek-ornek/soguk baslangic 429'larini onlemek icin 10 istek tek seferde
+      // degil, eszamanlilik ~4 olacak sekilde dalgalar halinde cekilir.
+      const [orders, invoices, drafts, settings] = await Promise.all([
         api.orders(),
-        api.products(),
-        api.hepsiburadaOrderLines(),
-        api.drafts(),
         api.invoices(),
+        api.drafts(),
+        api.settings()
+      ]);
+      const [connections, externalInvoices, jobs, automationStatus] = await Promise.all([
+        api.connections(),
         api.externalInvoices(),
         api.jobs(),
-        api.settings(),
-        api.connections(),
         api.automationStatus()
+      ]);
+      const [hepsiburadaProducts, hepsiburadaOrderLines] = await Promise.all([
+        api.products(),
+        api.hepsiburadaOrderLines()
       ]);
 
       const normalizedConnections = normalizeConnectionsSnapshot(connections);
@@ -631,7 +644,13 @@ export function usePlatformData() {
     } catch (error) {
       setLoadState("error");
       setMessage(errorMessage(error, "API baglantisi basarisiz."));
+    } finally {
+      platformLoadInFlight = null;
     }
+    })();
+
+    platformLoadInFlight = run;
+    return run;
   }, [applyCachedSnapshot]);
 
   const upsertJobInSnapshot = useCallback((job: IntegrationJobListItem) => {
@@ -849,9 +868,7 @@ export function usePlatformData() {
         const nextMessage = `${issueText}${autoApprovedText}${failedText} Sureci kartlardaki cubuktan izleyebilirsiniz.`;
         setMessage(nextMessage);
         await load();
-        window.setTimeout(() => void load(), 1500);
-        window.setTimeout(() => void load(), 4500);
-        window.setTimeout(() => void load(), 9000);
+        window.setTimeout(() => void load({ force: true }), 6000);
         return nextMessage;
       } catch (error) {
         const nextMessage = errorMessage(error, "Fatura kesme isi kuyruga alinamadi.");
