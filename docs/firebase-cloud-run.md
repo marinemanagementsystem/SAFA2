@@ -47,7 +47,9 @@ CONFIRM_DEPLOY=1 \
 ./scripts/deploy-cloud-run-api.sh
 ```
 
-The script builds `Dockerfile.cloudrun`, deploys Cloud Run in low-cost scale-to-zero mode with `DATA_BACKEND=firestore`, mounts the Cloud Storage bucket, applies the Artifact Registry cleanup policy in `ops/artifact-registry-cleanup-policy.json`, creates the default Firestore database if needed, creates/updates the `safa-gib-followup` Cloud Scheduler job, and deploys Firebase Hosting with the `/api/**` and `/earsiv-services/**` rewrites.
+The script builds `Dockerfile.cloudrun`, deploys Cloud Run with `DATA_BACKEND=firestore`, mounts the Cloud Storage bucket, applies the Artifact Registry cleanup policy in `ops/artifact-registry-cleanup-policy.json`, creates the default Firestore database if needed, creates/updates the `safa-gib-followup` Cloud Scheduler job, and deploys Firebase Hosting with the `/api/**` and `/earsiv-services/**` rewrites.
+
+The production default keeps one warm Cloud Run instance (`CLOUD_RUN_MIN_INSTANCES=1`) to reduce cold-start 429s and slow 14-18 second first responses. For a strict cost-saving profile, run the same script with `CLOUD_RUN_MIN_INSTANCES=0`; that restores scale-to-zero but brings back cold-start risk. `CLOUD_RUN_MAX_INSTANCES` defaults to `3` and can be lowered or raised through the environment.
 
 The deploy script uses Cloud Run's `--no-invoker-iam-check` because this project blocks public `allUsers` IAM bindings through organization policy. Firebase Hosting still reaches the service through the `/api/**` and `/earsiv-services/**` rewrites.
 
@@ -55,7 +57,7 @@ If Firebase CLI finalization fails while pinning Cloud Run rewrites, the script 
 
 ## Budget guard
 
-The production default is `free-tier-guard`: Cloud Run stays scale-to-zero, Cloud Scheduler runs four times per day, and the app records automation freshness in `/api/automation/status`. Manual catch-up stays available from the UI and runs as a durable job, so a closed browser does not lose the work.
+The production automation default is `free-tier-guard`: Cloud Scheduler runs four times per day, and the app records automation freshness in `/api/automation/status`. Manual catch-up stays available from the UI and runs as a durable job, so a closed browser does not lose the work. This guard limits automation volume; it is independent from Cloud Run's `CLOUD_RUN_MIN_INSTANCES` setting.
 
 Do not deploy a billing-unlink hard cap for normal production. It prevents surprise spend only by stopping paid Google Cloud resources, which conflicts with the no-loss automation requirement. Use Google Cloud Budget email alerts for human notification, app-level throttling for automation volume, and Artifact Registry cleanup for image buildup.
 

@@ -114,7 +114,7 @@ const trendyolDraftStorageKey = "safa.trendyolConnectionDraft.v1";
 const hepsiburadaDraftStorageKey = "safa.hepsiburadaConnectionDraft.v1";
 const gibPortalDraftStorageKey = "safa.gibPortalConnectionDraft.v1";
 const gibDirectDraftStorageKey = "safa.gibDirectConnectionDraft.v1";
-const platformSnapshotCacheFreshMs = 5_000;
+const platformSnapshotCacheFreshMs = 30_000;
 const reconstructedPdfFallbackSettingKey = "feature.gibPortal.reconstructedPdfFallback";
 
 interface PlatformSnapshotCache {
@@ -128,6 +128,53 @@ interface PlatformSnapshotCache {
 }
 
 let platformSnapshotCache: PlatformSnapshotCache | null = null;
+let platformLoadInFlight: Promise<void> | null = null;
+
+type PlatformSnapshotApiClient = Pick<
+  typeof api,
+  | "orders"
+  | "invoices"
+  | "drafts"
+  | "settings"
+  | "connections"
+  | "externalInvoices"
+  | "jobs"
+  | "automationStatus"
+  | "products"
+  | "hepsiburadaOrderLines"
+>;
+
+export async function fetchPlatformSnapshot(apiClient: PlatformSnapshotApiClient = api) {
+  const [orders, invoices, drafts, settings] = await Promise.all([
+    apiClient.orders(),
+    apiClient.invoices(),
+    apiClient.drafts(),
+    apiClient.settings()
+  ]);
+  const [connections, externalInvoices, jobs, automationStatus] = await Promise.all([
+    apiClient.connections(),
+    apiClient.externalInvoices(),
+    apiClient.jobs(),
+    apiClient.automationStatus()
+  ]);
+  const [hepsiburadaProducts, hepsiburadaOrderLines] = await Promise.all([
+    apiClient.products(),
+    apiClient.hepsiburadaOrderLines()
+  ]);
+
+  return {
+    orders,
+    invoices,
+    drafts,
+    settings,
+    connections,
+    externalInvoices,
+    jobs,
+    automationStatus,
+    hepsiburadaProducts,
+    hepsiburadaOrderLines
+  };
+}
 
 function gibPortalSyncRequest(input: number | GibPortalSyncRequest): GibPortalSyncRequest {
   return typeof input === "number" ? { days: input } : input;
@@ -529,109 +576,120 @@ export function usePlatformData() {
       }
     }
 
+    if (platformLoadInFlight) {
+      return platformLoadInFlight;
+    }
+
     setLoadState(options.preferCache && platformSnapshotCache ? "idle" : "loading");
 
-    try {
-      const [orders, hepsiburadaProducts, hepsiburadaOrderLines, drafts, invoices, externalInvoices, jobs, settings, connections, automationStatus] = await Promise.all([
-        api.orders(),
-        api.products(),
-        api.hepsiburadaOrderLines(),
-        api.drafts(),
-        api.invoices(),
-        api.externalInvoices(),
-        api.jobs(),
-        api.settings(),
-        api.connections(),
-        api.automationStatus()
-      ]);
+    const run = (async () => {
+      try {
+        const {
+          orders,
+          hepsiburadaProducts,
+          hepsiburadaOrderLines,
+          drafts,
+          invoices,
+          externalInvoices,
+          jobs,
+          settings,
+          connections,
+          automationStatus
+        } = await fetchPlatformSnapshot();
 
-      const normalizedConnections = normalizeConnectionsSnapshot(connections);
-      const nextSnapshot = {
-        orders,
-        hepsiburadaProducts,
-        hepsiburadaOrderLines,
-        drafts,
-        invoices,
-        externalInvoices,
-        jobs,
-        settings: settings.runtime ?? {},
-        connections: normalizedConnections,
-        automationStatus
-      };
-      const nextTrendyolForm = {
-        sellerId: normalizedConnections.trendyol.sellerId,
-        apiKey: "",
-        apiSecret: "",
-        userAgent: normalizedConnections.trendyol.userAgent,
-        baseUrl: normalizedConnections.trendyol.baseUrl,
-        storefrontCode: normalizedConnections.trendyol.storefrontCode,
-        lookbackDays: normalizedConnections.trendyol.lookbackDays
-      };
-      const nextHepsiburadaForm = {
-        merchantId: normalizedConnections.hepsiburada.merchantId,
-        username: normalizedConnections.hepsiburada.username,
-        password: "",
-        userAgent: normalizedConnections.hepsiburada.userAgent,
-        environment: normalizedConnections.hepsiburada.environment,
-        productBaseUrl: normalizedConnections.hepsiburada.productBaseUrl,
-        listingBaseUrl: normalizedConnections.hepsiburada.listingBaseUrl,
-        orderBaseUrl: normalizedConnections.hepsiburada.orderBaseUrl,
-        supplierBaseUrl: normalizedConnections.hepsiburada.supplierBaseUrl,
-        lookbackDays: normalizedConnections.hepsiburada.lookbackDays
-      };
-      const nextGibPortalForm = {
-        username: normalizedConnections.gibPortal.username,
-        password: "",
-        portalUrl: normalizedConnections.gibPortal.portalUrl
-      };
-      const nextGibDirectForm = {
-        environment: normalizedConnections.gibDirect.environment,
-        taxId: normalizedConnections.gibDirect.taxId,
-        serviceUrl: normalizedConnections.gibDirect.serviceUrl,
-        wsdlUrl: normalizedConnections.gibDirect.wsdlUrl ?? "",
-        soapAction: normalizedConnections.gibDirect.soapAction ?? "",
-        soapBodyTemplate: "",
-        soapBodyTemplatePath: "",
-        signerMode: normalizedConnections.gibDirect.signerMode,
-        signerCommand: "",
-        soapSignerCommand: "",
-        invoicePrefix: normalizedConnections.gibDirect.invoicePrefix,
-        nextInvoiceSequence: normalizedConnections.gibDirect.nextInvoiceSequence,
-        unitCode: normalizedConnections.gibDirect.unitCode,
-        defaultBuyerTckn: normalizedConnections.gibDirect.defaultBuyerTckn,
-        testAccessConfirmed: normalizedConnections.gibDirect.testAccessConfirmed,
-        productionAccessConfirmed: normalizedConnections.gibDirect.productionAccessConfirmed,
-        authorizationReference: normalizedConnections.gibDirect.authorizationReference ?? "",
-        clientCertPath: "",
-        clientKeyPath: "",
-        clientPfxPath: "",
-        clientCertPassword: ""
-      };
-      const nextMessage = normalizedConnections.gibDirect.ready
-        ? "Canli entegrasyon modu acik. GIB direct fatura kesimi hazir."
-        : `Canli entegrasyon modu acik. ${normalizedConnections.gibDirect.message}`;
+        const normalizedConnections = normalizeConnectionsSnapshot(connections);
+        const nextSnapshot = {
+          orders,
+          hepsiburadaProducts,
+          hepsiburadaOrderLines,
+          drafts,
+          invoices,
+          externalInvoices,
+          jobs,
+          settings: settings.runtime ?? {},
+          connections: normalizedConnections,
+          automationStatus
+        };
+        const nextTrendyolForm = {
+          sellerId: normalizedConnections.trendyol.sellerId,
+          apiKey: "",
+          apiSecret: "",
+          userAgent: normalizedConnections.trendyol.userAgent,
+          baseUrl: normalizedConnections.trendyol.baseUrl,
+          storefrontCode: normalizedConnections.trendyol.storefrontCode,
+          lookbackDays: normalizedConnections.trendyol.lookbackDays
+        };
+        const nextHepsiburadaForm = {
+          merchantId: normalizedConnections.hepsiburada.merchantId,
+          username: normalizedConnections.hepsiburada.username,
+          password: "",
+          userAgent: normalizedConnections.hepsiburada.userAgent,
+          environment: normalizedConnections.hepsiburada.environment,
+          productBaseUrl: normalizedConnections.hepsiburada.productBaseUrl,
+          listingBaseUrl: normalizedConnections.hepsiburada.listingBaseUrl,
+          orderBaseUrl: normalizedConnections.hepsiburada.orderBaseUrl,
+          supplierBaseUrl: normalizedConnections.hepsiburada.supplierBaseUrl,
+          lookbackDays: normalizedConnections.hepsiburada.lookbackDays
+        };
+        const nextGibPortalForm = {
+          username: normalizedConnections.gibPortal.username,
+          password: "",
+          portalUrl: normalizedConnections.gibPortal.portalUrl
+        };
+        const nextGibDirectForm = {
+          environment: normalizedConnections.gibDirect.environment,
+          taxId: normalizedConnections.gibDirect.taxId,
+          serviceUrl: normalizedConnections.gibDirect.serviceUrl,
+          wsdlUrl: normalizedConnections.gibDirect.wsdlUrl ?? "",
+          soapAction: normalizedConnections.gibDirect.soapAction ?? "",
+          soapBodyTemplate: "",
+          soapBodyTemplatePath: "",
+          signerMode: normalizedConnections.gibDirect.signerMode,
+          signerCommand: "",
+          soapSignerCommand: "",
+          invoicePrefix: normalizedConnections.gibDirect.invoicePrefix,
+          nextInvoiceSequence: normalizedConnections.gibDirect.nextInvoiceSequence,
+          unitCode: normalizedConnections.gibDirect.unitCode,
+          defaultBuyerTckn: normalizedConnections.gibDirect.defaultBuyerTckn,
+          testAccessConfirmed: normalizedConnections.gibDirect.testAccessConfirmed,
+          productionAccessConfirmed: normalizedConnections.gibDirect.productionAccessConfirmed,
+          authorizationReference: normalizedConnections.gibDirect.authorizationReference ?? "",
+          clientCertPath: "",
+          clientKeyPath: "",
+          clientPfxPath: "",
+          clientCertPassword: ""
+        };
+        const nextMessage = normalizedConnections.gibDirect.ready
+          ? "Canli entegrasyon modu acik. GIB direct fatura kesimi hazir."
+          : `Canli entegrasyon modu acik. ${normalizedConnections.gibDirect.message}`;
 
-      platformSnapshotCache = {
-        snapshot: nextSnapshot,
-        trendyolForm: nextTrendyolForm,
-        hepsiburadaForm: nextHepsiburadaForm,
-        gibPortalForm: nextGibPortalForm,
-        gibDirectForm: nextGibDirectForm,
-        message: nextMessage,
-        storedAt: Date.now()
-      };
+        platformSnapshotCache = {
+          snapshot: nextSnapshot,
+          trendyolForm: nextTrendyolForm,
+          hepsiburadaForm: nextHepsiburadaForm,
+          gibPortalForm: nextGibPortalForm,
+          gibDirectForm: nextGibDirectForm,
+          message: nextMessage,
+          storedAt: Date.now()
+        };
 
-      setSnapshot(nextSnapshot);
-      setTrendyolForm(nextTrendyolForm);
-      setHepsiburadaForm(nextHepsiburadaForm);
-      setGibPortalForm(nextGibPortalForm);
-      setGibDirectForm(nextGibDirectForm);
-      setMessage(nextMessage);
-      setLoadState("idle");
-    } catch (error) {
-      setLoadState("error");
-      setMessage(errorMessage(error, "API baglantisi basarisiz."));
-    }
+        setSnapshot(nextSnapshot);
+        setTrendyolForm(nextTrendyolForm);
+        setHepsiburadaForm(nextHepsiburadaForm);
+        setGibPortalForm(nextGibPortalForm);
+        setGibDirectForm(nextGibDirectForm);
+        setMessage(nextMessage);
+        setLoadState("idle");
+      } catch (error) {
+        setLoadState("error");
+        setMessage(errorMessage(error, "API baglantisi basarisiz."));
+      } finally {
+        platformLoadInFlight = null;
+      }
+    })();
+
+    platformLoadInFlight = run;
+    return run;
   }, [applyCachedSnapshot]);
 
   const upsertJobInSnapshot = useCallback((job: IntegrationJobListItem) => {
@@ -849,9 +907,7 @@ export function usePlatformData() {
         const nextMessage = `${issueText}${autoApprovedText}${failedText} Sureci kartlardaki cubuktan izleyebilirsiniz.`;
         setMessage(nextMessage);
         await load();
-        window.setTimeout(() => void load(), 1500);
-        window.setTimeout(() => void load(), 4500);
-        window.setTimeout(() => void load(), 9000);
+        window.setTimeout(() => void load({ force: true }), 6000);
         return nextMessage;
       } catch (error) {
         const nextMessage = errorMessage(error, "Fatura kesme isi kuyruga alinamadi.");

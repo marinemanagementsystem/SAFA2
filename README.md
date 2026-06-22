@@ -108,7 +108,7 @@ Cloud Run deploy hazirligi:
 CONFIRM_DEPLOY=1 ./scripts/deploy-cloud-run-api.sh
 ```
 
-Bu komut calistirilmadan once Cloud SQL verileri Firestore'a tasinmis ve Secret Manager degerleri hazir olmalidir. Ayrintili adimlar `docs/firebase-cloud-run.md` dosyasindadir.
+Bu komut calistirilmadan once Cloud SQL verileri Firestore'a tasinmis ve Secret Manager degerleri hazir olmalidir. Varsayilan deploy bir sicak Cloud Run instance'i tutar; kati maliyet profili gerekiyorsa `CLOUD_RUN_MIN_INSTANCES=0` eklenir. Ayrintili adimlar `docs/firebase-cloud-run.md` dosyasindadir.
 
 Firebase build artik varsayilan olarak `NEXT_PUBLIC_API_BASE_URL=/api` kullanir; canli bundle icinde `http://localhost:4000/api` kalmamali. Bu nedenle arkadasiniz linkten girdiginde Chrome Local Network Access izni istememelidir.
 

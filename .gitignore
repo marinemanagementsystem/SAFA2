@@ -13,3 +13,8 @@ storage
 apps/web/out
 apps/api/generated
 apps/api/prisma/dev.db
+
+# Tooling artifacts
+.playwright-mcp/
+.superpowers/
+output/

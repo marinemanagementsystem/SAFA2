@@ -340,6 +340,32 @@ export function isApiGatewayProxyError(error: unknown) {
   return /502|503|504/.test(message) && /Canli API yanit vermiyor|Bad Gateway|Gateway|proxy/i.test(message);
 }
 
+const retryableStatus = new Set([429, 502, 503, 504]);
+const maxGetRetries = 3;
+
+function requestDelay(ms: number) {
+  return new Promise<void>((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+function retryDelayMs(attempt: number, retryAfterHeader: string | null): number {
+  if (retryAfterHeader) {
+    const seconds = Number(retryAfterHeader);
+    if (Number.isFinite(seconds) && seconds >= 0) {
+      return Math.min(seconds * 1000, 15_000);
+    }
+
+    const dateMs = Date.parse(retryAfterHeader);
+    if (!Number.isNaN(dateMs)) {
+      return Math.min(Math.max(dateMs - Date.now(), 0), 15_000);
+    }
+  }
+
+  const base = Math.min(500 * 2 ** attempt, 8_000);
+  return base + Math.floor(Math.random() * 250);
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   if (!API_AVAILABLE) {
     throw new Error("Canli API bagli degil. Backend deploy edilince bu aksiyon aktif olacak.");
@@ -347,64 +373,87 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
   const method = getRequestMethod(init);
   const url = `${API_BASE}${path}`;
+  const canRetry = method === "GET";
   const startedAt = performance.now();
 
   logApiRequest(method, path, url, init);
 
-  let response: Response;
   const isFormDataBody = typeof FormData !== "undefined" && init?.body instanceof FormData;
-  try {
-    response = await fetch(url, {
-      ...init,
-      ...localNetworkFetchOptions(url),
-      headers: {
-        ...(isFormDataBody ? {} : { "Content-Type": "application/json" }),
-        ...(init?.headers ?? {})
-      },
-      credentials: "include",
-      cache: "no-store"
-    });
-  } catch (error) {
-    logApiFailure(method, path, url, Math.round(performance.now() - startedAt), error);
-    throw apiConnectionFailureMessage(url, error);
-  }
 
-  const contentType = response.headers.get("content-type") ?? "";
-  const body = await response.text();
-  const parsedBody = parseResponseBody(body, contentType);
-  const durationMs = Math.round(performance.now() - startedAt);
+  let attempt = 0;
+  for (;;) {
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        ...init,
+        ...localNetworkFetchOptions(url),
+        headers: {
+          ...(isFormDataBody ? {} : { "Content-Type": "application/json" }),
+          ...(init?.headers ?? {})
+        },
+        credentials: "include",
+        cache: "no-store"
+      });
+    } catch (error) {
+      if (canRetry && attempt < maxGetRetries) {
+        await requestDelay(retryDelayMs(attempt, null));
+        attempt += 1;
+        continue;
+      }
 
-  logApiResponse(method, path, response, durationMs, parsedBody);
-
-  if (!response.ok) {
-    if (contentType.includes("text/html")) {
-      throw new Error(`${response.status} ${response.statusText}. Canli API yanit vermiyor veya yanlis adrese bagli.`);
+      logApiFailure(method, path, url, Math.round(performance.now() - startedAt), error);
+      throw apiConnectionFailureMessage(url, error);
     }
 
-    if (contentType.includes("application/json")) {
+    if (canRetry && retryableStatus.has(response.status) && attempt < maxGetRetries) {
+      const wait = retryDelayMs(attempt, response.headers.get("retry-after"));
       try {
-        const parsed =
-          parsedBody && typeof parsedBody === "object" ? (parsedBody as { message?: unknown; error?: unknown }) : {};
-        const message = Array.isArray(parsed.message) ? parsed.message.join(" ") : parsed.message;
-        if (typeof message === "string" && message.trim()) {
-          throw new Error(message);
-        }
-        if (typeof parsed.error === "string" && parsed.error.trim()) {
-          throw new Error(parsed.error);
-        }
-      } catch (error) {
-        if (error instanceof SyntaxError) {
-          // Fall through to the raw body below.
-        } else {
-          throw error;
+        await response.text();
+      } catch {
+        // Response body is not needed when the request is about to be retried.
+      }
+      await requestDelay(wait);
+      attempt += 1;
+      continue;
+    }
+
+    const contentType = response.headers.get("content-type") ?? "";
+    const body = await response.text();
+    const parsedBody = parseResponseBody(body, contentType);
+    const durationMs = Math.round(performance.now() - startedAt);
+
+    logApiResponse(method, path, response, durationMs, parsedBody);
+
+    if (!response.ok) {
+      if (contentType.includes("text/html")) {
+        throw new Error(`${response.status} ${response.statusText}. Canli API yanit vermiyor veya yanlis adrese bagli.`);
+      }
+
+      if (contentType.includes("application/json")) {
+        try {
+          const parsed =
+            parsedBody && typeof parsedBody === "object" ? (parsedBody as { message?: unknown; error?: unknown }) : {};
+          const message = Array.isArray(parsed.message) ? parsed.message.join(" ") : parsed.message;
+          if (typeof message === "string" && message.trim()) {
+            throw new Error(message);
+          }
+          if (typeof parsed.error === "string" && parsed.error.trim()) {
+            throw new Error(parsed.error);
+          }
+        } catch (error) {
+          if (error instanceof SyntaxError) {
+            // Fall through to the raw body below.
+          } else {
+            throw error;
+          }
         }
       }
+
+      throw new Error(body || `${response.status} ${response.statusText}`);
     }
 
-    throw new Error(body || `${response.status} ${response.statusText}`);
+    return parsedBody as T;
   }
-
-  return parsedBody as T;
 }
 
 export const api = {

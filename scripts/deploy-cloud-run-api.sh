@@ -14,6 +14,8 @@ SCHEDULER_JOB="${SCHEDULER_JOB:-safa-gib-followup}"
 SCHEDULER_SECRET="${SCHEDULER_SECRET:-safa-scheduler-secret}"
 SCHEDULER_CRON="${SCHEDULER_CRON:-0 9,13,17,21 * * *}"
 SAFA_AUTOMATION_DAILY_AUTO_RUN_LIMIT="${SAFA_AUTOMATION_DAILY_AUTO_RUN_LIMIT:-4}"
+CLOUD_RUN_MIN_INSTANCES="${CLOUD_RUN_MIN_INSTANCES:-1}"
+CLOUD_RUN_MAX_INSTANCES="${CLOUD_RUN_MAX_INSTANCES:-3}"
 ARTIFACT_CLEANUP_POLICY_FILE="${ARTIFACT_CLEANUP_POLICY_FILE:-ops/artifact-registry-cleanup-policy.json}"
 
 if [[ "${CONFIRM_DEPLOY:-}" != "1" ]]; then
@@ -100,8 +102,8 @@ gcloud run deploy "${SERVICE}" \
   --port 8080 \
   --cpu 1 \
   --memory 1Gi \
-  --min-instances 0 \
-  --max-instances 3 \
+  --min-instances "${CLOUD_RUN_MIN_INSTANCES}" \
+  --max-instances "${CLOUD_RUN_MAX_INSTANCES}" \
   --cpu-throttling \
   --service-account "${RUNTIME_SERVICE_ACCOUNT}" \
   --add-volume "name=${VOLUME_NAME},type=cloud-storage,bucket=${STORAGE_BUCKET}" \

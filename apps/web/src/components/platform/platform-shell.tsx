@@ -161,22 +161,26 @@ export function PlatformShell({
           </div>
 
           <div className="command-actions" aria-label="Ana islemler">
-            <button className="ui-button ghost" onClick={onRefresh} disabled={!apiAvailable || loadState === "loading" || busyAction === "refresh"}>
-              {loadState === "loading" || busyAction === "refresh" ? <Loader2 size={18} className="spin" /> : <RefreshCw size={18} />}
-              Yenile
-            </button>
-            <button className="ui-button primary" onClick={onSync} disabled={!apiAvailable || busyAction === "sync"}>
-              {busyAction === "sync" ? <Loader2 size={18} className="spin" /> : <Send size={18} />}
-              {apiAvailable ? "Trendyol cek" : "API bekleniyor"}
-            </button>
-            <button className="ui-button ghost" onClick={onOpenPortal} disabled={busyAction === "open-gib"}>
-              {busyAction === "open-gib" ? <Loader2 size={18} className="spin" /> : <LogIn size={18} />}
-              e-Arsiv ac
-            </button>
-            <button className="ui-button ghost" onClick={onClosePortalSession} disabled={!apiAvailable || busyAction === "logout-gib"}>
-              {busyAction === "logout-gib" ? <Loader2 size={18} className="spin" /> : <ShieldOff size={18} />}
-              e-Arsiv cikis
-            </button>
+            {view !== "invoices" ? (
+              <>
+                <button className="ui-button ghost" onClick={onRefresh} disabled={!apiAvailable || loadState === "loading" || busyAction === "refresh"}>
+                  {loadState === "loading" || busyAction === "refresh" ? <Loader2 size={18} className="spin" /> : <RefreshCw size={18} />}
+                  Yenile
+                </button>
+                <button className="ui-button primary" onClick={onSync} disabled={!apiAvailable || busyAction === "sync"}>
+                  {busyAction === "sync" ? <Loader2 size={18} className="spin" /> : <Send size={18} />}
+                  {apiAvailable ? "Trendyol cek" : "API bekleniyor"}
+                </button>
+                <button className="ui-button ghost" onClick={onOpenPortal} disabled={busyAction === "open-gib"}>
+                  {busyAction === "open-gib" ? <Loader2 size={18} className="spin" /> : <LogIn size={18} />}
+                  e-Arsiv ac
+                </button>
+                <button className="ui-button ghost" onClick={onClosePortalSession} disabled={!apiAvailable || busyAction === "logout-gib"}>
+                  {busyAction === "logout-gib" ? <Loader2 size={18} className="spin" /> : <ShieldOff size={18} />}
+                  e-Arsiv cikis
+                </button>
+              </>
+            ) : null}
             <button className="ui-button ghost" onClick={onLogout}>
               <LogOut size={18} />
               Cikis
