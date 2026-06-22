@@ -1,0 +1,1229 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SAFA Codex Modern Tum Sayfalar Mockup</title>
+  <style>body{margin:0;padding:24px;background:#f2f5f6;font-family:Inter,ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}button{font:inherit}</style>
+</head>
+<body>
+<div id="safa-modern-prototype">
+  <style>
+    #safa-modern-prototype {
+      --page: #f2f5f6;
+      --panel: #ffffff;
+      --panel-muted: #f8fafb;
+      --ink: #162025;
+      --text: #27363d;
+      --muted: #66757d;
+      --faint: #92a0a6;
+      --line: #dce5e8;
+      --line-strong: #c3d0d5;
+      --teal: #087a70;
+      --teal-strong: #06574f;
+      --teal-soft: #e4f3f1;
+      --blue: #2563eb;
+      --blue-soft: #eaf0ff;
+      --green: #157347;
+      --green-soft: #e7f5ed;
+      --amber: #9a6700;
+      --amber-soft: #fff4dc;
+      --rose: #b8325d;
+      --rose-soft: #ffeaf1;
+      --red: #b42318;
+      --red-soft: #fff0ed;
+      --shadow: 0 16px 40px rgba(19, 34, 40, 0.1);
+      color: var(--ink);
+      font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      letter-spacing: 0;
+    }
+
+    #safa-modern-prototype * {
+      box-sizing: border-box;
+    }
+
+    #safa-modern-prototype button,
+    #safa-modern-prototype input,
+    #safa-modern-prototype select {
+      font: inherit;
+      letter-spacing: 0;
+    }
+
+    #safa-modern-prototype .brief {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 18px;
+      margin-bottom: 16px;
+    }
+
+    #safa-modern-prototype h2 {
+      margin: 0;
+      font-size: 24px;
+      line-height: 1.14;
+      letter-spacing: 0;
+    }
+
+    #safa-modern-prototype .subtitle {
+      max-width: 840px;
+      margin: 7px 0 0;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.45;
+    }
+
+    #safa-modern-prototype .prototype-status {
+      flex: 0 0 auto;
+      border: 1px solid var(--line-strong);
+      border-radius: 999px;
+      padding: 8px 12px;
+      background: #fbfcfc;
+      color: #334249;
+      font-size: 12px;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+
+    #safa-modern-prototype .page-tabs {
+      display: flex;
+      gap: 7px;
+      overflow-x: auto;
+      margin-bottom: 12px;
+      padding-bottom: 2px;
+    }
+
+    #safa-modern-prototype .page-tab {
+      flex: 0 0 auto;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      padding: 8px 10px;
+      background: var(--panel);
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+      cursor: pointer;
+    }
+
+    #safa-modern-prototype .page-tab.active {
+      border-color: rgba(8, 122, 112, 0.35);
+      background: var(--teal-soft);
+      color: var(--teal-strong);
+    }
+
+    #safa-modern-prototype .app-frame {
+      overflow: hidden;
+      border: 1px solid var(--line-strong);
+      border-radius: 12px;
+      background: var(--page);
+      box-shadow: var(--shadow);
+    }
+
+    #safa-modern-prototype .screen {
+      display: none;
+    }
+
+    #safa-modern-prototype .screen.active {
+      display: block;
+    }
+
+    #safa-modern-prototype .shell {
+      display: grid;
+      grid-template-columns: 218px minmax(0, 1fr);
+      min-height: 690px;
+      background: var(--page);
+    }
+
+    #safa-modern-prototype .side {
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      gap: 18px;
+      padding: 18px 14px;
+      border-right: 1px solid var(--line);
+      background: #ffffff;
+    }
+
+    #safa-modern-prototype .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    #safa-modern-prototype .brand-mark {
+      display: grid;
+      width: 34px;
+      height: 34px;
+      place-items: center;
+      border-radius: 8px;
+      background: var(--teal);
+      color: #fff;
+      font-weight: 900;
+      font-size: 18px;
+    }
+
+    #safa-modern-prototype .brand strong {
+      display: block;
+      font-size: 15px;
+      line-height: 1;
+    }
+
+    #safa-modern-prototype .brand small {
+      display: block;
+      margin-top: 3px;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    #safa-modern-prototype .nav-group-title {
+      margin: 12px 8px 7px;
+      color: var(--faint);
+      font-size: 10px;
+      font-weight: 900;
+      text-transform: uppercase;
+    }
+
+    #safa-modern-prototype .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      border: 1px solid transparent;
+      border-radius: 8px;
+      padding: 9px 8px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    #safa-modern-prototype .nav-item.active {
+      border-color: rgba(8, 122, 112, 0.24);
+      background: var(--teal-soft);
+      color: var(--teal-strong);
+    }
+
+    #safa-modern-prototype .nav-dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: var(--line-strong);
+    }
+
+    #safa-modern-prototype .nav-item.active .nav-dot {
+      background: var(--teal);
+    }
+
+    #safa-modern-prototype .side-health {
+      display: grid;
+      gap: 7px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 10px;
+      background: var(--panel-muted);
+    }
+
+    #safa-modern-prototype .micro {
+      color: var(--faint);
+      font-size: 10px;
+      font-weight: 900;
+      text-transform: uppercase;
+    }
+
+    #safa-modern-prototype .side-health strong {
+      font-size: 13px;
+    }
+
+    #safa-modern-prototype .main {
+      display: grid;
+      grid-template-rows: auto auto minmax(0, 1fr);
+      min-width: 0;
+    }
+
+    #safa-modern-prototype .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 16px 18px 12px;
+      background: var(--page);
+    }
+
+    #safa-modern-prototype .title-block h3 {
+      margin: 0;
+      font-size: 22px;
+      line-height: 1.15;
+      letter-spacing: 0;
+    }
+
+    #safa-modern-prototype .title-block p {
+      margin: 5px 0 0;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    #safa-modern-prototype .actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    #safa-modern-prototype .btn {
+      min-height: 34px;
+      border: 1px solid var(--line-strong);
+      border-radius: 7px;
+      padding: 7px 10px;
+      background: #fff;
+      color: var(--text);
+      font-size: 12px;
+      font-weight: 850;
+      white-space: nowrap;
+    }
+
+    #safa-modern-prototype .btn.primary {
+      border-color: var(--teal);
+      background: var(--teal);
+      color: #fff;
+    }
+
+    #safa-modern-prototype .btn.danger {
+      border-color: rgba(184, 50, 93, 0.34);
+      background: var(--rose-soft);
+      color: var(--rose);
+    }
+
+    #safa-modern-prototype .btn.disabled {
+      color: var(--faint);
+      background: #f5f7f8;
+      cursor: not-allowed;
+    }
+
+    #safa-modern-prototype .mode-ribbon {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin: 0 18px;
+      border: 1px solid var(--line);
+      border-left: 4px solid var(--teal);
+      border-radius: 8px;
+      padding: 9px 11px;
+      background: #fbfdfd;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 750;
+    }
+
+    #safa-modern-prototype .pill {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 4px 8px;
+      background: #fff;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 850;
+      white-space: nowrap;
+    }
+
+    #safa-modern-prototype .pill.teal {
+      border-color: rgba(8, 122, 112, 0.22);
+      background: var(--teal-soft);
+      color: var(--teal-strong);
+    }
+
+    #safa-modern-prototype .pill.green {
+      border-color: rgba(21, 115, 71, 0.22);
+      background: var(--green-soft);
+      color: var(--green);
+    }
+
+    #safa-modern-prototype .pill.amber {
+      border-color: rgba(154, 103, 0, 0.22);
+      background: var(--amber-soft);
+      color: var(--amber);
+    }
+
+    #safa-modern-prototype .pill.rose {
+      border-color: rgba(184, 50, 93, 0.22);
+      background: var(--rose-soft);
+      color: var(--rose);
+    }
+
+    #safa-modern-prototype .content {
+      min-width: 0;
+      padding: 16px 18px 18px;
+    }
+
+    #safa-modern-prototype .grid-4 {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    #safa-modern-prototype .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    #safa-modern-prototype .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    #safa-modern-prototype .panel {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #fff;
+      box-shadow: 0 4px 14px rgba(19, 34, 40, 0.04);
+      min-width: 0;
+    }
+
+    #safa-modern-prototype .panel.pad {
+      padding: 13px;
+    }
+
+    #safa-modern-prototype .panel-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 12px 13px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    #safa-modern-prototype .panel-head strong {
+      font-size: 13px;
+    }
+
+    #safa-modern-prototype .metric {
+      display: grid;
+      gap: 8px;
+      padding: 13px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #fff;
+      min-height: 104px;
+    }
+
+    #safa-modern-prototype .metric small {
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 800;
+    }
+
+    #safa-modern-prototype .metric strong {
+      font-size: 28px;
+      line-height: 1;
+      letter-spacing: 0;
+    }
+
+    #safa-modern-prototype .metric .hint {
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.25;
+    }
+
+    #safa-modern-prototype .table {
+      display: grid;
+    }
+
+    #safa-modern-prototype .row,
+    #safa-modern-prototype .table-head {
+      display: grid;
+      align-items: center;
+      gap: 10px;
+      min-height: 42px;
+      padding: 9px 13px;
+      border-bottom: 1px solid var(--line);
+      font-size: 12px;
+    }
+
+    #safa-modern-prototype .table-head {
+      min-height: 34px;
+      color: var(--faint);
+      font-size: 10px;
+      font-weight: 900;
+      text-transform: uppercase;
+      background: var(--panel-muted);
+    }
+
+    #safa-modern-prototype .row:last-child {
+      border-bottom: 0;
+    }
+
+    #safa-modern-prototype .row strong {
+      display: block;
+      font-size: 12px;
+    }
+
+    #safa-modern-prototype .row small {
+      display: block;
+      margin-top: 2px;
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    #safa-modern-prototype .split-work {
+      display: grid;
+      grid-template-columns: 320px minmax(0, 1fr);
+      gap: 12px;
+    }
+
+    #safa-modern-prototype .filter-strip {
+      display: flex;
+      gap: 7px;
+      overflow-x: auto;
+      margin-bottom: 12px;
+    }
+
+    #safa-modern-prototype .stage {
+      flex: 0 0 auto;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 7px 10px;
+      background: #fff;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 850;
+    }
+
+    #safa-modern-prototype .stage.active {
+      border-color: rgba(8, 122, 112, 0.35);
+      background: var(--teal-soft);
+      color: var(--teal-strong);
+    }
+
+    #safa-modern-prototype .record-list {
+      overflow: hidden;
+    }
+
+    #safa-modern-prototype .record-card {
+      display: grid;
+      gap: 6px;
+      border-bottom: 1px solid var(--line);
+      padding: 11px 12px;
+      background: #fff;
+      font-size: 12px;
+    }
+
+    #safa-modern-prototype .record-card.active {
+      border-left: 4px solid var(--teal);
+      background: #fbfdfd;
+    }
+
+    #safa-modern-prototype .record-card:last-child {
+      border-bottom: 0;
+    }
+
+    #safa-modern-prototype .record-main {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      font-weight: 900;
+    }
+
+    #safa-modern-prototype .record-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    #safa-modern-prototype .detail-layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 260px;
+      gap: 12px;
+    }
+
+    #safa-modern-prototype .detail-summary {
+      display: grid;
+      gap: 12px;
+    }
+
+    #safa-modern-prototype .detail-hero {
+      display: flex;
+      align-items: start;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 14px;
+    }
+
+    #safa-modern-prototype .detail-hero h4 {
+      margin: 0;
+      font-size: 20px;
+      letter-spacing: 0;
+    }
+
+    #safa-modern-prototype .detail-hero p {
+      margin: 5px 0 0;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    #safa-modern-prototype .tabs-line {
+      display: flex;
+      gap: 6px;
+      border-bottom: 1px solid var(--line);
+      padding: 0 12px;
+    }
+
+    #safa-modern-prototype .tabs-line span {
+      border-bottom: 2px solid transparent;
+      padding: 10px 2px 8px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 850;
+    }
+
+    #safa-modern-prototype .tabs-line span.active {
+      border-color: var(--teal);
+      color: var(--teal-strong);
+    }
+
+    #safa-modern-prototype .field-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 9px;
+      padding: 12px;
+    }
+
+    #safa-modern-prototype .field {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 9px;
+      background: var(--panel-muted);
+    }
+
+    #safa-modern-prototype .field span {
+      display: block;
+      color: var(--faint);
+      font-size: 10px;
+      font-weight: 900;
+      text-transform: uppercase;
+    }
+
+    #safa-modern-prototype .field strong {
+      display: block;
+      margin-top: 5px;
+      font-size: 12px;
+    }
+
+    #safa-modern-prototype .action-dock {
+      display: grid;
+      gap: 8px;
+      padding: 11px;
+    }
+
+    #safa-modern-prototype .dock-step {
+      display: grid;
+      grid-template-columns: 24px minmax(0, 1fr);
+      gap: 8px;
+      align-items: center;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 9px;
+      background: #fff;
+    }
+
+    #safa-modern-prototype .dock-step .num {
+      display: grid;
+      width: 24px;
+      height: 24px;
+      place-items: center;
+      border-radius: 7px;
+      background: var(--panel-muted);
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 950;
+    }
+
+    #safa-modern-prototype .dock-step strong {
+      display: block;
+      font-size: 12px;
+    }
+
+    #safa-modern-prototype .dock-step small {
+      display: block;
+      margin-top: 2px;
+      color: var(--muted);
+      font-size: 10px;
+      line-height: 1.25;
+    }
+
+    #safa-modern-prototype .dock-step.done {
+      border-color: rgba(21, 115, 71, 0.24);
+      background: var(--green-soft);
+    }
+
+    #safa-modern-prototype .dock-step.done .num {
+      background: var(--green);
+      color: #fff;
+    }
+
+    #safa-modern-prototype .dock-step.current {
+      border-color: rgba(8, 122, 112, 0.34);
+      box-shadow: 0 0 0 2px rgba(8, 122, 112, 0.08);
+    }
+
+    #safa-modern-prototype .dock-step.current .num {
+      background: var(--teal);
+      color: #fff;
+    }
+
+    #safa-modern-prototype .dock-step.risk {
+      border-color: rgba(184, 50, 93, 0.26);
+      background: #fffafb;
+    }
+
+    #safa-modern-prototype .dock-step.risk .num {
+      background: var(--rose-soft);
+      color: var(--rose);
+    }
+
+    #safa-modern-prototype .dock-step.warn {
+      border-color: rgba(154, 103, 0, 0.28);
+      background: var(--amber-soft);
+    }
+
+    #safa-modern-prototype .timeline {
+      display: grid;
+      gap: 8px;
+      padding: 12px;
+    }
+
+    #safa-modern-prototype .event {
+      display: grid;
+      grid-template-columns: 86px minmax(0, 1fr);
+      gap: 10px;
+      font-size: 12px;
+    }
+
+    #safa-modern-prototype .event time {
+      color: var(--faint);
+      font-size: 11px;
+      font-weight: 850;
+    }
+
+    #safa-modern-prototype .event div {
+      border-left: 2px solid var(--line);
+      padding-left: 10px;
+    }
+
+    #safa-modern-prototype .connector-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    #safa-modern-prototype .connector {
+      display: grid;
+      gap: 12px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 13px;
+      background: #fff;
+    }
+
+    #safa-modern-prototype .connector-top {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    #safa-modern-prototype .connector h4 {
+      margin: 0;
+      font-size: 15px;
+    }
+
+    #safa-modern-prototype .connector p {
+      margin: 4px 0 0;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.35;
+    }
+
+    #safa-modern-prototype .form-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 9px;
+    }
+
+    #safa-modern-prototype .input {
+      min-height: 34px;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      padding: 8px 10px;
+      background: var(--panel-muted);
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 750;
+    }
+
+    #safa-modern-prototype .profile-grid {
+      display: grid;
+      grid-template-columns: 260px minmax(0, 1fr);
+      gap: 12px;
+    }
+
+    #safa-modern-prototype .profile-list {
+      display: grid;
+      gap: 8px;
+      padding: 12px;
+    }
+
+    #safa-modern-prototype .profile {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 10px;
+      background: #fff;
+      font-size: 12px;
+    }
+
+    #safa-modern-prototype .profile.active {
+      border-color: rgba(8, 122, 112, 0.34);
+      background: var(--teal-soft);
+    }
+
+    #safa-modern-prototype .status-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    #safa-modern-prototype .job-card {
+      border: 1px solid var(--line);
+      border-radius: 9px;
+      padding: 12px;
+      background: #fff;
+      font-size: 12px;
+    }
+
+    #safa-modern-prototype .job-card strong {
+      display: block;
+      font-size: 13px;
+    }
+
+    #safa-modern-prototype .bar {
+      height: 7px;
+      overflow: hidden;
+      border-radius: 999px;
+      margin-top: 10px;
+      background: var(--line);
+    }
+
+    #safa-modern-prototype .bar span {
+      display: block;
+      height: 100%;
+      border-radius: inherit;
+      background: var(--teal);
+    }
+
+    #safa-modern-prototype .setting-row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 12px;
+      align-items: center;
+      border-bottom: 1px solid var(--line);
+      padding: 12px 13px;
+      font-size: 12px;
+    }
+
+    #safa-modern-prototype .setting-row:last-child {
+      border-bottom: 0;
+    }
+
+    #safa-modern-prototype .setting-row strong {
+      display: block;
+      font-size: 13px;
+    }
+
+    #safa-modern-prototype .setting-row small {
+      display: block;
+      margin-top: 3px;
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.35;
+    }
+
+    #safa-modern-prototype .login-stage {
+      display: grid;
+      min-height: 690px;
+      grid-template-columns: 1fr 420px;
+      background: var(--page);
+    }
+
+    #safa-modern-prototype .login-left {
+      display: grid;
+      align-content: center;
+      gap: 18px;
+      padding: 46px;
+    }
+
+    #safa-modern-prototype .login-metrics {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+      max-width: 620px;
+    }
+
+    #safa-modern-prototype .login-card {
+      align-self: center;
+      margin-right: 40px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 18px;
+      background: #fff;
+      box-shadow: var(--shadow);
+    }
+
+    #safa-modern-prototype .login-card h3 {
+      margin: 0;
+      font-size: 21px;
+    }
+
+    #safa-modern-prototype .login-card p {
+      margin: 6px 0 18px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    #safa-modern-prototype .login-form {
+      display: grid;
+      gap: 10px;
+    }
+
+    @media (max-width: 1120px) {
+      #safa-modern-prototype .shell {
+        grid-template-columns: 1fr;
+      }
+
+      #safa-modern-prototype .side {
+        display: none;
+      }
+
+      #safa-modern-prototype .grid-4,
+      #safa-modern-prototype .grid-3,
+      #safa-modern-prototype .status-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      #safa-modern-prototype .split-work,
+      #safa-modern-prototype .detail-layout,
+      #safa-modern-prototype .profile-grid {
+        grid-template-columns: 1fr;
+      }
+
+      #safa-modern-prototype .login-stage {
+        grid-template-columns: 1fr;
+      }
+
+      #safa-modern-prototype .login-card {
+        margin: 0 24px 24px;
+      }
+    }
+
+    @media (max-width: 720px) {
+      #safa-modern-prototype .brief,
+      #safa-modern-prototype .topbar {
+        display: grid;
+      }
+
+      #safa-modern-prototype .grid-4,
+      #safa-modern-prototype .grid-3,
+      #safa-modern-prototype .grid-2,
+      #safa-modern-prototype .connector-grid,
+      #safa-modern-prototype .field-grid,
+      #safa-modern-prototype .form-grid,
+      #safa-modern-prototype .status-grid,
+      #safa-modern-prototype .login-metrics {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+
+  <div class="brief">
+    <div>
+      <h2>Codex modern SAFA mockup</h2>
+      <p class="subtitle">
+        Tum sayfalar ayni operasyon kabugunda toplandi. Tasarim sade ama detayli:
+        staging kilidi gorunur, kritik aksiyonlar kaybolmaz, Faturalar ekrani
+        ledger/inbox modeliyle calisir.
+      </p>
+    </div>
+    <div class="prototype-status">Modern operasyon paneli - Tum sayfalar</div>
+  </div>
+
+  <div class="page-tabs">
+    <button class="page-tab active" data-choice="Giris" onclick="showSafaScreen('login', this)">Giris</button>
+    <button class="page-tab" data-choice="Genel" onclick="showSafaScreen('overview', this)">Genel</button>
+    <button class="page-tab" data-choice="Siparisler" onclick="showSafaScreen('orders', this)">Siparisler</button>
+    <button class="page-tab" data-choice="Faturalar" onclick="showSafaScreen('invoices', this)">Faturalar</button>
+    <button class="page-tab" data-choice="Entegrasyonlar" onclick="showSafaScreen('integrations', this)">Entegrasyonlar</button>
+    <button class="page-tab" data-choice="Kayitli Bilgiler" onclick="showSafaScreen('vault', this)">Kayitli Bilgiler</button>
+    <button class="page-tab" data-choice="Operasyon" onclick="showSafaScreen('operations', this)">Operasyon</button>
+    <button class="page-tab" data-choice="Ayarlar" onclick="showSafaScreen('settings', this)">Ayarlar</button>
+  </div>
+
+  <div class="app-frame">
+    <section class="screen active" data-screen="login">
+      <div class="login-stage">
+        <div class="login-left">
+          <div class="brand">
+            <div class="brand-mark">S</div>
+            <div><strong>SAFA</strong><small>Commerce OS</small></div>
+          </div>
+          <div class="title-block">
+            <h3>Operasyon baslamadan once guvenli oturum</h3>
+            <p>Giris ekrani artik yalniz form degil; sistemin canli/staging durumunu da acilmadan once gosterir.</p>
+          </div>
+          <div class="login-metrics">
+            <div class="metric"><small>Bugun bekleyen</small><strong>17</strong><div class="hint">Taslak ve imza isi</div></div>
+            <div class="metric"><small>API modu</small><strong style="color: var(--teal)">OK</strong><div class="hint">Staging proxy hazir</div></div>
+            <div class="metric"><small>Riskli aksiyon</small><strong style="color: var(--rose)">Kilitli</strong><div class="hint">Preview write guard</div></div>
+          </div>
+        </div>
+        <div class="login-card">
+          <h3>SAFA paneline gir</h3>
+          <p>Oturum cookie ile korunur. Preview modunda yazma aksiyonlari kilitli kalir.</p>
+          <div class="login-form">
+            <div class="input">Kullanici adi - sarper</div>
+            <div class="input">Sifre - ********</div>
+            <button class="btn primary">Giris yap</button>
+            <span class="pill amber">Staging: canli veri yazilmaz</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="screen" data-screen="overview">
+      <div class="shell">
+        <aside class="side">
+          <div class="brand"><div class="brand-mark">S</div><div><strong>SAFA</strong><small>Commerce OS</small></div></div>
+          <nav>
+            <div class="nav-group-title">Islem</div>
+            <div class="nav-item active"><span class="nav-dot"></span>Genel</div>
+            <div class="nav-item"><span class="nav-dot"></span>Siparisler</div>
+            <div class="nav-item"><span class="nav-dot"></span>Faturalar</div>
+            <div class="nav-group-title">Kurulum</div>
+            <div class="nav-item"><span class="nav-dot"></span>Entegrasyonlar</div>
+            <div class="nav-item"><span class="nav-dot"></span>Kayitli Bilgiler</div>
+            <div class="nav-item"><span class="nav-dot"></span>Operasyon</div>
+            <div class="nav-item"><span class="nav-dot"></span>Ayarlar</div>
+          </nav>
+          <div class="side-health"><span class="micro">Baglanti skoru</span><strong>4/4 hazir</strong><span class="pill green">Canli baglanti saglikli</span></div>
+        </aside>
+        <main class="main">
+          <header class="topbar">
+            <div class="title-block"><h3>Operasyon merkezi</h3><p>Bugunun fatura ve siparis isleri tek oncelik listesinde.</p></div>
+            <div class="actions"><button class="btn">Yenile</button><button class="btn primary">Trendyol cek</button><button class="btn">e-Arsiv ac</button></div>
+          </header>
+          <div class="mode-ribbon"><span>Son mesaj: Son 7 gun guvenli eslestirme tamamlandi.</span><span class="pill teal">Staging preview</span></div>
+          <div class="content">
+            <div class="grid-4">
+              <div class="metric"><small>Bekleyen taslak</small><strong>12</strong><div class="hint">Onay veya imza bekliyor</div></div>
+              <div class="metric"><small>Imza bekliyor</small><strong style="color: var(--rose)">5</strong><div class="hint">GIB aksiyonu kilitli</div></div>
+              <div class="metric"><small>Harici eslesmeyen</small><strong style="color: var(--amber)">3</strong><div class="hint">Manuel kontrol gerekebilir</div></div>
+              <div class="metric"><small>Bugun kapanan</small><strong style="color: var(--green)">38</strong><div class="hint">PDF ve pazaryeri tamam</div></div>
+            </div>
+            <div class="grid-2" style="margin-top:12px">
+              <section class="panel">
+                <div class="panel-head"><strong>Dikkat kuyrugu</strong><span class="pill amber">3 is kritik</span></div>
+                <div class="table">
+                  <div class="row" style="grid-template-columns:1fr auto"><div><strong>GIB imza bekleyen faturalar</strong><small>5 kayit - son 42 dk</small></div><span class="pill rose">Kilitli</span></div>
+                  <div class="row" style="grid-template-columns:1fr auto"><div><strong>Trendyol gonderim bekleyen</strong><small>2 kayit - PDF hazir</small></div><span class="pill amber">Onay bekler</span></div>
+                  <div class="row" style="grid-template-columns:1fr auto"><div><strong>Harici fatura eslesmesi</strong><small>3 kayit - guven skoru dusuk</small></div><span class="pill">Incele</span></div>
+                </div>
+              </section>
+              <section class="panel">
+                <div class="panel-head"><strong>Otomasyon sagligi</strong><span class="pill green">Calisiyor</span></div>
+                <div class="timeline">
+                  <div class="event"><time>14:20</time><div><strong>Son 7 gun guvenli eslestirme</strong><br><span style="color:var(--muted)">86% guvenli kapandi, 3 kayit manuel incelemede.</span></div></div>
+                  <div class="event"><time>13:58</time><div><strong>Trendyol paket cekimi</strong><br><span style="color:var(--muted)">42 paket guncellendi, yeni taslak yok.</span></div></div>
+                  <div class="event"><time>13:41</time><div><strong>GIB preview sync</strong><br><span style="color:var(--muted)">Yazmasiz kontrol tamamlandi.</span></div></div>
+                </div>
+              </section>
+            </div>
+          </div>
+        </main>
+      </div>
+    </section>
+
+    <section class="screen" data-screen="orders">
+      <div class="shell">
+        <aside class="side">
+          <div class="brand"><div class="brand-mark">S</div><div><strong>SAFA</strong><small>Commerce OS</small></div></div>
+          <nav><div class="nav-group-title">Islem</div><div class="nav-item"><span class="nav-dot"></span>Genel</div><div class="nav-item active"><span class="nav-dot"></span>Siparisler</div><div class="nav-item"><span class="nav-dot"></span>Faturalar</div><div class="nav-group-title">Kurulum</div><div class="nav-item"><span class="nav-dot"></span>Entegrasyonlar</div><div class="nav-item"><span class="nav-dot"></span>Kayitli Bilgiler</div><div class="nav-item"><span class="nav-dot"></span>Operasyon</div><div class="nav-item"><span class="nav-dot"></span>Ayarlar</div></nav>
+          <div class="side-health"><span class="micro">Siparis filtresi</span><strong>Bugun - 42 paket</strong><span class="pill teal">Fatura izi acik</span></div>
+        </aside>
+        <main class="main">
+          <header class="topbar"><div class="title-block"><h3>Siparisler</h3><p>Paket, musteri, fatura ve harici eslesme tek tabloda.</p></div><div class="actions"><button class="btn">Filtreler</button><button class="btn">Excel</button><button class="btn primary">Trendyol cek</button></div></header>
+          <div class="mode-ribbon"><span>Siparis listesi salt-okuma; fatura aksiyonlari Faturalar masasina yonlenir.</span><span class="pill teal">42 paket</span></div>
+          <div class="content">
+            <section class="panel">
+              <div class="panel-head"><strong>Siparis akisi</strong><div class="actions"><span class="pill teal">Hazir</span><span class="pill amber">Eksik fatura</span><span class="pill green">Kapandi</span></div></div>
+              <div class="table">
+                <div class="table-head" style="grid-template-columns:1.2fr .9fr .8fr .9fr .7fr">Paket / Musteri<span>Kanal</span><span>Tutar</span><span>Fatura durumu</span><span>Aksiyon</span></div>
+                <div class="row" style="grid-template-columns:1.2fr .9fr .8fr .9fr .7fr"><div><strong>TY-982144 - Deniz Market</strong><small>2 kalem - teslim hazir</small></div><span>Trendyol</span><span>1.240,00 TL</span><span class="pill rose">Imza bekler</span><button class="btn">Fatura masasi</button></div>
+                <div class="row" style="grid-template-columns:1.2fr .9fr .8fr .9fr .7fr"><div><strong>HB-44102 - Kuzey Denizcilik</strong><small>5 kalem - kargo cikti</small></div><span>Hepsiburada</span><span>3.870,00 TL</span><span class="pill green">Kapandi</span><button class="btn">PDF ac</button></div>
+                <div class="row" style="grid-template-columns:1.2fr .9fr .8fr .9fr .7fr"><div><strong>TY-982151 - Arda Gida</strong><small>1 kalem - eslesme dusuk</small></div><span>Trendyol</span><span>680,00 TL</span><span class="pill amber">Harici kontrol</span><button class="btn">Esle</button></div>
+                <div class="row" style="grid-template-columns:1.2fr .9fr .8fr .9fr .7fr"><div><strong>TY-982168 - Lima Tekstil</strong><small>3 kalem - yeni taslak</small></div><span>Trendyol</span><span>2.180,00 TL</span><span class="pill teal">Taslak hazir</span><button class="btn">Incele</button></div>
+              </div>
+            </section>
+          </div>
+        </main>
+      </div>
+    </section>
+
+    <section class="screen" data-screen="invoices">
+      <div class="shell">
+        <aside class="side">
+          <div class="brand"><div class="brand-mark">S</div><div><strong>SAFA</strong><small>Fatura Yonetimi</small></div></div>
+          <nav><div class="nav-group-title">Islem</div><div class="nav-item"><span class="nav-dot"></span>Genel</div><div class="nav-item"><span class="nav-dot"></span>Siparisler</div><div class="nav-item active"><span class="nav-dot"></span>Faturalar</div><div class="nav-group-title">Kurulum</div><div class="nav-item"><span class="nav-dot"></span>Entegrasyonlar</div><div class="nav-item"><span class="nav-dot"></span>Kayitli Bilgiler</div><div class="nav-item"><span class="nav-dot"></span>Operasyon</div><div class="nav-item"><span class="nav-dot"></span>Ayarlar</div></nav>
+          <div class="side-health"><span class="micro">Operasyon kilidi</span><strong>Riskli aksiyonlar kilitli</strong><span class="pill rose">Preview guard</span></div>
+        </aside>
+        <main class="main">
+          <header class="topbar"><div class="title-block"><h3>Fatura Operasyon Masasi</h3><p>Liste, detay ve eylem rihtimi tek ekranda. Hicbir aksiyon kaybolmadan siralandi.</p></div><div class="actions"><button class="btn">Yenile</button><button class="btn">e-Arsiv ac</button><button class="btn danger disabled">Guvenli cikis</button><button class="btn primary">Kontrol et ve uygula</button></div></header>
+          <div class="mode-ribbon"><span>Preview: GIB imza, pazaryeri gonderim ve kayit yazma aksiyonlari kilitli; kuru calisma serbest.</span><span class="pill rose">Read-only guard</span></div>
+          <div class="content">
+            <div class="filter-strip">
+              <span class="stage active">Tum isler - 22</span><span class="stage">Taslak - 12</span><span class="stage">Imza - 5</span><span class="stage">PDF Arsiv - 4</span><span class="stage">Harici Esleme - 3</span><span class="stage">Gonderim - 2</span>
+            </div>
+            <div class="split-work">
+              <section class="panel record-list">
+                <div class="panel-head"><strong>Is kuyrugu</strong><span class="pill teal">Ledger</span></div>
+                <div class="record-card active"><div class="record-main"><span>SAF-2026-000812</span><span>1.240 TL</span></div><div class="record-meta"><span>Trendyol</span><span>Imza bekliyor</span><span>TY-982144</span></div></div>
+                <div class="record-card"><div class="record-main"><span>SAF-2026-000813</span><span>3.870 TL</span></div><div class="record-meta"><span>Hepsiburada</span><span>PDF arsiv</span><span>HB-44102</span></div></div>
+                <div class="record-card"><div class="record-main"><span>Harici GIB-9120</span><span>680 TL</span></div><div class="record-meta"><span>GIB Portal</span><span>Eslesme dusuk</span><span>Arda Gida</span></div></div>
+                <div class="record-card"><div class="record-main"><span>SAF-2026-000814</span><span>2.180 TL</span></div><div class="record-meta"><span>Trendyol</span><span>Gonderim bekler</span><span>Lima Tekstil</span></div></div>
+              </section>
+              <section class="detail-layout">
+                <div class="detail-summary">
+                  <div class="panel">
+                    <div class="detail-hero"><div><h4>SAF-2026-000812</h4><p>Deniz Market - Trendyol - TY-982144 - Imza bekliyor</p></div><span class="pill rose">GIB aksiyonu kilitli</span></div>
+                    <div class="tabs-line"><span class="active">Ozet</span><span>Kalemler</span><span>Denetim izi</span><span>Harici eslesme</span></div>
+                    <div class="field-grid">
+                      <div class="field"><span>Siradaki adim</span><strong>GIB/e-Arsiv imza</strong></div>
+                      <div class="field"><span>Fatura tutari</span><strong>1.240,00 TL</strong></div>
+                      <div class="field"><span>Guven skoru</span><strong style="color:var(--green)">92%</strong></div>
+                      <div class="field"><span>PDF</span><strong>Henuz yok</strong></div>
+                      <div class="field"><span>Trendyol</span><strong>Gonderilmedi</strong></div>
+                      <div class="field"><span>Son islem</span><strong>Taslak onaylandi</strong></div>
+                    </div>
+                  </div>
+                  <div class="panel">
+                    <div class="panel-head"><strong>Denetim izi</strong><span class="pill">Son 4 olay</span></div>
+                    <div class="timeline"><div class="event"><time>14:22</time><div><strong>Taslak onaylandi</strong><br><span style="color:var(--muted)">sarper - basarili</span></div></div><div class="event"><time>14:18</time><div><strong>Harici fatura kontrol edildi</strong><br><span style="color:var(--muted)">GIB preview - yazmasiz</span></div></div><div class="event"><time>14:12</time><div><strong>Siparis eslesti</strong><br><span style="color:var(--muted)">TY-982144 - 92% guven</span></div></div></div>
+                  </div>
+                </div>
+                <aside class="panel">
+                  <div class="panel-head"><strong>Eylem rihtimi</strong><span class="pill rose">Guard</span></div>
+                  <div class="action-dock">
+                    <div class="dock-step done"><span class="num">1</span><div><strong>Taslak onay</strong><small>Tamamlandi, geri alinmaz.</small></div></div>
+                    <div class="dock-step current risk"><span class="num">2</span><div><strong>GIB/e-Arsiv imza</strong><small>Preview modunda kilitli.</small></div></div>
+                    <div class="dock-step"><span class="num">3</span><div><strong>PDF arsiv</strong><small>Imza sonrasi aktif olur.</small></div></div>
+                    <div class="dock-step"><span class="num">4</span><div><strong>Harici esleme</strong><small>Guvenli eslesme veya manuel secim.</small></div></div>
+                    <div class="dock-step risk"><span class="num">5</span><div><strong>Pazaryeri gonder</strong><small>Canli modda iki adimli onay.</small></div></div>
+                    <div class="dock-step warn"><span class="num">6</span><div><strong>Kontrol et ve uygula</strong><small>Staging'de sadece kuru calisma.</small></div></div>
+                  </div>
+                </aside>
+              </section>
+            </div>
+          </div>
+        </main>
+      </div>
+    </section>
+
+    <section class="screen" data-screen="integrations">
+      <div class="shell">
+        <aside class="side"><div class="brand"><div class="brand-mark">S</div><div><strong>SAFA</strong><small>Commerce OS</small></div></div><nav><div class="nav-group-title">Islem</div><div class="nav-item"><span class="nav-dot"></span>Genel</div><div class="nav-item"><span class="nav-dot"></span>Siparisler</div><div class="nav-item"><span class="nav-dot"></span>Faturalar</div><div class="nav-group-title">Kurulum</div><div class="nav-item active"><span class="nav-dot"></span>Entegrasyonlar</div><div class="nav-item"><span class="nav-dot"></span>Kayitli Bilgiler</div><div class="nav-item"><span class="nav-dot"></span>Operasyon</div><div class="nav-item"><span class="nav-dot"></span>Ayarlar</div></nav><div class="side-health"><span class="micro">Baglanti</span><strong>Trendyol, GIB, HB</strong><span class="pill green">3 aktif</span></div></aside>
+        <main class="main">
+          <header class="topbar"><div class="title-block"><h3>Entegrasyonlar</h3><p>Canli baglantilar ve tarayici taslaklari ayni kart modelinde.</p></div><div class="actions"><button class="btn">Kayitli bilgiden doldur</button><button class="btn primary">Baglantilari test et</button></div></header>
+          <div class="mode-ribbon"><span>Connect aksiyonlari dis sisteme dokunabilir; preview modunda test dry-run olarak gorunur.</span><span class="pill amber">Dis API guard</span></div>
+          <div class="content">
+            <div class="connector-grid">
+              <div class="connector"><div class="connector-top"><div><h4>Trendyol</h4><p>Supplier ID, API key ve secret ile siparis cekimi.</p></div><span class="pill green">Bagli</span></div><div class="form-grid"><div class="input">Supplier ID - 123456</div><div class="input">API key - kayitli</div></div><div class="actions"><button class="btn">Taslak kaydet</button><button class="btn disabled">Canli test kilitli</button></div></div>
+              <div class="connector"><div class="connector-top"><div><h4>GIB Portal</h4><p>e-Arsiv portal oturumu, token/proxy ve imzali fatura sorgusu.</p></div><span class="pill amber">Oturum gerek</span></div><div class="form-grid"><div class="input">Kullanici - kayitli</div><div class="input">Sifre - sifreli</div></div><div class="actions"><button class="btn">Portal ac</button><button class="btn primary">Preview sorgu</button></div></div>
+              <div class="connector"><div class="connector-top"><div><h4>GIB Direct</h4><p>Dogru kimlik bilgisiyle resmi imza akisi.</p></div><span class="pill rose">Riskli</span></div><div class="form-grid"><div class="input">Vergi no - kayitli</div><div class="input">Sertifika - hazir</div></div><div class="actions"><button class="btn">Taslagi dogrula</button><button class="btn disabled">Imza kilitli</button></div></div>
+              <div class="connector"><div class="connector-top"><div><h4>Hepsiburada</h4><p>Urun katalogu, fiyat/stok ve siparis kalemleri.</p></div><span class="pill green">Hazir</span></div><div class="form-grid"><div class="input">Merchant ID - kayitli</div><div class="input">Service key - kayitli</div></div><div class="actions"><button class="btn">Liste cek</button><button class="btn disabled">Upload kilitli</button></div></div>
+            </div>
+          </div>
+        </main>
+      </div>
+    </section>
+
+    <section class="screen" data-screen="vault">
+      <div class="shell">
+        <aside class="side"><div class="brand"><div class="brand-mark">S</div><div><strong>SAFA</strong><small>Commerce OS</small></div></div><nav><div class="nav-group-title">Islem</div><div class="nav-item"><span class="nav-dot"></span>Genel</div><div class="nav-item"><span class="nav-dot"></span>Siparisler</div><div class="nav-item"><span class="nav-dot"></span>Faturalar</div><div class="nav-group-title">Kurulum</div><div class="nav-item"><span class="nav-dot"></span>Entegrasyonlar</div><div class="nav-item active"><span class="nav-dot"></span>Kayitli Bilgiler</div><div class="nav-item"><span class="nav-dot"></span>Operasyon</div><div class="nav-item"><span class="nav-dot"></span>Ayarlar</div></nav><div class="side-health"><span class="micro">Kasa durumu</span><strong>Tarayicida sifreli</strong><span class="pill teal">Yerel vault</span></div></aside>
+        <main class="main">
+          <header class="topbar"><div class="title-block"><h3>Kayitli Bilgiler</h3><p>Profil kasasi sade: sec, kilidi ac, ilgili forma aktar.</p></div><div class="actions"><button class="btn">Yeni profil</button><button class="btn primary">Kilidi ac</button></div></header>
+          <div class="mode-ribbon"><span>Vault verisi farkli hosting origin'inde paylasilmaz; preview icin bu beklenen izolasyondur.</span><span class="pill teal">Sifreli localStorage</span></div>
+          <div class="content">
+            <div class="profile-grid">
+              <section class="panel"><div class="panel-head"><strong>Profiller</strong><span class="pill">4 kayit</span></div><div class="profile-list"><div class="profile active"><strong>Trendyol Ana Hesap</strong><br><span style="color:var(--muted)">API bilgileri - son kullanim bugun</span></div><div class="profile"><strong>GIB Portal</strong><br><span style="color:var(--muted)">Kullanici ve sifre</span></div><div class="profile"><strong>Hepsiburada</strong><br><span style="color:var(--muted)">Merchant bilgileri</span></div></div></section>
+              <section class="panel"><div class="panel-head"><strong>Profil detayi</strong><span class="pill green">Cozuldu</span></div><div class="field-grid"><div class="field"><span>Tip</span><strong>Trendyol</strong></div><div class="field"><span>Supplier ID</span><strong>123456</strong></div><div class="field"><span>Secret</span><strong>Maskeli</strong></div><div class="field"><span>Aktarim</span><strong>Entegrasyon formu</strong></div><div class="field"><span>Son degisim</span><strong>2026-06-20</strong></div><div class="field"><span>Guvenlik</span><strong>Parola ile acilir</strong></div></div><div class="actions" style="padding:0 12px 12px"><button class="btn primary">Forma aktar</button><button class="btn danger">Profili sil</button></div></section>
+            </div>
+          </div>
+        </main>
+      </div>
+    </section>
+
+    <section class="screen" data-screen="operations">
+      <div class="shell">
+        <aside class="side"><div class="brand"><div class="brand-mark">S</div><div><strong>SAFA</strong><small>Commerce OS</small></div></div><nav><div class="nav-group-title">Islem</div><div class="nav-item"><span class="nav-dot"></span>Genel</div><div class="nav-item"><span class="nav-dot"></span>Siparisler</div><div class="nav-item"><span class="nav-dot"></span>Faturalar</div><div class="nav-group-title">Kurulum</div><div class="nav-item"><span class="nav-dot"></span>Entegrasyonlar</div><div class="nav-item"><span class="nav-dot"></span>Kayitli Bilgiler</div><div class="nav-item active"><span class="nav-dot"></span>Operasyon</div><div class="nav-item"><span class="nav-dot"></span>Ayarlar</div></nav><div class="side-health"><span class="micro">Kuyruk sagligi</span><strong>1 hata - 4 aktif</strong><span class="pill amber">Izle</span></div></aside>
+        <main class="main">
+          <header class="topbar"><div class="title-block"><h3>Operasyon izleme</h3><p>Job, hata, retry ve otomasyon guard tek ekranda.</p></div><div class="actions"><button class="btn">Loglari yenile</button><button class="btn primary">Hata kuyrugunu ac</button></div></header>
+          <div class="mode-ribbon"><span>Retry aksiyonlari staging'de simule edilir; canli retry icin iki adimli onay gerekir.</span><span class="pill amber">Retry guard</span></div>
+          <div class="content">
+            <div class="status-grid">
+              <div class="job-card"><span class="pill green">Running</span><strong style="margin-top:10px">Trendyol sync</strong><span style="color:var(--muted)">42 paket isleniyor</span><div class="bar"><span style="width:72%"></span></div></div>
+              <div class="job-card"><span class="pill amber">Waiting</span><strong style="margin-top:10px">GIB preview</strong><span style="color:var(--muted)">3 kayit manuel kontrol</span><div class="bar"><span style="width:48%;background:var(--amber)"></span></div></div>
+              <div class="job-card"><span class="pill rose">Failed</span><strong style="margin-top:10px">PDF arsiv retry</strong><span style="color:var(--muted)">1 kayit endpoint hatasi</span><div class="bar"><span style="width:22%;background:var(--rose)"></span></div></div>
+            </div>
+            <section class="panel" style="margin-top:12px"><div class="panel-head"><strong>Son job olaylari</strong><span class="pill">Canli iz</span></div><div class="table"><div class="table-head" style="grid-template-columns:.8fr 1fr .8fr .8fr">Saat<span>Job</span><span>Durum</span><span>Aksiyon</span></div><div class="row" style="grid-template-columns:.8fr 1fr .8fr .8fr"><span>14:28</span><strong>external-invoices/apply</strong><span class="pill green">OK</span><button class="btn">Detay</button></div><div class="row" style="grid-template-columns:.8fr 1fr .8fr .8fr"><span>14:21</span><strong>monthly-archive</strong><span class="pill rose">Failed</span><button class="btn disabled">Retry kilitli</button></div></div></section>
+          </div>
+        </main>
+      </div>
+    </section>
+
+    <section class="screen" data-screen="settings">
+      <div class="shell">
+        <aside class="side"><div class="brand"><div class="brand-mark">S</div><div><strong>SAFA</strong><small>Commerce OS</small></div></div><nav><div class="nav-group-title">Islem</div><div class="nav-item"><span class="nav-dot"></span>Genel</div><div class="nav-item"><span class="nav-dot"></span>Siparisler</div><div class="nav-item"><span class="nav-dot"></span>Faturalar</div><div class="nav-group-title">Kurulum</div><div class="nav-item"><span class="nav-dot"></span>Entegrasyonlar</div><div class="nav-item"><span class="nav-dot"></span>Kayitli Bilgiler</div><div class="nav-item"><span class="nav-dot"></span>Operasyon</div><div class="nav-item active"><span class="nav-dot"></span>Ayarlar</div></nav><div class="side-health"><span class="micro">Runtime</span><strong>Europe/Istanbul</strong><span class="pill teal">TRY</span></div></aside>
+        <main class="main">
+          <header class="topbar"><div class="title-block"><h3>Ayarlar</h3><p>Runtime, staging modu ve saglayici sagligi salt-okuma gorunur.</p></div><div class="actions"><button class="btn">Yenile</button><button class="btn primary">Durum raporu indir</button></div></header>
+          <div class="mode-ribbon"><span>Prod'a gecis oncesi bu ekrandaki hedefler: hosting target, API target ve read-only flag birlikte dogrulanir.</span><span class="pill teal">Config check</span></div>
+          <div class="content">
+            <div class="grid-2">
+              <section class="panel"><div class="panel-head"><strong>Runtime</strong><span class="pill green">Saglikli</span></div><div class="setting-row"><div><strong>API hedefi</strong><small>/api -> safa-api-staging; prod hedefinden ayrildi.</small></div><span class="pill green">Staging</span></div><div class="setting-row"><div><strong>Para birimi</strong><small>TRY format, Europe/Istanbul zaman dilimi.</small></div><span class="pill">TRY</span></div><div class="setting-row"><div><strong>Read-only flag</strong><small>Riskli POST/PUT/DELETE aksiyonlari kilitlenir.</small></div><span class="pill rose">Aktif</span></div></section>
+              <section class="panel"><div class="panel-head"><strong>Saglayici durumu</strong><span class="pill">4 kontrol</span></div><div class="setting-row"><div><strong>Trendyol</strong><small>Siparis cekimi hazir; gonderim guard'li.</small></div><span class="pill green">OK</span></div><div class="setting-row"><div><strong>GIB Portal</strong><small>Preview sorgu aktif; imza kilitli.</small></div><span class="pill amber">Guard</span></div><div class="setting-row"><div><strong>Hepsiburada</strong><small>Katalog ve stok upload staging'de kapali.</small></div><span class="pill amber">Guard</span></div></section>
+            </div>
+          </div>
+        </main>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    function showSafaScreen(screenName, button) {
+      var root = document.getElementById("safa-modern-prototype");
+      root.querySelectorAll(".screen").forEach(function (screen) {
+        screen.classList.toggle("active", screen.getAttribute("data-screen") === screenName);
+      });
+      root.querySelectorAll(".page-tab").forEach(function (tab) {
+        tab.classList.remove("active");
+      });
+      if (button) button.classList.add("active");
+      if (window.brainstorm && typeof window.brainstorm.choice === "function") {
+        window.brainstorm.choice(screenName, { label: button ? button.textContent.trim() : screenName });
+      }
+    }
+  </script>
+</div>
+
+</body>
+</html>
