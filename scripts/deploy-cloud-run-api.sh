@@ -134,9 +134,12 @@ else
 fi
 
 pnpm --filter @safa/web build:firebase
+# firebase.json "hosting.site" may target an isolated site (e.g. redesign). Keep the
+# REST fallback on the SAME site so a CLI failure never publishes to the wrong site.
+HOSTING_SITE="$(node -e "try{process.stdout.write((require('./firebase.json').hosting?.site)||'')}catch(e){}" 2>/dev/null || true)"
 if ! firebase deploy --only hosting --project "${PROJECT_ID}"; then
   echo "Firebase CLI deploy failed; falling back to Firebase Hosting REST deploy with gcloud OAuth."
-  ./scripts/deploy-firebase-hosting-rest.sh
+  FIREBASE_SITE="${HOSTING_SITE:-${PROJECT_ID}}" ./scripts/deploy-firebase-hosting-rest.sh
 fi
 
 echo "SAFA API deployed to Cloud Run and Firebase Hosting rewrites deployed."

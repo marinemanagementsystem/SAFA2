@@ -43,7 +43,10 @@ export function PlatformApp({ view }: PlatformAppProps) {
   };
 
   const promoteExternalInvoiceConfirmed = (id: string, sendToTrendyol: boolean) => {
-    if (sendToTrendyol && !confirmLiveAction("e-Arsiv faturasi arsive alinacak ve Trendyol'a GERCEKTEN gonderilecek.")) return;
+    const message = sendToTrendyol
+      ? "e-Arsiv faturasi arsive alinacak ve Trendyol'a GERCEKTEN gonderilecek."
+      : "e-Arsiv faturasi GERCEKTEN arsive alinacak ve taslak fatura kesildi olarak isaretlenecek.";
+    if (!confirmLiveAction(message)) return;
     void platform.promoteExternalInvoice(id, sendToTrendyol);
   };
 
@@ -88,7 +91,7 @@ export function PlatformApp({ view }: PlatformAppProps) {
               detailState={platform.detailState}
               busyAction={platform.busyAction ?? ""}
               onSelectOrder={platform.setSelectedOrderId}
-              onUploadPortalDrafts={platform.uploadPortalDrafts}
+              onUploadPortalDrafts={uploadPortalDraftsConfirmed}
             />
           ) : null}
           {view === "invoices" ? (
@@ -176,7 +179,7 @@ export function PlatformApp({ view }: PlatformAppProps) {
               orders={snapshot.orders}
               drafts={snapshot.drafts}
               invoices={snapshot.invoices}
-              onRetryInvoice={(id) => void platform.issueDrafts([id])}
+              onRetryInvoice={(id) => void issueDraftsConfirmed([id])}
             />
           ) : null}
           {view === "settings" ? (

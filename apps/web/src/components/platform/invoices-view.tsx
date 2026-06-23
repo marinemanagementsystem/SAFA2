@@ -350,6 +350,7 @@ function nextActionFor(action: DraftActionKind, tone: NoticeTone, pending: boole
     return "Fatura kesimi baslamadi veya tamamlanmadi. Karttaki hata sebebini kontrol edip Tekrar dene butonunu kullanin.";
   }
 
+  if (tone === "neutral") return "Islem iptal edildi; canli sistemde hicbir sey degismedi. Hazir oldugunuzda tekrar baslatabilirsiniz.";
   if (tone === "warning") return "Kismi veya kontrol gerektiren sonuc var. Basarisiz kartlari filtreleyip tek tek tekrar deneyin.";
   if (action === "portal") return "Taslak GIB portalina gitti. Resmi fatura sayilmasi icin GIB portalinda Duzenlenen Belgeler ekranindan imzalayin.";
   if (action === "approve") return "Taslak onaylandi ve Onayli filtresine tasindi. Normal akis icin GIB taslagina yukleyin; imza ve Trendyol aktarimi portal takip akisiyle izlenir.";
