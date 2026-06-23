@@ -1,6 +1,6 @@
 "use client";
 
-import { KeyRound, LogIn, ShieldCheck } from "lucide-react";
+import { KeyRound, Loader2, LogIn, ShieldCheck } from "lucide-react";
 import type { FormEvent, ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { api } from "../../lib/api";
@@ -84,7 +84,16 @@ export function AuthGate({ children }: { children: (session: AuthGateSession) =>
     });
   }
 
-  if (!ready) return null;
+  if (!ready) {
+    return (
+      <main className="auth-shell">
+        <div className="auth-loading" role="status" aria-live="polite">
+          <Loader2 size={26} className="spin" />
+          <span>Oturum kontrol ediliyor…</span>
+        </div>
+      </main>
+    );
+  }
   if (session) return <>{children({ ...session, logout })}</>;
 
   return (

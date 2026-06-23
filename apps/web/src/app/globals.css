@@ -82,6 +82,19 @@ a {
   padding: 24px;
 }
 
+.auth-loading {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.auth-loading svg {
+  color: var(--accent);
+}
+
 .auth-card {
   width: min(100%, 520px);
   border: 1px solid var(--line);
