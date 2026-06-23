@@ -774,6 +774,71 @@ a {
   padding: 14px;
 }
 
+a.metric-card.linkable {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+}
+
+a.metric-card.linkable:hover {
+  border-color: var(--accent);
+  box-shadow: 0 6px 18px rgba(16, 24, 40, 0.1);
+}
+
+a.metric-card.linkable:hover small {
+  color: var(--accent);
+}
+
+.automation-health {
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-left-width: 3px;
+  border-radius: 7px;
+  background: var(--surface-muted);
+}
+
+.automation-health.success {
+  border-left-color: var(--success);
+}
+
+.automation-health.warning {
+  border-left-color: var(--amber);
+}
+
+.automation-health.danger {
+  border-left-color: var(--danger);
+}
+
+.automation-health.neutral {
+  border-left-color: var(--line-strong);
+}
+
+.automation-health-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.automation-health-head .micro-label {
+  margin-right: auto;
+}
+
+.automation-health strong {
+  display: block;
+  font-size: 15px;
+}
+
+.automation-health small {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
 .metric-card strong {
   display: block;
   margin-top: 8px;

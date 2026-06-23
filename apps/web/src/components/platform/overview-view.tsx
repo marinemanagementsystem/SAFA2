@@ -1,9 +1,10 @@
 "use client";
 
-import { ArrowRight, CheckCircle2, Clock3, Loader2, PackageCheck, ReceiptText, Send, ShieldCheck, TriangleAlert } from "lucide-react";
+import { ArrowRight, CheckCircle2, Clock3, Gauge, Loader2, PackageCheck, ReceiptText, Send, ShieldCheck, TriangleAlert } from "lucide-react";
 import Link from "next/link";
 import { cx, formatDateTime, money, statusLabel, statusTone } from "../../lib/platform/format";
 import { integrationCatalog } from "../../lib/platform/integration-catalog";
+import { buildAutomationStatusView } from "./automation-status-model";
 import type { PlatformSnapshot } from "./use-platform-data";
 
 interface OverviewViewProps {
@@ -25,6 +26,7 @@ export function OverviewView({ snapshot, loadState, busyAction, apiAvailable, on
   const totalRevenue = snapshot.orders.reduce((sum, order) => sum + order.totalPayableCents, 0);
   const latestJob = snapshot.jobs[0];
   const activeIntegrations = integrationCatalog.filter((item) => item.availability === "active");
+  const automation = buildAutomationStatusView(snapshot.automationStatus);
 
   return (
     <div className="view-stack">
@@ -68,25 +70,25 @@ export function OverviewView({ snapshot, loadState, busyAction, apiAvailable, on
       </section>
 
       <section className="metric-grid" aria-label="Platform metrikleri">
-        <article className="metric-card">
+        <Link className="metric-card linkable" href="/orders">
           <span className="micro-label">Teslim paket</span>
           <strong>{snapshot.orders.length}</strong>
-          <small>{loadState === "loading" ? "Yenileniyor" : "Aktif liste"}</small>
-        </article>
-        <article className="metric-card">
+          <small>{loadState === "loading" ? "Yenileniyor" : "Siparislere git"}</small>
+        </Link>
+        <Link className="metric-card linkable" href="/invoices">
           <span className="micro-label">SAFA fatura kapsami</span>
           <strong>
             {issued} / {externalMatched}
           </strong>
           <small>SAFA'da kesilen / harici bulunan</small>
-        </article>
-        <article className="metric-card">
+        </Link>
+        <Link className="metric-card linkable" href="/invoices">
           <span className="micro-label">Taslak kontrol</span>
           <strong>
             {ready} / {approved}
           </strong>
           <small>Hazir / onayli, {externalDrafts} harici kapali</small>
-        </article>
+        </Link>
         <article className="metric-card">
           <span className="micro-label">Siparis hacmi</span>
           <strong>{money(totalRevenue)}</strong>
@@ -145,6 +147,16 @@ export function OverviewView({ snapshot, loadState, busyAction, apiAvailable, on
               <p>Henüz fatura veya gonderim isi olusmadi.</p>
             </div>
           )}
+
+          <div className={cx("automation-health", automation.tone)}>
+            <div className="automation-health-head">
+              <Gauge size={16} />
+              <span className="micro-label">Otomasyon sagligi</span>
+              <span className={cx("status-pill", automation.tone)}>{automation.statusLabel}</span>
+            </div>
+            <strong>{automation.budgetLabel}</strong>
+            <small>{automation.lines[0]}</small>
+          </div>
         </article>
       </section>
 
