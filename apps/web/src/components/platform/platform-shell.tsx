@@ -9,6 +9,7 @@ import {
   Loader2,
   LogIn,
   LogOut,
+  MoreHorizontal,
   PackageCheck,
   PlugZap,
   ReceiptText,
@@ -19,7 +20,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import type { ComponentType, ReactNode } from "react";
-import { NAV_ITEMS } from "../../lib/platform/navigation";
+import { NAV_GROUP_LABELS, NAV_GROUP_ORDER, NAV_ITEMS, navItemsByGroup } from "../../lib/platform/navigation";
 import type { PlatformView } from "../../lib/platform/types";
 import { cx } from "../../lib/platform/format";
 import type { PlatformSnapshot } from "./use-platform-data";
@@ -65,14 +66,6 @@ const viewTitles: Record<PlatformView, { title: string; subtitle: string }> = {
   }
 };
 
-const invoiceOpsNavItems: Array<{ view: PlatformView; href: string; label: string; description: string; mobileLabel: string }> = [
-  { view: "orders", href: "/orders", label: "Satislar", description: "Siparis ve paketler", mobileLabel: "Satis" },
-  { view: "invoices", href: "/invoices", label: "Faturalar", description: "Fatura operasyonu", mobileLabel: "Fatura" },
-  { view: "integrations", href: "/integrations", label: "Pazaryeri", description: "Kanal baglantilari", mobileLabel: "Pazar" },
-  { view: "operations", href: "/operations", label: "Raporlar", description: "Kuyruk ve durum", mobileLabel: "Rapor" },
-  { view: "settings", href: "/settings", label: "Ayarlar", description: "Runtime ayarlari", mobileLabel: "Ayar" }
-];
-
 interface PlatformShellProps {
   view: PlatformView;
   snapshot: PlatformSnapshot;
@@ -111,7 +104,6 @@ export function PlatformShell({
   const title = viewTitles[view];
   const connected = connectionScore(snapshot);
   const isLiveMode = apiAvailable && snapshot.settings.liveIntegrationsOnly === true;
-  const navItems = view === "invoices" ? invoiceOpsNavItems : NAV_ITEMS;
 
   return (
     <main className={cx("platform-shell", `view-${view}`)}>
@@ -125,18 +117,28 @@ export function PlatformShell({
         </Link>
 
         <nav className="nav-list" aria-label="Ana sayfalar">
-          {navItems.map((item) => {
-            const Icon = navIcons[item.view];
-            return (
-              <Link className={cx("nav-item", item.view === view && "active")} href={item.href} key={item.view}>
-                <Icon size={18} />
-                <span>
-                  <strong>{item.label}</strong>
-                  <small>{item.description}</small>
-                </span>
-              </Link>
-            );
-          })}
+          {NAV_GROUP_ORDER.map((group) => (
+            <div className="nav-group" key={group}>
+              <span className="nav-group-label">{NAV_GROUP_LABELS[group]}</span>
+              {navItemsByGroup(group).map((item) => {
+                const Icon = navIcons[item.view];
+                return (
+                  <Link
+                    className={cx("nav-item", item.view === view && "active")}
+                    href={item.href}
+                    key={item.view}
+                    aria-current={item.view === view ? "page" : undefined}
+                  >
+                    <Icon size={18} />
+                    <span>
+                      <strong>{item.label}</strong>
+                      <small>{item.description}</small>
+                    </span>
+                  </Link>
+                );
+              })}
+            </div>
+          ))}
         </nav>
 
         <div className="nav-health">
@@ -169,18 +171,26 @@ export function PlatformShell({
               {busyAction === "sync" ? <Loader2 size={18} className="spin" /> : <Send size={18} />}
               {apiAvailable ? "Trendyol cek" : "API bekleniyor"}
             </button>
-            <button className="ui-button ghost" onClick={onOpenPortal} disabled={busyAction === "open-gib"}>
-              {busyAction === "open-gib" ? <Loader2 size={18} className="spin" /> : <LogIn size={18} />}
-              e-Arsiv ac
-            </button>
-            <button className="ui-button ghost" onClick={onClosePortalSession} disabled={!apiAvailable || busyAction === "logout-gib"}>
-              {busyAction === "logout-gib" ? <Loader2 size={18} className="spin" /> : <ShieldOff size={18} />}
-              e-Arsiv cikis
-            </button>
-            <button className="ui-button ghost" onClick={onLogout}>
-              <LogOut size={18} />
-              Cikis
-            </button>
+            <details className="command-menu">
+              <summary className="ui-button ghost" aria-label="Diger islemler">
+                <MoreHorizontal size={18} />
+                Diger
+              </summary>
+              <div className="command-menu-pop" role="menu">
+                <button className="command-menu-item" role="menuitem" onClick={onOpenPortal} disabled={busyAction === "open-gib"}>
+                  {busyAction === "open-gib" ? <Loader2 size={16} className="spin" /> : <LogIn size={16} />}
+                  e-Arsiv ac
+                </button>
+                <button className="command-menu-item" role="menuitem" onClick={onClosePortalSession} disabled={!apiAvailable || busyAction === "logout-gib"}>
+                  {busyAction === "logout-gib" ? <Loader2 size={16} className="spin" /> : <ShieldOff size={16} />}
+                  e-Arsiv cikis
+                </button>
+                <button className="command-menu-item danger" role="menuitem" onClick={onLogout}>
+                  <LogOut size={16} />
+                  Cikis
+                </button>
+              </div>
+            </details>
           </div>
         </header>
 
@@ -189,15 +199,19 @@ export function PlatformShell({
             <Boxes size={18} />
             <span>{message}</span>
           </div>
-          <span className={cx("mode-pill", apiAvailable && isLiveMode ? "success" : "warning")}>
-            {!apiAvailable ? "Backend baglantisi bekleniyor" : isLiveMode ? "Canli entegrasyon modu" : "Canli mod kontrol ediliyor"}
+          <span className={cx("mode-pill", !apiAvailable ? "warning" : isLiveMode ? "danger" : "warning")}>
+            {!apiAvailable
+              ? "Backend baglantisi bekleniyor"
+              : isLiveMode
+                ? "● Canli yazma modu — islemler gercek"
+                : "Canli mod kontrol ediliyor"}
           </span>
         </div>
 
         {children}
 
         <nav className="mobile-tabbar" aria-label="Mobil navigasyon">
-          {navItems.map((item) => {
+          {NAV_ITEMS.map((item) => {
             const Icon = navIcons[item.view];
             return (
               <Link className={cx("mobile-tab", item.view === view && "active")} href={item.href} key={item.view}>
