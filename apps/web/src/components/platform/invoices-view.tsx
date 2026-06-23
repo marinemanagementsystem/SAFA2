@@ -287,6 +287,7 @@ function actionCopy(action: DraftActionKind, count: number) {
 
 function toneFromMessage(message: string): NoticeTone {
   const normalized = stringValue(message);
+  if (normalized.includes("iptal")) return "neutral";
   if (
     normalized.includes("basarisiz") ||
     normalized.includes("başarısız") ||
