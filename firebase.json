@@ -1,5 +1,6 @@
 {
   "hosting": {
+    "site": "safa-redesign",
     "public": "apps/web/out",
     "ignore": [
       "firebase.json",
