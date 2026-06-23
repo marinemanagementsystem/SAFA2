@@ -16,9 +16,43 @@ interface PlatformAppProps {
   view: PlatformView;
 }
 
+const CANCELLED_MESSAGE = "Islem iptal edildi; canli sistemde hicbir sey degismedi.";
+
+function confirmLiveAction(message: string) {
+  if (typeof window === "undefined") return true;
+  return window.confirm(`CANLI ISLEM — geri alinamaz.\n\n${message}\n\nDevam edilsin mi?`);
+}
+
 export function PlatformApp({ view }: PlatformAppProps) {
   const platform = usePlatformData();
   const { snapshot } = platform;
+
+  const issueDraftsConfirmed = (ids: string[]) =>
+    confirmLiveAction(`${ids.length} taslak icin GERCEK fatura kesilecek.`)
+      ? platform.issueDrafts(ids)
+      : Promise.resolve(CANCELLED_MESSAGE);
+
+  const uploadPortalDraftsConfirmed = (ids: string[]) =>
+    confirmLiveAction(`${ids.length} taslak GIB e-Arsiv portaline imza bekleyen belge olarak yuklenecek.`)
+      ? platform.uploadPortalDrafts(ids)
+      : Promise.resolve(CANCELLED_MESSAGE);
+
+  const sendInvoiceToTrendyolConfirmed = (id: string) => {
+    if (!confirmLiveAction("Fatura PDF'i Trendyol'a GERCEKTEN gonderilecek.")) return;
+    void platform.sendInvoiceToTrendyol(id);
+  };
+
+  const promoteExternalInvoiceConfirmed = (id: string, sendToTrendyol: boolean) => {
+    if (sendToTrendyol && !confirmLiveAction("e-Arsiv faturasi arsive alinacak ve Trendyol'a GERCEKTEN gonderilecek.")) return;
+    void platform.promoteExternalInvoice(id, sendToTrendyol);
+  };
+
+  const applyGibExternalInvoicesConfirmed = (
+    input: Parameters<typeof platform.applyGibExternalInvoices>[0]
+  ) =>
+    confirmLiveAction("Son donem imzali e-Arsiv kayitlari GERCEKTEN uygulanacak (arsive alma + gerekirse Trendyol gonderimi).")
+      ? platform.applyGibExternalInvoices(input)
+      : Promise.resolve(null);
 
   return (
     <AuthGate>
@@ -67,18 +101,18 @@ export function PlatformApp({ view }: PlatformAppProps) {
               automationStatus={snapshot.automationStatus}
               busyAction={platform.busyAction}
               onApprove={platform.approveDrafts}
-              onIssue={platform.issueDrafts}
-              onUploadPortalDrafts={platform.uploadPortalDrafts}
+              onIssue={issueDraftsConfirmed}
+              onUploadPortalDrafts={uploadPortalDraftsConfirmed}
               onImportExternalInvoices={(source, records) => void platform.importExternalInvoices(source, records)}
               onPreviewGibExternalInvoices={platform.previewGibExternalInvoices}
-              onApplyGibExternalInvoices={platform.applyGibExternalInvoices}
+              onApplyGibExternalInvoices={applyGibExternalInvoicesConfirmed}
               onSyncTrendyolExternalInvoices={() => void platform.syncTrendyolExternalInvoices()}
               onRunAutomationNow={() => void platform.runAutomationNow()}
               onReconcileExternalInvoices={() => void platform.reconcileExternalInvoices()}
               onMatchExternalInvoice={(id, target) => void platform.matchExternalInvoice(id, target)}
-              onPromoteExternalInvoice={(id, sendToTrendyol) => void platform.promoteExternalInvoice(id, sendToTrendyol)}
+              onPromoteExternalInvoice={promoteExternalInvoiceConfirmed}
               onUploadExternalInvoicePdf={(id, file) => void platform.uploadExternalInvoicePdf(id, file)}
-              onSendInvoiceToTrendyol={(id) => void platform.sendInvoiceToTrendyol(id)}
+              onSendInvoiceToTrendyol={sendInvoiceToTrendyolConfirmed}
               onCreateMonthlyArchive={platform.createMonthlyInvoiceArchive}
               onRefresh={() => void platform.refresh()}
               onOpenGibPortal={() => void platform.openGibPortal()}
