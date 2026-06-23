@@ -966,6 +966,62 @@ a.metric-card.linkable:hover small {
   flex-wrap: wrap;
 }
 
+.invoice-lifecycle-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 10px 12px;
+  list-style: none;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface);
+}
+
+.invoice-lifecycle-strip li {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 11px 5px 6px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-muted);
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.invoice-lifecycle-strip li:not(:last-child)::after {
+  content: "→";
+  margin-left: 4px;
+  color: var(--faint);
+  font-weight: 800;
+}
+
+.invoice-lifecycle-strip .lifecycle-no {
+  display: inline-grid;
+  place-items: center;
+  width: 19px;
+  height: 19px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.view-invoices .invoice-lifecycle-strip {
+  border-color: rgba(255, 255, 255, 0.12);
+  background: #16282e;
+}
+
+.view-invoices .invoice-lifecycle-strip li {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.05);
+  color: #dce8ea;
+}
+
 .invoice-ops-warning {
   display: grid;
   grid-template-columns: 34px minmax(0, 1fr) auto;

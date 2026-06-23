@@ -2205,6 +2205,15 @@ function InvoiceOperationsDashboard({
         </div>
       </article>
 
+      <ol className="invoice-lifecycle-strip" aria-label="Fatura yasam dongusu">
+        <li><span className="lifecycle-no">1</span>Taslak</li>
+        <li><span className="lifecycle-no">2</span>Onay</li>
+        <li><span className="lifecycle-no">3</span>GIB / e-Arsiv Imza</li>
+        <li><span className="lifecycle-no">4</span>PDF Arsiv</li>
+        <li><span className="lifecycle-no">5</span>Harici Esleme</li>
+        <li><span className="lifecycle-no">6</span>Pazaryeri Gonderim</li>
+      </ol>
+
       <div className="invoice-ops-warning">
         <AlertTriangle size={20} />
         <div>
