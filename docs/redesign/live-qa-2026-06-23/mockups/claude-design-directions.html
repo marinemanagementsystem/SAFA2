@@ -1,0 +1,452 @@
+<div id="safa-redesign-picker">
+  <style>
+    #safa-redesign-picker {
+      --bg: #f4f6f7;
+      --surface: #ffffff;
+      --ink: #172126;
+      --muted: #647178;
+      --line: #dfe7ea;
+      --line-strong: #c8d4d8;
+      --teal: #087a70;
+      --teal-soft: #e5f4f1;
+      --amber: #9a6700;
+      --amber-soft: #fff5df;
+      --rose: #b8325d;
+      --rose-soft: #ffeaf1;
+      --success: #157347;
+      color: var(--ink);
+    }
+
+    #safa-redesign-picker * {
+      box-sizing: border-box;
+    }
+
+    #safa-redesign-picker .intro {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 18px;
+    }
+
+    #safa-redesign-picker h2 {
+      margin: 0;
+      font-size: 24px;
+      line-height: 1.15;
+      letter-spacing: 0;
+    }
+
+    #safa-redesign-picker .subtitle {
+      max-width: 780px;
+      margin: 8px 0 0;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.45;
+    }
+
+    #safa-redesign-picker .mode-badge {
+      flex: 0 0 auto;
+      border: 1px solid var(--line-strong);
+      border-radius: 999px;
+      padding: 8px 12px;
+      background: #f9fbfb;
+      color: #344148;
+      font-size: 12px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    #safa-redesign-picker .cards-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 16px;
+    }
+
+    #safa-redesign-picker .direction-card {
+      position: relative;
+      display: grid;
+      gap: 12px;
+      min-height: 380px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 14px;
+      background: var(--surface);
+      box-shadow: 0 8px 24px rgba(18, 32, 38, 0.07);
+      cursor: pointer;
+      transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+    }
+
+    #safa-redesign-picker .direction-card:hover {
+      border-color: var(--line-strong);
+      box-shadow: 0 14px 32px rgba(18, 32, 38, 0.1);
+      transform: translateY(-1px);
+    }
+
+    #safa-redesign-picker .direction-card.selected {
+      border-color: var(--teal);
+      box-shadow: 0 0 0 3px rgba(8, 122, 112, 0.16), 0 14px 32px rgba(18, 32, 38, 0.1);
+    }
+
+    #safa-redesign-picker .direction-card.selected::after {
+      content: "Claude onerisi";
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      border-radius: 999px;
+      padding: 4px 8px;
+      background: var(--teal);
+      color: #fff;
+      font-size: 11px;
+      font-weight: 800;
+    }
+
+    #safa-redesign-picker .tag {
+      width: fit-content;
+      border-radius: 999px;
+      padding: 4px 8px;
+      background: var(--teal-soft);
+      color: var(--teal);
+      font-size: 11px;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+
+    #safa-redesign-picker h3 {
+      margin: 0;
+      font-size: 17px;
+      letter-spacing: 0;
+    }
+
+    #safa-redesign-picker .card-copy {
+      margin: 0;
+      min-height: 44px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    #safa-redesign-picker .mini-ui {
+      display: grid;
+      gap: 8px;
+      height: 176px;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 10px;
+      background: var(--bg);
+    }
+
+    #safa-redesign-picker .mini-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      min-height: 18px;
+    }
+
+    #safa-redesign-picker .mini-title {
+      font-size: 10px;
+      font-weight: 800;
+      color: #253238;
+    }
+
+    #safa-redesign-picker .mini-lock {
+      border-radius: 999px;
+      padding: 3px 6px;
+      background: #eef3f4;
+      color: #44525a;
+      font-size: 9px;
+      font-weight: 800;
+    }
+
+    #safa-redesign-picker .metric-row {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 6px;
+    }
+
+    #safa-redesign-picker .metric {
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      padding: 7px;
+      background: #fff;
+    }
+
+    #safa-redesign-picker .metric strong {
+      display: block;
+      color: var(--teal);
+      font-size: 18px;
+      line-height: 1;
+    }
+
+    #safa-redesign-picker .metric span {
+      display: block;
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 10px;
+      line-height: 1.2;
+    }
+
+    #safa-redesign-picker .mini-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 6px 7px;
+      background: #fff;
+      font-size: 10px;
+    }
+
+    #safa-redesign-picker .mini-row .danger {
+      color: var(--rose);
+      font-weight: 800;
+    }
+
+    #safa-redesign-picker .mini-row .warn {
+      color: var(--amber);
+      font-weight: 800;
+    }
+
+    #safa-redesign-picker .kanban {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 5px;
+      height: 130px;
+    }
+
+    #safa-redesign-picker .lane {
+      display: grid;
+      align-content: start;
+      gap: 5px;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      padding: 6px;
+      background: #fff;
+    }
+
+    #safa-redesign-picker .lane-title {
+      color: var(--muted);
+      font-size: 9px;
+      font-weight: 900;
+    }
+
+    #safa-redesign-picker .chip {
+      border: 1px solid var(--line);
+      border-radius: 5px;
+      padding: 5px;
+      background: #f8fbfb;
+      color: #344148;
+      font-size: 9px;
+      line-height: 1.2;
+    }
+
+    #safa-redesign-picker .chip.risk {
+      border-color: rgba(184, 50, 93, 0.38);
+      background: var(--rose-soft);
+      color: var(--rose);
+    }
+
+    #safa-redesign-picker .inbox-grid {
+      display: grid;
+      grid-template-columns: 0.86fr 1.14fr;
+      gap: 7px;
+      height: 132px;
+    }
+
+    #safa-redesign-picker .inbox-list,
+    #safa-redesign-picker .detail-panel {
+      display: grid;
+      align-content: start;
+      gap: 5px;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      padding: 6px;
+      background: #fff;
+      min-width: 0;
+    }
+
+    #safa-redesign-picker .record {
+      display: flex;
+      justify-content: space-between;
+      gap: 5px;
+      border: 1px solid var(--line);
+      border-radius: 5px;
+      padding: 5px;
+      background: #f8fbfb;
+      font-size: 9px;
+    }
+
+    #safa-redesign-picker .record.active {
+      border-color: var(--teal);
+      background: var(--teal-soft);
+      color: var(--teal);
+      font-weight: 900;
+    }
+
+    #safa-redesign-picker .dock-step {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 5px;
+      border: 1px solid var(--line);
+      border-radius: 5px;
+      padding: 5px 6px;
+      background: #fff;
+      font-size: 9px;
+      font-weight: 800;
+    }
+
+    #safa-redesign-picker .dock-step.ok {
+      border-color: rgba(8, 122, 112, 0.45);
+      color: var(--teal);
+    }
+
+    #safa-redesign-picker .dock-step.risk {
+      border-color: rgba(184, 50, 93, 0.45);
+      color: var(--rose);
+      background: #fffafb;
+    }
+
+    #safa-redesign-picker .dock-step.warn {
+      border-color: rgba(154, 103, 0, 0.42);
+      color: var(--amber);
+      background: var(--amber-soft);
+    }
+
+    #safa-redesign-picker .tradeoff {
+      display: grid;
+      gap: 5px;
+      border-top: 1px solid var(--line);
+      padding-top: 10px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.35;
+    }
+
+    #safa-redesign-picker .tradeoff b {
+      color: var(--ink);
+    }
+
+    @media (max-width: 980px) {
+      #safa-redesign-picker .intro {
+        display: grid;
+      }
+
+      #safa-redesign-picker .cards-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+
+  <div class="intro">
+    <div>
+      <h2>Claude Design: SAFA yeni frontend yonleri</h2>
+      <p class="subtitle">
+        Claude Opus 4.8'in onerisi: Dashboard komuta merkezi gibi ozetlesin,
+        Fatura Masasi ise sol liste, sag detay ve guard'li eylem rihtimiyle
+        calissin. Bir yon sec; sonra bunu tek ekranlik prototipe cevirebiliriz.
+      </p>
+    </div>
+    <div class="mode-badge">Preview/Staging: riskli islemler kilitli</div>
+  </div>
+
+  <div class="cards cards-grid">
+    <div class="card direction-card" data-choice="A - Operasyon Komuta Merkezi" onclick="toggleSelect(this)">
+      <div class="tag">Yon A</div>
+      <div>
+        <h3>Operasyon Komuta Merkezi</h3>
+        <p class="card-copy">Ustte metrikler, altta dikkat kuyruklari. Gun basinda neye odaklanacagini hizli gosterir.</p>
+      </div>
+      <div class="mini-ui">
+        <div class="mini-top">
+          <span class="mini-title">Genel operasyon durumu</span>
+          <span class="mini-lock">Staging</span>
+        </div>
+        <div class="metric-row">
+          <div class="metric"><strong>12</strong><span>Bekleyen taslak</span></div>
+          <div class="metric"><strong>5</strong><span>Imza bekliyor</span></div>
+          <div class="metric"><strong>3</strong><span>Eslesmeyen</span></div>
+          <div class="metric"><strong style="color: var(--rose)">1</strong><span>Hata</span></div>
+        </div>
+        <div class="mini-row"><span>Son 7 gun guvenli eslestirme</span><span style="color: var(--success); font-weight: 900">86%</span></div>
+        <div class="mini-row"><span>Trendyol gonderim bekleyen</span><span class="warn">2</span></div>
+      </div>
+      <div class="tradeoff">
+        <span><b>Arti:</b> Durum farkindaligi en yuksek.</span>
+        <span><b>Eksi:</b> Tek kayit uzerinde calisma hizi orta.</span>
+      </div>
+    </div>
+
+    <div class="card direction-card" data-choice="B - Fatura Kanban Akisi" onclick="toggleSelect(this)">
+      <div class="tag">Yon B</div>
+      <div>
+        <h3>Fatura Kanban Akisi</h3>
+        <p class="card-copy">Taslak, imza, arsiv, esleme ve gonderim kolonlari. Sureci gorsel olarak anlatir.</p>
+      </div>
+      <div class="mini-ui">
+        <div class="mini-top">
+          <span class="mini-title">Fatura yasam dongusu</span>
+          <span class="mini-lock">Guard aktif</span>
+        </div>
+        <div class="kanban">
+          <div class="lane">
+            <div class="lane-title">Taslak</div>
+            <div class="chip">SAF-812<br>Onay bekliyor</div>
+            <div class="chip">SAF-815<br>Kalem kontrol</div>
+          </div>
+          <div class="lane">
+            <div class="lane-title">Imza</div>
+            <div class="chip risk">SAF-813<br>GIB kilitli</div>
+          </div>
+          <div class="lane">
+            <div class="lane-title">Arsiv</div>
+            <div class="chip">SAF-809<br>PDF hazir</div>
+          </div>
+          <div class="lane">
+            <div class="lane-title">Gonderim</div>
+            <div class="chip risk">Trendyol<br>Canli mod</div>
+          </div>
+        </div>
+      </div>
+      <div class="tradeoff">
+        <span><b>Arti:</b> Nerede takildigi cok net gorunur.</span>
+        <span><b>Eksi:</b> Yuksek hacimde detay ve denetim izi sikisir.</span>
+      </div>
+    </div>
+
+    <div class="card direction-card selected" data-choice="C - Minimal Ledger Inbox" onclick="toggleSelect(this)">
+      <div class="tag">Yon C - Onerilen</div>
+      <div>
+        <h3>Minimal Ledger / Inbox</h3>
+        <p class="card-copy">Sol kayit listesi, sag detay ve yasam dongusu sirasinda guard'li eylem rihtimi.</p>
+      </div>
+      <div class="mini-ui">
+        <div class="mini-top">
+          <span class="mini-title">Fatura Operasyon Masasi</span>
+          <span class="mini-lock">Read-only preview</span>
+        </div>
+        <div class="inbox-grid">
+          <div class="inbox-list">
+            <div class="record active"><span>SAF-812</span><span>Imza</span></div>
+            <div class="record"><span>SAF-813</span><span>Arsiv</span></div>
+            <div class="record"><span>SAF-814</span><span style="color: var(--amber)">Esleme</span></div>
+            <div class="record"><span>SAF-815</span><span>Gonderim</span></div>
+          </div>
+          <div class="detail-panel">
+            <div class="dock-step ok"><span>1. Taslak onay</span><span>done</span></div>
+            <div class="dock-step risk"><span>2. GIB/e-Arsiv imza</span><span>locked</span></div>
+            <div class="dock-step"><span>3. PDF arsiv</span><span>open</span></div>
+            <div class="dock-step risk"><span>4. Trendyol gonder</span><span>locked</span></div>
+            <div class="dock-step warn"><span>Kontrol et ve uygula</span><span>dry-run</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="tradeoff">
+        <span><b>Arti:</b> Triyaj hizi, detay ve denetim izi en dengeli.</span>
+        <span><b>Eksi:</b> Buyuk resmi dashboard desteklemeli.</span>
+      </div>
+    </div>
+  </div>
+</div>

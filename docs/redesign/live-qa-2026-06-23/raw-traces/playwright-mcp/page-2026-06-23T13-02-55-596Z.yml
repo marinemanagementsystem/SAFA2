@@ -1,0 +1,330 @@
+- generic [active] [ref=e1]:
+  - alert [ref=e7]
+  - main [ref=e8]:
+    - complementary "SAFA navigasyon" [ref=e9]:
+      - link "SAFA overview" [ref=e10] [cursor=pointer]:
+        - /url: /
+        - generic [ref=e11]: S
+        - generic [ref=e12]:
+          - strong [ref=e13]: SAFA
+          - generic [ref=e14]: Commerce OS
+      - navigation "Ana sayfalar" [ref=e15]:
+        - generic [ref=e16]:
+          - generic [ref=e17]: Islem
+          - link "Genel Canli operasyon ozeti" [ref=e18] [cursor=pointer]:
+            - /url: /
+            - img [ref=e19]
+            - generic [ref=e22]:
+              - strong [ref=e23]: Genel
+              - generic [ref=e24]: Canli operasyon ozeti
+          - link "Siparisler Paket ve siparis takibi" [ref=e25] [cursor=pointer]:
+            - /url: /orders
+            - img [ref=e26]
+            - generic [ref=e31]:
+              - strong [ref=e32]: Siparisler
+              - generic [ref=e33]: Paket ve siparis takibi
+          - link "Faturalar Taslak ve fatura akisi" [ref=e34] [cursor=pointer]:
+            - /url: /invoices
+            - img [ref=e35]
+            - generic [ref=e37]:
+              - strong [ref=e38]: Faturalar
+              - generic [ref=e39]: Taslak ve fatura akisi
+        - generic [ref=e40]:
+          - generic [ref=e41]: Kurulum
+          - link "Entegrasyonlar Pazaryeri ve kargo baglantilari" [ref=e42] [cursor=pointer]:
+            - /url: /integrations
+            - img [ref=e43]
+            - generic [ref=e49]:
+              - strong [ref=e50]: Entegrasyonlar
+              - generic [ref=e51]: Pazaryeri ve kargo baglantilari
+          - link "Kayitli Bilgiler Sifreli profil kasasi" [ref=e52] [cursor=pointer]:
+            - /url: /saved-information
+            - img [ref=e53]
+            - generic [ref=e56]:
+              - strong [ref=e57]: Kayitli Bilgiler
+              - generic [ref=e58]: Sifreli profil kasasi
+          - link "Operasyon Kuyruk, hata ve sync izleme" [ref=e59] [cursor=pointer]:
+            - /url: /operations
+            - img [ref=e60]
+            - generic [ref=e62]:
+              - strong [ref=e63]: Operasyon
+              - generic [ref=e64]: Kuyruk, hata ve sync izleme
+          - link "Ayarlar Runtime ve saglayici durumu" [ref=e65] [cursor=pointer]:
+            - /url: /settings
+            - img [ref=e66]
+            - generic [ref=e69]:
+              - strong [ref=e70]: Ayarlar
+              - generic [ref=e71]: Runtime ve saglayici durumu
+      - generic [ref=e73]:
+        - text: Baglanti skoru
+        - strong [ref=e74]: 0/2 canli
+    - generic [ref=e76]:
+      - generic [ref=e77]:
+        - generic [ref=e78]:
+          - heading "Entegrasyonlar" [level=1] [ref=e79]
+          - paragraph [ref=e80]: Trendyol, e-Arsiv ve GIB baglanti bilgilerini yonet.
+        - generic "Ana islemler" [ref=e81]:
+          - button "Yenile" [disabled] [ref=e82]:
+            - img [ref=e83]
+            - text: Yenile
+          - button "Trendyol cek" [ref=e85] [cursor=pointer]:
+            - img [ref=e86]
+            - text: Trendyol cek
+          - group [ref=e89]:
+            - generic "Diger islemler" [ref=e90] [cursor=pointer]:
+              - img [ref=e91]
+              - text: Diger
+      - status [ref=e95]:
+        - generic [ref=e96]:
+          - img [ref=e97]
+          - generic [ref=e107]: Canli entegrasyon modu acik. Sahte veri uretilmez; baglanti yoksa islem hata verir.
+        - generic [ref=e108]: Canli mod kontrol ediliyor
+      - generic [ref=e109]:
+        - generic [ref=e110]:
+          - generic [ref=e111]:
+            - generic [ref=e112]:
+              - text: Profil kasasi
+              - heading "Kayitli profilden doldur" [level=2] [ref=e113]
+              - paragraph [ref=e114]: Profil secildiginde Trendyol ve e-Arsiv alanlari otomatik dolar.
+            - generic [ref=e115]: Kasa kapali
+          - generic [ref=e116]:
+            - textbox [ref=e117]: Kasa 2
+            - generic [ref=e118]:
+              - generic [ref=e119]: Kasa sec
+              - combobox "Kasa sec" [ref=e120]:
+                - option "Kasa 2" [selected]
+                - option "Varsayilan kasa"
+            - generic [ref=e121]:
+              - generic [ref=e122]: Kasa sifresi
+              - textbox "Kasa sifresi" [ref=e123]
+            - button "Kasayi ac" [ref=e124] [cursor=pointer]:
+              - img [ref=e125]
+              - text: Kasayi ac
+        - region "Otomasyon guncellik durumu" [ref=e128]:
+          - generic [ref=e129]:
+            - generic [ref=e130]: Guncel degil
+            - heading "Otomasyon guncelligi" [level=2] [ref=e131]
+            - paragraph [ref=e132]: Canli API otomasyon durumunu henuz dondurmedi.
+          - generic [ref=e134]: Otomasyon durumu alinamadi.
+          - generic [ref=e135]:
+            - generic [ref=e136]: Otomasyon durumu bekleniyor
+            - button "Simdi guncelle" [disabled] [ref=e137]:
+              - img [ref=e138]
+              - text: Simdi guncelle
+        - generic [ref=e143]:
+          - generic [ref=e144]:
+            - generic [ref=e145]:
+              - text: Entegrasyonlar
+              - heading "Baglanti kartlari" [level=2] [ref=e146]
+              - paragraph [ref=e147]: Kartlardan birini acarak ilgili alanlari ve operasyon butonlarini sayfa ici modalda yonetin.
+            - img [ref=e148]
+          - generic [ref=e154]:
+            - button "Pazaryeri Trendyol Bekliyor Satici bilgileri ve partner aksiyonu." [ref=e155] [cursor=pointer]:
+              - img [ref=e157]
+              - generic [ref=e160]:
+                - generic [ref=e161]: Pazaryeri
+                - generic [ref=e162]:
+                  - strong [ref=e163]: Trendyol
+                  - generic [ref=e164]: Bekliyor
+                - generic [ref=e165]: Satici bilgileri ve partner aksiyonu.
+            - button "Pazaryeri Hepsiburada Bekliyor Katalog, stok/fiyat, siparis ve paketleme." [ref=e166] [cursor=pointer]:
+              - img [ref=e168]
+              - generic [ref=e171]:
+                - generic [ref=e172]: Pazaryeri
+                - generic [ref=e173]:
+                  - strong [ref=e174]: Hepsiburada
+                  - generic [ref=e175]: Bekliyor
+                - generic [ref=e176]: Katalog, stok/fiyat, siparis ve paketleme.
+            - button "Fatura e-Arsiv Portal Bekliyor Portal girisi, oturum ve baglanti." [ref=e177] [cursor=pointer]:
+              - img [ref=e179]
+              - generic [ref=e182]:
+                - generic [ref=e183]: Fatura
+                - generic [ref=e184]:
+                  - strong [ref=e185]: e-Arsiv Portal
+                  - generic [ref=e186]: Bekliyor
+                - generic [ref=e187]: Portal girisi, oturum ve baglanti.
+            - button "Fatura GIB Direct Eksik ayar Servis, imza ve yetki ayarlari." [ref=e188] [cursor=pointer]:
+              - img [ref=e190]
+              - generic [ref=e194]:
+                - generic [ref=e195]: Fatura
+                - generic [ref=e196]:
+                  - strong [ref=e197]: GIB Direct
+                  - generic [ref=e198]: Eksik ayar
+                - generic [ref=e199]: Servis, imza ve yetki ayarlari.
+        - generic [ref=e200]:
+          - generic [ref=e201]:
+            - generic [ref=e202]:
+              - text: Adapter catalog
+              - heading "Pazaryeri adaptorlari" [level=2] [ref=e203]
+              - paragraph [ref=e204]: Planli pazaryeri kanallari ortak modele hazir.
+            - img [ref=e205]
+          - generic [ref=e211]:
+            - article [ref=e212]:
+              - generic [ref=e213]: AM
+              - generic [ref=e214]:
+                - generic [ref=e215]:
+                  - strong [ref=e216]: Amazon
+                  - generic [ref=e217]: Adapter planlandi
+                - heading "Adapter planlandi" [level=3] [ref=e218]
+                - paragraph [ref=e219]: Marketplace order ve settlement akislari icin genislemeye hazir.
+                - generic [ref=e220]:
+                  - generic [ref=e221]: order import
+                  - generic [ref=e222]: tax docs
+                  - generic [ref=e223]: settlement
+              - button "Amazon adapter planlandi" [disabled] [ref=e224]:
+                - img [ref=e225]
+            - article [ref=e229]:
+              - generic [ref=e230]: N1
+              - generic [ref=e231]:
+                - generic [ref=e232]:
+                  - strong [ref=e233]: N11
+                  - generic [ref=e234]: Adapter planlandi
+                - heading "Adapter planlandi" [level=3] [ref=e235]
+                - paragraph [ref=e236]: Siparis cekme, fatura baglama ve kargo durumlarini ortak modele tasir.
+                - generic [ref=e237]:
+                  - generic [ref=e238]: siparis
+                  - generic [ref=e239]: fatura
+                  - generic [ref=e240]: kargo
+              - button "N11 adapter planlandi" [disabled] [ref=e241]:
+                - img [ref=e242]
+            - article [ref=e246]:
+              - generic [ref=e247]: Cİ
+              - generic [ref=e248]:
+                - generic [ref=e249]:
+                  - strong [ref=e250]: Ciceksepeti
+                  - generic [ref=e251]: Adapter planlandi
+                - heading "Adapter planlandi" [level=3] [ref=e252]
+                - paragraph [ref=e253]: Coklu kanal satis gorunurlugu icin sonraki pazaryeri adaptoru.
+                - generic [ref=e254]:
+                  - generic [ref=e255]: kanal
+                  - generic [ref=e256]: fatura
+                  - generic [ref=e257]: rapor
+              - button "Ciceksepeti adapter planlandi" [disabled] [ref=e258]:
+                - img [ref=e259]
+        - generic [ref=e263]:
+          - generic [ref=e264]:
+            - generic [ref=e265]:
+              - text: Adapter catalog
+              - heading "Fatura saglayicilari" [level=2] [ref=e266]
+              - paragraph [ref=e267]: "Runtime saglayici: bekleniyor"
+            - img [ref=e268]
+          - article [ref=e275]:
+            - generic [ref=e276]: OZ
+            - generic [ref=e277]:
+              - generic [ref=e278]:
+                - strong [ref=e279]: Ozel Entegratorler
+                - generic [ref=e280]: Adapter planlandi
+              - heading "Adapter planlandi" [level=3] [ref=e281]
+              - paragraph [ref=e282]: Logo, Mikro, Paraşut veya benzeri saglayicilar icin ortak fatura adaptoru.
+              - generic [ref=e283]:
+                - generic [ref=e284]: UBL
+                - generic [ref=e285]: arsiv
+                - generic [ref=e286]: mutabakat
+            - button "Ozel Entegratorler adapter planlandi" [disabled] [ref=e287]:
+              - img [ref=e288]
+        - generic [ref=e292]:
+          - generic [ref=e293]:
+            - generic [ref=e294]:
+              - text: Adapter catalog
+              - heading "Kargo firmalari" [level=2] [ref=e295]
+              - paragraph [ref=e296]: Kargo takip ve SLA katmani icin planli adapter yuzeyi.
+            - img [ref=e297]
+          - generic [ref=e303]:
+            - article [ref=e304]:
+              - generic [ref=e305]: YU
+              - generic [ref=e306]:
+                - generic [ref=e307]:
+                  - strong [ref=e308]: Yurtici Kargo
+                  - generic [ref=e309]: Adapter planlandi
+                - heading "Adapter planlandi" [level=3] [ref=e310]
+                - paragraph [ref=e311]: Kargo takip numarasi, teslimat durumu ve iade akislari icin hazir slot.
+                - generic [ref=e312]:
+                  - generic [ref=e313]: tracking
+                  - generic [ref=e314]: teslimat
+                  - generic [ref=e315]: iade
+              - button "Yurtici Kargo adapter planlandi" [disabled] [ref=e316]:
+                - img [ref=e317]
+            - article [ref=e321]:
+              - generic [ref=e322]: AR
+              - generic [ref=e323]:
+                - generic [ref=e324]:
+                  - strong [ref=e325]: Aras Kargo
+                  - generic [ref=e326]: Adapter planlandi
+                - heading "Adapter planlandi" [level=3] [ref=e327]
+                - paragraph [ref=e328]: Operasyon ekraninda kargo SLA ve durum esleme icin temsil edilir.
+                - generic [ref=e329]:
+                  - generic [ref=e330]: tracking
+                  - generic [ref=e331]: SLA
+                  - generic [ref=e332]: bildirim
+              - button "Aras Kargo adapter planlandi" [disabled] [ref=e333]:
+                - img [ref=e334]
+            - article [ref=e338]:
+              - generic [ref=e339]: MN
+              - generic [ref=e340]:
+                - generic [ref=e341]:
+                  - strong [ref=e342]: MNG Kargo
+                  - generic [ref=e343]: Adapter planlandi
+                - heading "Adapter planlandi" [level=3] [ref=e344]
+                - paragraph [ref=e345]: Kargo firma havuzunda aktiflestirilebilir saglayici olarak hazir.
+                - generic [ref=e346]:
+                  - generic [ref=e347]: tracking
+                  - generic [ref=e348]: sube
+                  - generic [ref=e349]: iade
+              - button "MNG Kargo adapter planlandi" [disabled] [ref=e350]:
+                - img [ref=e351]
+            - article [ref=e355]:
+              - generic [ref=e356]: SU
+              - generic [ref=e357]:
+                - generic [ref=e358]:
+                  - strong [ref=e359]: Surat Kargo
+                  - generic [ref=e360]: Adapter planlandi
+                - heading "Adapter planlandi" [level=3] [ref=e361]
+                - paragraph [ref=e362]: Durum normalize etme ve teslimat uyarilari icin genisletilebilir.
+                - generic [ref=e363]:
+                  - generic [ref=e364]: tracking
+                  - generic [ref=e365]: durum
+                  - generic [ref=e366]: uyari
+              - button "Surat Kargo adapter planlandi" [disabled] [ref=e367]:
+                - img [ref=e368]
+            - article [ref=e372]:
+              - generic [ref=e373]: PT
+              - generic [ref=e374]:
+                - generic [ref=e375]:
+                  - strong [ref=e376]: PTT Kargo
+                  - generic [ref=e377]: Adapter planlandi
+                - heading "Adapter planlandi" [level=3] [ref=e378]
+                - paragraph [ref=e379]: Kamu kargo akislari ve takip kodu eslemeleri icin planli slot.
+                - generic [ref=e380]:
+                  - generic [ref=e381]: tracking
+                  - generic [ref=e382]: teslimat
+                  - generic [ref=e383]: rapor
+              - button "PTT Kargo adapter planlandi" [disabled] [ref=e384]:
+                - img [ref=e385]
+            - article [ref=e389]:
+              - generic [ref=e390]: HE
+              - generic [ref=e391]:
+                - generic [ref=e392]:
+                  - strong [ref=e393]: HepsiJet
+                  - generic [ref=e394]: Adapter planlandi
+                - heading "Adapter planlandi" [level=3] [ref=e395]
+                - paragraph [ref=e396]: Hepsiburada operasyonlariyla birlikte kargo katmanina baglanacak.
+                - generic [ref=e397]:
+                  - generic [ref=e398]: tracking
+                  - generic [ref=e399]: SLA
+                  - generic [ref=e400]: iade
+              - button "HepsiJet adapter planlandi" [disabled] [ref=e401]:
+                - img [ref=e402]
+            - article [ref=e406]:
+              - generic [ref=e407]: TR
+              - generic [ref=e408]:
+                - generic [ref=e409]:
+                  - strong [ref=e410]: Trendyol Express
+                  - generic [ref=e411]: Adapter planlandi
+                - heading "Adapter planlandi" [level=3] [ref=e412]
+                - paragraph [ref=e413]: Trendyol paketleri icin kargo sinyallerini ayri izleme katmanina tasir.
+                - generic [ref=e414]:
+                  - generic [ref=e415]: tracking
+                  - generic [ref=e416]: paket
+                  - generic [ref=e417]: teslimat
+              - button "Trendyol Express adapter planlandi" [disabled] [ref=e418]:
+                - img [ref=e419]

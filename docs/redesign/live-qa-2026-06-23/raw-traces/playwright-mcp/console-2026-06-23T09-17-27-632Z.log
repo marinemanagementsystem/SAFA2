@@ -1,0 +1,36 @@
+[     867ms] [INFO] [SAFA API] -> GET /auth/session {method: GET, path: /auth/session, url: /api/auth/session, body: undefined, requestedAt: 2026-06-23T09:17:28.498Z} @ https://safa-redesign.web.app/_next/static/chunks/0gvqwh8lbqr0k.js:0
+[     869ms] [INFO] [SAFA API] -> GET /orders {method: GET, path: /orders, url: /api/orders, body: undefined, requestedAt: 2026-06-23T09:17:28.501Z} @ https://safa-redesign.web.app/_next/static/chunks/0gvqwh8lbqr0k.js:0
+[     870ms] [INFO] [SAFA API] -> GET /products {method: GET, path: /products, url: /api/products, body: undefined, requestedAt: 2026-06-23T09:17:28.502Z} @ https://safa-redesign.web.app/_next/static/chunks/0gvqwh8lbqr0k.js:0
+[     871ms] [INFO] [SAFA API] -> GET /integrations/hepsiburada/order-lines {method: GET, path: /integrations/hepsiburada/order-lines, url: /api/integrations/hepsiburada/order-lines, body: undefined, requestedAt: 2026-06-23T09:17:28.502Z} @ https://safa-redesign.web.app/_next/static/chunks/0gvqwh8lbqr0k.js:0
+[     872ms] [INFO] [SAFA API] -> GET /invoice-drafts {method: GET, path: /invoice-drafts, url: /api/invoice-drafts, body: undefined, requestedAt: 2026-06-23T09:17:28.503Z} @ https://safa-redesign.web.app/_next/static/chunks/0gvqwh8lbqr0k.js:0
+[     872ms] [INFO] [SAFA API] -> GET /invoices {method: GET, path: /invoices, url: /api/invoices, body: undefined, requestedAt: 2026-06-23T09:17:28.504Z} @ https://safa-redesign.web.app/_next/static/chunks/0gvqwh8lbqr0k.js:0
+[     873ms] [INFO] [SAFA API] -> GET /external-invoices {method: GET, path: /external-invoices, url: /api/external-invoices, body: undefined, requestedAt: 2026-06-23T09:17:28.504Z} @ https://safa-redesign.web.app/_next/static/chunks/0gvqwh8lbqr0k.js:0
+[     873ms] [INFO] [SAFA API] -> GET /jobs {method: GET, path: /jobs, url: /api/jobs, body: undefined, requestedAt: 2026-06-23T09:17:28.505Z} @ https://safa-redesign.web.app/_next/static/chunks/0gvqwh8lbqr0k.js:0
+[     874ms] [INFO] [SAFA API] -> GET /settings {method: GET, path: /settings, url: /api/settings, body: undefined, requestedAt: 2026-06-23T09:17:28.505Z} @ https://safa-redesign.web.app/_next/static/chunks/0gvqwh8lbqr0k.js:0
+[     874ms] [INFO] [SAFA API] -> GET /settings/connections {method: GET, path: /settings/connections, url: /api/settings/connections, body: undefined, requestedAt: 2026-06-23T09:17:28.506Z} @ https://safa-redesign.web.app/_next/static/chunks/0gvqwh8lbqr0k.js:0
+[     875ms] [INFO] [SAFA API] -> GET /automation/status {method: GET, path: /automation/status, url: /api/automation/status, body: undefined, requestedAt: 2026-06-23T09:17:28.506Z} @ https://safa-redesign.web.app/_next/static/chunks/0gvqwh8lbqr0k.js:0
+[     880ms] [INFO] [SAFA ROUTE] navigation {from: null, to: /, pathname: /, search: null, navigatedAt: 2026-06-23T09:17:28.511Z} @ https://safa-redesign.web.app/_next/static/chunks/0u_z2k12x9vs1.js:0
+[    2028ms] [ERROR] Failed to load resource: the server responded with a status of 404 () @ https://safa-redesign.web.app/favicon.ico:0
+[   21006ms] [ERROR] Failed to load resource: the server responded with a status of 401 () @ https://safa-redesign.web.app/api/settings:0
+[   21007ms] [ERROR] Failed to load resource: the server responded with a status of 401 () @ https://safa-redesign.web.app/api/settings/connections:0
+[   21007ms] [ERROR] Failed to load resource: the server responded with a status of 401 () @ https://safa-redesign.web.app/api/integrations/hepsiburada/order-lines:0
+[   21007ms] [ERROR] Failed to load resource: the server responded with a status of 401 () @ https://safa-redesign.web.app/api/products:0
+[   21007ms] [ERROR] Failed to load resource: the server responded with a status of 401 () @ https://safa-redesign.web.app/api/orders:0
+[   21008ms] [ERROR] Failed to load resource: the server responded with a status of 401 () @ https://safa-redesign.web.app/api/automation/status:0
+[   21009ms] [INFO] [SAFA API] <- 200 GET /auth/session (20142ms) {method: GET, path: /auth/session, status: 200, statusText: , ok: true} @ https://safa-redesign.web.app/_next/static/chunks/0gvqwh8lbqr0k.js:0
+[   21010ms] [WARNING] [SAFA API] <- 401 GET /settings (20136ms) {method: GET, path: /settings, status: 401, statusText: , ok: false} @ https://safa-redesign.web.app/_next/static/chunks/0gvqwh8lbqr0k.js:0
+[   21010ms] [WARNING] [SAFA API] <- 401 GET /settings/connections (20136ms) {method: GET, path: /settings/connections, status: 401, statusText: , ok: false} @ https://safa-redesign.web.app/_next/static/chunks/0gvqwh8lbqr0k.js:0
+[   21010ms] [WARNING] [SAFA API] <- 401 GET /integrations/hepsiburada/order-lines (20140ms) {method: GET, path: /integrations/hepsiburada/order-lines, status: 401, statusText: , ok: false} @ https://safa-redesign.web.app/_next/static/chunks/0gvqwh8lbqr0k.js:0
+[   21011ms] [WARNING] [SAFA API] <- 401 GET /products (20141ms) {method: GET, path: /products, status: 401, statusText: , ok: false} @ https://safa-redesign.web.app/_next/static/chunks/0gvqwh8lbqr0k.js:0
+[   21011ms] [WARNING] [SAFA API] <- 401 GET /orders (20142ms) {method: GET, path: /orders, status: 401, statusText: , ok: false} @ https://safa-redesign.web.app/_next/static/chunks/0gvqwh8lbqr0k.js:0
+[   21011ms] [ERROR] Failed to load resource: the server responded with a status of 401 () @ https://safa-redesign.web.app/api/invoices:0
+[   21011ms] [ERROR] Failed to load resource: the server responded with a status of 401 () @ https://safa-redesign.web.app/api/invoice-drafts:0
+[   21033ms] [WARNING] [SAFA API] <- 401 GET /automation/status (20158ms) {method: GET, path: /automation/status, status: 401, statusText: , ok: false} @ https://safa-redesign.web.app/_next/static/chunks/0gvqwh8lbqr0k.js:0
+[   21033ms] [ERROR] Failed to load resource: the server responded with a status of 401 () @ https://safa-redesign.web.app/api/jobs:0
+[   21033ms] [ERROR] Failed to load resource: the server responded with a status of 401 () @ https://safa-redesign.web.app/api/external-invoices:0
+[   21033ms] [WARNING] [SAFA API] <- 401 GET /invoices (20161ms) {method: GET, path: /invoices, status: 401, statusText: , ok: false} @ https://safa-redesign.web.app/_next/static/chunks/0gvqwh8lbqr0k.js:0
+[   21033ms] [WARNING] [SAFA API] <- 401 GET /invoice-drafts (20161ms) {method: GET, path: /invoice-drafts, status: 401, statusText: , ok: false} @ https://safa-redesign.web.app/_next/static/chunks/0gvqwh8lbqr0k.js:0
+[   21033ms] [WARNING] [SAFA API] <- 401 GET /jobs (20160ms) {method: GET, path: /jobs, status: 401, statusText: , ok: false} @ https://safa-redesign.web.app/_next/static/chunks/0gvqwh8lbqr0k.js:0
+[   21033ms] [WARNING] [SAFA API] <- 401 GET /external-invoices (20160ms) {method: GET, path: /external-invoices, status: 401, statusText: , ok: false} @ https://safa-redesign.web.app/_next/static/chunks/0gvqwh8lbqr0k.js:0
+[   39359ms] [INFO] [SAFA API] -> POST /auth/login {method: POST, path: /auth/login, url: /api/auth/login, body: Object, requestedAt: 2026-06-23T09:18:06.990Z} @ https://safa-redesign.web.app/_next/static/chunks/0gvqwh8lbqr0k.js:0
+[   39491ms] [INFO] [SAFA API] <- 201 POST /auth/login (132ms) {method: POST, path: /auth/login, status: 201, statusText: , ok: true} @ https://safa-redesign.web.app/_next/static/chunks/0gvqwh8lbqr0k.js:0

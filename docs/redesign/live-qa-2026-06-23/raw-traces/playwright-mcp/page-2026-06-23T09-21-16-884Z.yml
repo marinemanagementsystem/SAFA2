@@ -1,0 +1,185 @@
+- generic [active] [ref=e1]:
+  - alert [ref=e2]
+  - main [ref=e3]:
+    - complementary "SAFA navigasyon" [ref=e4]:
+      - link "SAFA overview" [ref=e5] [cursor=pointer]:
+        - /url: /
+        - generic [ref=e6]: S
+        - generic [ref=e7]:
+          - strong [ref=e8]: SAFA
+          - generic [ref=e9]: Commerce OS
+      - navigation "Ana sayfalar" [ref=e10]:
+        - generic [ref=e11]:
+          - generic [ref=e12]: Islem
+          - link "Genel Canli operasyon ozeti" [ref=e13] [cursor=pointer]:
+            - /url: /
+            - img [ref=e14]
+            - generic [ref=e17]:
+              - strong [ref=e18]: Genel
+              - generic [ref=e19]: Canli operasyon ozeti
+          - link "Siparisler Paket ve siparis takibi" [ref=e20] [cursor=pointer]:
+            - /url: /orders
+            - img [ref=e21]
+            - generic [ref=e26]:
+              - strong [ref=e27]: Siparisler
+              - generic [ref=e28]: Paket ve siparis takibi
+          - link "Faturalar Taslak ve fatura akisi" [ref=e29] [cursor=pointer]:
+            - /url: /invoices
+            - img [ref=e30]
+            - generic [ref=e32]:
+              - strong [ref=e33]: Faturalar
+              - generic [ref=e34]: Taslak ve fatura akisi
+        - generic [ref=e35]:
+          - generic [ref=e36]: Kurulum
+          - link "Entegrasyonlar Pazaryeri ve kargo baglantilari" [ref=e37] [cursor=pointer]:
+            - /url: /integrations
+            - img [ref=e38]
+            - generic [ref=e44]:
+              - strong [ref=e45]: Entegrasyonlar
+              - generic [ref=e46]: Pazaryeri ve kargo baglantilari
+          - link "Kayitli Bilgiler Sifreli profil kasasi" [ref=e47] [cursor=pointer]:
+            - /url: /saved-information
+            - img [ref=e48]
+            - generic [ref=e51]:
+              - strong [ref=e52]: Kayitli Bilgiler
+              - generic [ref=e53]: Sifreli profil kasasi
+          - link "Operasyon Kuyruk, hata ve sync izleme" [ref=e54] [cursor=pointer]:
+            - /url: /operations
+            - img [ref=e55]
+            - generic [ref=e57]:
+              - strong [ref=e58]: Operasyon
+              - generic [ref=e59]: Kuyruk, hata ve sync izleme
+          - link "Ayarlar Runtime ve saglayici durumu" [ref=e60] [cursor=pointer]:
+            - /url: /settings
+            - img [ref=e61]
+            - generic [ref=e64]:
+              - strong [ref=e65]: Ayarlar
+              - generic [ref=e66]: Runtime ve saglayici durumu
+      - generic [ref=e68]:
+        - text: Baglanti skoru
+        - strong [ref=e69]: 2/2 canli
+    - generic [ref=e71]:
+      - generic [ref=e72]:
+        - generic [ref=e73]:
+          - heading "Operasyon merkezi" [level=1] [ref=e74]
+          - paragraph [ref=e75]: Siparis, fatura, e-Arsiv ve entegrasyon durumunu tek yerden takip et.
+        - generic "Ana islemler" [ref=e76]:
+          - button "Yenile" [ref=e77] [cursor=pointer]:
+            - img [ref=e78]
+            - text: Yenile
+          - button "Trendyol cek" [ref=e83] [cursor=pointer]:
+            - img [ref=e84]
+            - text: Trendyol cek
+          - group [ref=e87]:
+            - generic "Diger islemler" [ref=e88] [cursor=pointer]:
+              - img [ref=e89]
+              - text: Diger
+      - status [ref=e93]:
+        - generic [ref=e94]:
+          - img [ref=e95]
+          - generic [ref=e105]: "Canli entegrasyon modu acik. GIB direct icin eksik ayar var: GIB vergi kimlik no, GIB servis URL, Fatura seri prefix, Fatura sira numarasi, Mali muhur/NES imzalama komutu, GIB SOAP/WSS imzalama komutu, GIB SOAP govde sablonu."
+        - generic [ref=e106]: ● Canli yazma modu — islemler gercek
+      - generic [ref=e107]:
+        - generic [ref=e108]:
+          - generic [ref=e109]:
+            - heading "Bugunku operasyon durumu" [level=2] [ref=e110]
+            - paragraph [ref=e111]: Trendyol teslim paketleri, e-Arsiv taslaklari, PDF ciktilari ve entegrasyon sagligi burada ozetlenir.
+            - generic [ref=e112]:
+              - button "Trendyol cek" [ref=e113] [cursor=pointer]:
+                - img [ref=e114]
+                - text: Trendyol cek
+              - link "Entegrasyonlari gor" [ref=e117] [cursor=pointer]:
+                - /url: /integrations
+                - text: Entegrasyonlari gor
+                - img [ref=e118]
+          - generic "Operasyon akisi" [ref=e120]:
+            - generic [ref=e121]:
+              - img [ref=e122]
+              - generic [ref=e127]: Orders
+              - strong [ref=e128]: "500"
+            - generic [ref=e130]:
+              - img [ref=e131]
+              - generic [ref=e133]: Drafts
+              - strong [ref=e134]: "76"
+            - generic [ref=e136]:
+              - img [ref=e137]
+              - generic [ref=e139]: Jobs
+              - strong [ref=e140]: 7 hata
+        - region "Platform metrikleri" [ref=e141]:
+          - article [ref=e142]:
+            - text: Teslim paket
+            - strong [ref=e143]: "500"
+            - generic [ref=e144]: Aktif liste
+          - article [ref=e145]:
+            - text: SAFA fatura kapsami
+            - strong [ref=e146]: 0 / 424
+            - generic [ref=e147]: SAFA'da kesilen / harici bulunan
+          - article [ref=e148]:
+            - text: Taslak kontrol
+            - strong [ref=e149]: 76 / 0
+            - generic [ref=e150]: Hazir / onayli, 424 harici kapali
+          - article [ref=e151]:
+            - text: Siparis hacmi
+            - strong [ref=e152]: ₺129.956,70
+            - generic [ref=e153]: Filtrelenmemis toplam
+        - generic [ref=e154]:
+          - article [ref=e155]:
+            - generic [ref=e156]:
+              - generic [ref=e157]:
+                - text: Aktif saglayicilar
+                - heading "Canli baglantilar" [level=2] [ref=e158]
+              - link "Yonet" [ref=e159] [cursor=pointer]:
+                - /url: /integrations
+            - generic [ref=e160]:
+              - generic [ref=e161]:
+                - generic [ref=e162]: TR
+                - generic [ref=e163]:
+                  - strong [ref=e164]: Trendyol
+                  - generic [ref=e165]: Canli siparis ve fatura PDF akisi
+                - generic [ref=e166]: Aktif
+              - generic [ref=e167]:
+                - generic [ref=e168]: HE
+                - generic [ref=e169]:
+                  - strong [ref=e170]: Hepsiburada
+                  - generic [ref=e171]: Katalog, stok/fiyat ve paketleme akisi
+                - generic [ref=e172]: Aktif
+              - generic [ref=e173]:
+                - generic [ref=e174]: GI
+                - generic [ref=e175]:
+                  - strong [ref=e176]: GIB e-Arsiv
+                  - generic [ref=e177]: Portal ve direct entegrasyon merkezi
+                - generic [ref=e178]: Aktif
+          - article [ref=e179]:
+            - generic [ref=e180]:
+              - generic [ref=e181]:
+                - text: Son olay
+                - heading "Operasyon nabzi" [level=2] [ref=e182]
+              - link "Kuyruga git" [ref=e183] [cursor=pointer]:
+                - /url: /operations
+            - generic [ref=e184]:
+              - generic [ref=e185]: Isleniyor
+              - heading "gib-portal.followup" [level=3] [ref=e186]
+              - paragraph [ref=e187]: scheduled-gib-followup
+              - generic [ref=e188]: 23.06.2026 09:00
+        - generic [ref=e189]:
+          - generic [ref=e190]:
+            - generic [ref=e191]:
+              - text: Bugunun odagi
+              - heading "Fatura aksiyonlari" [level=2] [ref=e192]
+            - img [ref=e193]
+          - generic [ref=e196]:
+            - link "76 Bilinen faturasi yok SAFA veya harici eslesme bekleyenler" [ref=e197] [cursor=pointer]:
+              - /url: /orders
+              - generic [ref=e198]: "76"
+              - strong [ref=e199]: Bilinen faturasi yok
+              - generic [ref=e200]: SAFA veya harici eslesme bekleyenler
+            - link "76 Hazir taslak Toplu onay ve fatura kesme akisi" [ref=e201] [cursor=pointer]:
+              - /url: /invoices
+              - generic [ref=e202]: "76"
+              - strong [ref=e203]: Hazir taslak
+              - generic [ref=e204]: Toplu onay ve fatura kesme akisi
+            - link "7 Hata sinyali Basarisiz job ve gonderim denemeleri" [ref=e205] [cursor=pointer]:
+              - /url: /operations
+              - generic [ref=e206]: "7"
+              - strong [ref=e207]: Hata sinyali
+              - generic [ref=e208]: Basarisiz job ve gonderim denemeleri

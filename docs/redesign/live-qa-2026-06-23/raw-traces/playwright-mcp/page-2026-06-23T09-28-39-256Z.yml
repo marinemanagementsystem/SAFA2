@@ -1,0 +1,347 @@
+- generic [active] [ref=e1]:
+  - alert [ref=e2]
+  - main [ref=e3]:
+    - complementary "SAFA navigasyon" [ref=e4]:
+      - link "SAFA overview" [ref=e5] [cursor=pointer]:
+        - /url: /
+        - generic [ref=e6]: S
+        - generic [ref=e7]:
+          - strong [ref=e8]: SAFA
+          - generic [ref=e9]: Fatura Yonetimi
+      - navigation "Ana sayfalar" [ref=e10]:
+        - generic [ref=e11]:
+          - generic [ref=e12]: Islem
+          - link "Genel" [ref=e13] [cursor=pointer]:
+            - /url: /
+            - img [ref=e14]
+            - strong [ref=e18]: Genel
+          - link "Siparisler" [ref=e19] [cursor=pointer]:
+            - /url: /orders
+            - img [ref=e20]
+            - strong [ref=e26]: Siparisler
+          - link "Faturalar" [ref=e27] [cursor=pointer]:
+            - /url: /invoices
+            - img [ref=e28]
+            - strong [ref=e31]: Faturalar
+        - generic [ref=e32]:
+          - generic [ref=e33]: Kurulum
+          - link "Entegrasyonlar" [ref=e34] [cursor=pointer]:
+            - /url: /integrations
+            - img [ref=e35]
+            - strong [ref=e42]: Entegrasyonlar
+          - link "Kayitli Bilgiler" [ref=e43] [cursor=pointer]:
+            - /url: /saved-information
+            - img [ref=e44]
+            - strong [ref=e48]: Kayitli Bilgiler
+          - link "Operasyon" [ref=e49] [cursor=pointer]:
+            - /url: /operations
+            - img [ref=e50]
+            - strong [ref=e53]: Operasyon
+          - link "Ayarlar" [ref=e54] [cursor=pointer]:
+            - /url: /settings
+            - img [ref=e55]
+            - strong [ref=e59]: Ayarlar
+      - generic [ref=e61]:
+        - text: Operasyon kilidi
+        - strong [ref=e62]: Bos arsiv yerine aksiyon
+    - generic [ref=e64]:
+      - region "Fatura operasyon masasi" [ref=e65]:
+        - article [ref=e66]:
+          - generic [ref=e67]:
+            - heading "Fatura Operasyon Masasi" [level=2] [ref=e68]
+            - paragraph [ref=e69]: PDF, GIB, harici fatura ve Trendyol tek ekranda.
+          - generic [ref=e70]:
+            - button "Yenile" [ref=e71] [cursor=pointer]:
+              - img [ref=e72]
+              - text: Yenile
+            - button "e-Arsiv ac" [ref=e77] [cursor=pointer]:
+              - img [ref=e78]
+              - text: e-Arsiv ac
+            - button "Imzalilari sorgula" [ref=e81] [cursor=pointer]:
+              - img [ref=e82]
+              - text: Imzalilari sorgula
+        - list "Fatura yasam dongusu" [ref=e87]:
+          - listitem [ref=e88]:
+            - generic [ref=e89]: "1"
+            - text: Taslak →
+          - listitem [ref=e90]:
+            - generic [ref=e91]: "2"
+            - text: Onay →
+          - listitem [ref=e92]:
+            - generic [ref=e93]: "3"
+            - text: GIB / e-Arsiv Imza →
+          - listitem [ref=e94]:
+            - generic [ref=e95]: "4"
+            - text: PDF Arsiv →
+          - listitem [ref=e96]:
+            - generic [ref=e97]: "5"
+            - text: Harici Esleme →
+          - listitem [ref=e98]:
+            - generic [ref=e99]: "6"
+            - text: Pazaryeri Gonderim
+        - generic [ref=e100]:
+          - img [ref=e101]
+          - generic [ref=e103]:
+            - strong [ref=e104]: PDF arsivi bos cunku resmi fatura henuz olusmadi.
+            - generic [ref=e105]: Taslak, GIB imzasi, harici e-Arsiv ve PDF eksigi ayni satirda izlenir.
+          - generic [ref=e106]: 0 imza · 0 PDF
+        - status [ref=e107]:
+          - generic [ref=e108]:
+            - generic [ref=e109]: Guncel degil
+            - generic [ref=e110]:
+              - strong [ref=e111]: Free-tier otomasyon korumasi
+              - generic [ref=e112]: Canli API otomasyon durumunu henuz dondurmedi.
+          - generic [ref=e114]: Otomasyon durumu alinamadi.
+          - generic [ref=e115]:
+            - generic [ref=e116]: Otomasyon durumu bekleniyor
+            - button "Simdi guncelle" [disabled] [ref=e117]:
+              - img [ref=e118]
+              - text: Simdi guncelle
+        - generic [ref=e123]:
+          - button "Son 7 gun oncelik 0 Operator aksiyonu bekleyen kayit" [ref=e124] [cursor=pointer]:
+            - generic [ref=e125]: Son 7 gun oncelik
+            - strong [ref=e126]: "0"
+            - emphasis [ref=e127]: Operator aksiyonu bekleyen kayit
+          - button "Portal imza bekliyor 0 GIB sorgusu veya portal imzasi gerekli" [ref=e128] [cursor=pointer]:
+            - generic [ref=e129]: Portal imza bekliyor
+            - strong [ref=e130]: "0"
+            - emphasis [ref=e131]: GIB sorgusu veya portal imzasi gerekli
+          - button "PDF arsivi bos 0 Arsive dusmeyen resmi PDF eksikleri" [ref=e132] [cursor=pointer]:
+            - generic [ref=e133]: PDF arsivi bos
+            - strong [ref=e134]: "0"
+            - emphasis [ref=e135]: Arsive dusmeyen resmi PDF eksikleri
+          - button "Harici e-Arsiv eslesti 0 SAFA arsivine alinabilecek kayit" [ref=e136] [cursor=pointer]:
+            - generic [ref=e137]: Harici e-Arsiv eslesti
+            - strong [ref=e138]: "0"
+            - emphasis [ref=e139]: SAFA arsivine alinabilecek kayit
+          - button "Trendyol gonderimi 0 PDF hazir veya pazaryeri hatasi var" [ref=e140] [cursor=pointer]:
+            - generic [ref=e141]: Trendyol gonderimi
+            - strong [ref=e142]: "0"
+            - emphasis [ref=e143]: PDF hazir veya pazaryeri hatasi var
+        - generic [ref=e144]:
+          - complementary [ref=e145]:
+            - generic [ref=e146]:
+              - generic [ref=e147]:
+                - text: Is kuyrugu
+                - heading "Is kuyrugu" [level=2] [ref=e148]
+                - paragraph [ref=e149]: Oncelik kulvarini secerek aksiyona goturur.
+              - generic [ref=e150]: 0 kayit
+            - generic [ref=e151]:
+              - generic [ref=e152]:
+                - generic [ref=e153]:
+                  - img [ref=e154]
+                  - text: Ay
+                - generic [ref=e156]:
+                  - strong [ref=e157]: Haziran 2026
+                  - img [ref=e158]
+              - generic [ref=e160]:
+                - generic [ref=e161]:
+                  - img [ref=e162]
+                  - text: Durum
+                - button "Durum" [ref=e163] [cursor=pointer]:
+                  - strong [ref=e164]: Aksiyon bekleyenler
+                  - generic [ref=e165]: Ac
+              - generic [ref=e166]:
+                - generic [ref=e167]:
+                  - img [ref=e168]
+                  - text: Arama
+                - textbox "Arama" [ref=e171]:
+                  - /placeholder: Fatura, siparis, paket
+            - generic [ref=e172]:
+              - button "PDF arsivi bos 0 Arsive dusmeyen resmi PDF eksikleri" [ref=e173] [cursor=pointer]:
+                - strong [ref=e174]: PDF arsivi bos
+                - generic [ref=e175]: "0"
+                - emphasis [ref=e176]: Arsive dusmeyen resmi PDF eksikleri
+              - button "Portal imza bekliyor 0 GIB sorgusu veya portal imzasi gerekli" [ref=e177] [cursor=pointer]:
+                - strong [ref=e178]: Portal imza bekliyor
+                - generic [ref=e179]: "0"
+                - emphasis [ref=e180]: GIB sorgusu veya portal imzasi gerekli
+              - button "Harici e-Arsiv eslesti 0 SAFA arsivine alinabilecek kayit" [ref=e181] [cursor=pointer]:
+                - strong [ref=e182]: Harici e-Arsiv eslesti
+                - generic [ref=e183]: "0"
+                - emphasis [ref=e184]: SAFA arsivine alinabilecek kayit
+              - button "Trendyol gonderimi 0 PDF hazir veya pazaryeri hatasi var" [ref=e185] [cursor=pointer]:
+                - strong [ref=e186]: Trendyol gonderimi
+                - generic [ref=e187]: "0"
+                - emphasis [ref=e188]: PDF hazir veya pazaryeri hatasi var
+          - article [ref=e189]:
+            - generic [ref=e190]:
+              - generic [ref=e191]:
+                - text: Birlesik fatura takibi
+                - heading "Taslak > GIB > PDF > Pazaryeri" [level=2] [ref=e192]
+                - paragraph [ref=e193]: Tek satirda resmi fatura, harici kayit ve pazaryeri durumu.
+              - button "Son 7 gun eslesenleri uygula" [ref=e195] [cursor=pointer]:
+                - img [ref=e196]
+                - text: Son 7 gun eslesenleri uygula
+            - generic [ref=e199]:
+              - generic [ref=e200]:
+                - generic [ref=e201]:
+                  - img [ref=e202]
+                  - text: Arama
+                - textbox "Arama" [ref=e205]:
+                  - /placeholder: Fatura no, siparis no, paket, musteri ara
+              - generic "Tablo durumu" [ref=e206]:
+                - button "Tumu" [ref=e207] [cursor=pointer]
+                - button "Eksik" [ref=e208] [cursor=pointer]
+                - button "Tamam" [ref=e209] [cursor=pointer]
+              - generic [ref=e210]:
+                - button "Trendyol izi ara" [ref=e211] [cursor=pointer]:
+                  - img [ref=e212]
+                - button "Tekrar eslestir" [ref=e217] [cursor=pointer]:
+                  - img [ref=e218]
+            - generic "Toplu taslak islemleri" [ref=e220]:
+              - generic [ref=e221]:
+                - generic [ref=e222]: Taslak yok
+                - generic [ref=e223]:
+                  - strong [ref=e224]: Secilecek taslak yok
+                  - generic [ref=e225]: Secilebilir taslak yok. Filtreyi degistirin veya senkronizasyon calistirin.
+            - table [ref=e227]:
+              - rowgroup [ref=e228]:
+                - row "Oncelik Kayit Akis GIB / PDF Pazaryeri Tutar" [ref=e229]:
+                  - columnheader "Oncelik" [ref=e230]
+                  - columnheader "Kayit" [ref=e231]
+                  - columnheader "Akis" [ref=e232]
+                  - columnheader "GIB / PDF" [ref=e233]
+                  - columnheader "Pazaryeri" [ref=e234]
+                  - columnheader "Tutar" [ref=e235]
+              - rowgroup [ref=e236]:
+                - row "Henuz fatura hareketi yok Siparis veya e-Arsiv senkronizasyonu calistiginda akis burada gorunur." [ref=e237]:
+                  - cell "Henuz fatura hareketi yok Siparis veya e-Arsiv senkronizasyonu calistiginda akis burada gorunur." [ref=e238]:
+                    - generic [ref=e239]:
+                      - img [ref=e240]
+                      - strong [ref=e243]: Henuz fatura hareketi yok
+                      - paragraph [ref=e244]: Siparis veya e-Arsiv senkronizasyonu calistiginda akis burada gorunur.
+          - article [ref=e245]:
+            - generic [ref=e246]:
+              - generic [ref=e247]:
+                - text: Codex tasarim karari
+                - heading "PDF arsivi tek basina bos ekran degil" [level=2] [ref=e248]
+                - paragraph [ref=e249]: Operator once eksigi gorur; aylik Excel ve ZIP arsivi ikincil kontrol olarak korunur.
+              - generic [ref=e250]:
+                - img [ref=e251]
+                - button "Temizle" [ref=e254] [cursor=pointer]:
+                  - img [ref=e255]
+                  - text: Temizle
+            - generic "Tasarim kararlari" [ref=e258]:
+              - generic [ref=e259]:
+                - strong [ref=e260]: Bos durum yok
+                - generic [ref=e261]: Her bosluk sebep ve aksiyona baglanir.
+              - generic [ref=e262]:
+                - strong [ref=e263]: Tek gercek satir
+                - generic [ref=e264]: Taslak, GIB, PDF ve Trendyol ayni kayitta birlesir.
+              - generic [ref=e265]:
+                - strong [ref=e266]: Operator onceligi
+                - generic [ref=e267]: Son 7 gunde yapilacak isler otomatik uste tasinir.
+            - generic "PDF arsivi filtreleri" [ref=e268]:
+              - generic [ref=e269]:
+                - generic [ref=e270]:
+                  - img [ref=e271]
+                  - text: Aylik arsiv
+                - textbox "Aylik arsiv" [ref=e273]: 2026-06
+              - link "Aylik Excel indir" [ref=e274] [cursor=pointer]:
+                - /url: /api/invoices/monthly-export.xlsx?year=2026&month=6
+                - img [ref=e275]
+                - text: Aylik Excel indir
+              - button "ZIP olustur/indir" [ref=e278] [cursor=pointer]:
+                - img [ref=e279]
+                - text: ZIP olustur/indir
+              - generic [ref=e282]:
+                - generic [ref=e283]:
+                  - img [ref=e284]
+                  - text: Arama
+                - textbox "Arama" [ref=e287]:
+                  - /placeholder: Fatura no, siparis, paket
+              - generic [ref=e288]:
+                - generic [ref=e289]:
+                  - img [ref=e290]
+                  - text: Durum
+                - combobox "Durum" [ref=e291]:
+                  - option "Tum faturalar" [selected]
+              - generic [ref=e292]:
+                - generic [ref=e293]:
+                  - img [ref=e294]
+                  - text: Tarih
+                - combobox "Tarih" [ref=e295]:
+                  - option "Tum zamanlar" [selected]
+                  - option "Bugun kesilen"
+                  - option "Son 7 gun"
+                  - option "Son 30 gun"
+            - generic [ref=e296]:
+              - generic [ref=e297]:
+                - generic [ref=e298]:
+                  - heading "Bugun kesilenler" [level=3] [ref=e299]
+                  - generic [ref=e300]: "0"
+                - generic [ref=e302]: Bu bolumde fatura yok.
+              - generic [ref=e303]:
+                - generic [ref=e304]:
+                  - heading "Onceki faturalar" [level=3] [ref=e305]
+                  - generic [ref=e306]: "0"
+                - generic [ref=e308]: Bu bolumde fatura yok.
+      - generic [ref=e309]:
+        - generic [ref=e310]:
+          - generic [ref=e311]:
+            - text: Harici fatura sorgulama
+            - heading "0 dis fatura kaydi" [level=2] [ref=e312]
+            - paragraph [ref=e313]: e-Arsiv Portal'dan canli sorgula, Trendyol siparis verisinde fatura izi ara veya gercek dis fatura listesini aktar. Eslesen kayitlar siparis ekraninda "Harici bulundu" olarak gorunur.
+          - generic [ref=e314]:
+            - generic [ref=e315]: 0 eslesme
+            - button "Temizle" [ref=e316] [cursor=pointer]:
+              - img [ref=e317]
+              - text: Temizle
+        - generic [ref=e320]:
+          - generic [ref=e321]:
+            - generic [ref=e322]: e-Arsiv kapsam
+            - strong [ref=e323]: Son 7 gun
+          - button "Son 7 gun imzalilarini kontrol et" [ref=e324] [cursor=pointer]:
+            - img [ref=e325]
+            - text: Son 7 gun imzalilarini kontrol et
+          - button "Son 7 gun guvenli olanlari uygula" [ref=e330] [cursor=pointer]:
+            - img [ref=e331]
+            - text: Son 7 gun guvenli olanlari uygula
+          - button "Trendyol fatura izi ara" [ref=e334] [cursor=pointer]:
+            - img [ref=e335]
+            - text: Trendyol fatura izi ara
+          - button "Tekrar eslestir" [ref=e340] [cursor=pointer]:
+            - img [ref=e341]
+            - text: Tekrar eslestir
+        - generic [ref=e343]:
+          - generic [ref=e344]:
+            - generic [ref=e345]:
+              - generic [ref=e346]: Kaynak
+              - combobox "Kaynak" [ref=e347]:
+                - option "e-Arsiv Portal" [selected]
+                - option "Trendyol"
+                - option "Diger gercek kaynak"
+            - generic [ref=e348]:
+              - generic [ref=e349]: Gercek fatura listesi JSON veya CSV
+              - textbox "Gercek fatura listesi JSON veya CSV" [ref=e350]:
+                - /placeholder: faturaNo;tarih;alici;vknTckn;tutar;siparisNo
+            - button "Listeyi al ve eslestir" [disabled] [ref=e351]:
+              - img [ref=e352]
+              - text: Listeyi al ve eslestir
+          - generic [ref=e355]:
+            - generic "Harici fatura filtreleri" [ref=e356]:
+              - generic [ref=e357]:
+                - generic [ref=e358]:
+                  - img [ref=e359]
+                  - text: Arama
+                - textbox "Arama" [ref=e362]:
+                  - /placeholder: Fatura no, alici, siparis, paket
+              - generic [ref=e363]:
+                - generic [ref=e364]:
+                  - img [ref=e365]
+                  - text: Kaynak
+                - combobox "Kaynak" [ref=e366]:
+                  - option "Tum kaynaklar" [selected]
+                  - option "e-Arsiv"
+                  - option "Trendyol"
+                  - option "Manuel"
+              - generic [ref=e367]:
+                - generic [ref=e368]:
+                  - img [ref=e369]
+                  - text: Eslesme
+                - combobox "Eslesme" [ref=e370]:
+                  - option "Tum kayitlar" [selected]
+                  - option "Eslesenler"
+                  - option "Acik kalanlar"
+            - generic [ref=e372]: Harici fatura kaydi yok.

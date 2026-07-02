@@ -13,3 +13,9 @@ storage
 apps/web/out
 apps/api/generated
 apps/api/prisma/dev.db
+
+# Local QA/tool artifacts should be archived under docs/ before committing.
+/.playwright-mcp/
+/.superpowers/
+/output/
+/faz*.png

@@ -1,0 +1,156 @@
+- generic [active] [ref=e1]:
+  - alert [ref=e7]
+  - main [ref=e8]:
+    - complementary "SAFA navigasyon" [ref=e9]:
+      - link "SAFA overview" [ref=e10] [cursor=pointer]:
+        - /url: /
+        - generic [ref=e11]: S
+        - generic [ref=e12]:
+          - strong [ref=e13]: SAFA
+          - generic [ref=e14]: Commerce OS
+      - navigation "Ana sayfalar" [ref=e15]:
+        - generic [ref=e16]:
+          - generic [ref=e17]: Islem
+          - link "Genel Canli operasyon ozeti" [ref=e18] [cursor=pointer]:
+            - /url: /
+            - img [ref=e19]
+            - generic [ref=e22]:
+              - strong [ref=e23]: Genel
+              - generic [ref=e24]: Canli operasyon ozeti
+          - link "Siparisler Paket ve siparis takibi" [ref=e25] [cursor=pointer]:
+            - /url: /orders
+            - img [ref=e26]
+            - generic [ref=e31]:
+              - strong [ref=e32]: Siparisler
+              - generic [ref=e33]: Paket ve siparis takibi
+          - link "Faturalar Taslak ve fatura akisi" [ref=e34] [cursor=pointer]:
+            - /url: /invoices
+            - img [ref=e35]
+            - generic [ref=e37]:
+              - strong [ref=e38]: Faturalar
+              - generic [ref=e39]: Taslak ve fatura akisi
+        - generic [ref=e40]:
+          - generic [ref=e41]: Kurulum
+          - link "Entegrasyonlar Pazaryeri ve kargo baglantilari" [ref=e42] [cursor=pointer]:
+            - /url: /integrations
+            - img [ref=e43]
+            - generic [ref=e49]:
+              - strong [ref=e50]: Entegrasyonlar
+              - generic [ref=e51]: Pazaryeri ve kargo baglantilari
+          - link "Kayitli Bilgiler Sifreli profil kasasi" [ref=e52] [cursor=pointer]:
+            - /url: /saved-information
+            - img [ref=e53]
+            - generic [ref=e56]:
+              - strong [ref=e57]: Kayitli Bilgiler
+              - generic [ref=e58]: Sifreli profil kasasi
+          - link "Operasyon Kuyruk, hata ve sync izleme" [ref=e59] [cursor=pointer]:
+            - /url: /operations
+            - img [ref=e60]
+            - generic [ref=e62]:
+              - strong [ref=e63]: Operasyon
+              - generic [ref=e64]: Kuyruk, hata ve sync izleme
+          - link "Ayarlar Runtime ve saglayici durumu" [ref=e65] [cursor=pointer]:
+            - /url: /settings
+            - img [ref=e66]
+            - generic [ref=e69]:
+              - strong [ref=e70]: Ayarlar
+              - generic [ref=e71]: Runtime ve saglayici durumu
+      - generic [ref=e73]:
+        - text: Baglanti skoru
+        - strong [ref=e74]: 0/2 canli
+    - generic [ref=e76]:
+      - generic [ref=e77]:
+        - generic [ref=e78]:
+          - heading "Ayarlar" [level=1] [ref=e79]
+          - paragraph [ref=e80]: Runtime, saglayici ve saklama durumunu kontrol et.
+        - generic "Ana islemler" [ref=e81]:
+          - button "Yenile" [disabled] [ref=e82]:
+            - img [ref=e83]
+            - text: Yenile
+          - button "Trendyol cek" [ref=e85] [cursor=pointer]:
+            - img [ref=e86]
+            - text: Trendyol cek
+          - group [ref=e89]:
+            - generic "Diger islemler" [ref=e90] [cursor=pointer]:
+              - img [ref=e91]
+              - text: Diger
+      - status [ref=e95]:
+        - generic [ref=e96]:
+          - img [ref=e97]
+          - generic [ref=e107]: Canli entegrasyon modu acik. Sahte veri uretilmez; baglanti yoksa islem hata verir.
+        - generic [ref=e108]: Canli mod kontrol ediliyor
+      - generic [ref=e109]:
+        - generic [ref=e110]:
+          - article [ref=e111]:
+            - generic [ref=e112]:
+              - generic [ref=e113]:
+                - text: Runtime
+                - heading "Calisma modu" [level=2] [ref=e114]
+              - img [ref=e115]
+            - generic [ref=e126]:
+              - generic [ref=e127]:
+                - img [ref=e129]
+                - generic [ref=e140]:
+                  - text: Backend API
+                  - strong [ref=e141]: Bagli
+              - generic [ref=e142]:
+                - img [ref=e144]
+                - generic [ref=e147]:
+                  - text: Entegrasyon modu
+                  - strong [ref=e148]: Canli mod kontrol ediliyor
+              - generic [ref=e149]:
+                - img [ref=e151]
+                - generic [ref=e157]:
+                  - text: Fatura saglayici
+                  - strong [ref=e158]: Bekleniyor
+              - generic [ref=e159]:
+                - img [ref=e161]
+                - generic [ref=e165]:
+                  - text: Yukleme durumu
+                  - strong [ref=e166]: Yenileniyor
+              - generic [ref=e167]:
+                - img [ref=e169]
+                - generic [ref=e173]:
+                  - text: Saklama dizini
+                  - strong [ref=e174]: ./storage
+          - article [ref=e175]:
+            - generic [ref=e176]:
+              - generic [ref=e177]:
+                - text: Saglik
+                - heading "Baglanti durumu" [level=2] [ref=e178]
+              - img [ref=e179]
+            - generic [ref=e185]:
+              - generic [ref=e186]:
+                - img [ref=e188]
+                - generic [ref=e194]:
+                  - text: Trendyol
+                  - strong [ref=e195]: Canli bilgi bekleniyor
+              - generic [ref=e196]:
+                - img [ref=e198]
+                - generic [ref=e201]:
+                  - text: GIB e-Arsiv Portal
+                  - strong [ref=e202]: Portal bilgisi bekleniyor
+              - generic [ref=e203]:
+                - img [ref=e205]
+                - generic [ref=e216]:
+                  - text: GIB direct
+                  - strong [ref=e217]: Canli yetki ve imza bekleniyor
+              - generic [ref=e218]:
+                - img [ref=e220]
+                - generic [ref=e224]:
+                  - text: Trendyol API
+                  - strong [ref=e225]: API bilgileri henuz tanimli degil
+        - generic [ref=e226]:
+          - generic [ref=e228]:
+            - text: Platform siniri
+            - heading "Ilk faz kararları" [level=2] [ref=e229]
+          - generic [ref=e230]:
+            - generic [ref=e231]:
+              - strong [ref=e232]: Yeni pazaryeri ve kargo firmalari
+              - paragraph [ref=e233]: Frontend adapter katalogunda gorunur; canli backend cagri yapmaz.
+            - generic [ref=e234]:
+              - strong [ref=e235]: Mevcut yetenekler
+              - paragraph [ref=e236]: Trendyol sync, GIB portal, taslak onay, fatura kesme ve PDF akislari korunur.
+            - generic [ref=e237]:
+              - strong [ref=e238]: Auth kapsami
+              - paragraph [ref=e239]: Yerel operasyon paneli mantigi devam eder; role/auth modeli bu faza dahil degildir.

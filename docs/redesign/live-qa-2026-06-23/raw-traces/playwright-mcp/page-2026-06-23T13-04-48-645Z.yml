@@ -1,0 +1,110 @@
+- generic [active] [ref=e1]:
+  - alert [ref=e7]
+  - main [ref=e8]:
+    - complementary "SAFA navigasyon" [ref=e9]:
+      - link "SAFA overview" [ref=e10] [cursor=pointer]:
+        - /url: /
+        - generic [ref=e11]: S
+        - generic [ref=e12]:
+          - strong [ref=e13]: SAFA
+          - generic [ref=e14]: Commerce OS
+      - navigation "Ana sayfalar" [ref=e15]:
+        - generic [ref=e16]:
+          - generic [ref=e17]: Islem
+          - link "Genel Canli operasyon ozeti" [ref=e18] [cursor=pointer]:
+            - /url: /
+            - img [ref=e19]
+            - generic [ref=e22]:
+              - strong [ref=e23]: Genel
+              - generic [ref=e24]: Canli operasyon ozeti
+          - link "Siparisler Paket ve siparis takibi" [ref=e25] [cursor=pointer]:
+            - /url: /orders
+            - img [ref=e26]
+            - generic [ref=e31]:
+              - strong [ref=e32]: Siparisler
+              - generic [ref=e33]: Paket ve siparis takibi
+          - link "Faturalar Taslak ve fatura akisi" [ref=e34] [cursor=pointer]:
+            - /url: /invoices
+            - img [ref=e35]
+            - generic [ref=e37]:
+              - strong [ref=e38]: Faturalar
+              - generic [ref=e39]: Taslak ve fatura akisi
+        - generic [ref=e40]:
+          - generic [ref=e41]: Kurulum
+          - link "Entegrasyonlar Pazaryeri ve kargo baglantilari" [ref=e42] [cursor=pointer]:
+            - /url: /integrations
+            - img [ref=e43]
+            - generic [ref=e49]:
+              - strong [ref=e50]: Entegrasyonlar
+              - generic [ref=e51]: Pazaryeri ve kargo baglantilari
+          - link "Kayitli Bilgiler Sifreli profil kasasi" [ref=e52] [cursor=pointer]:
+            - /url: /saved-information
+            - img [ref=e53]
+            - generic [ref=e56]:
+              - strong [ref=e57]: Kayitli Bilgiler
+              - generic [ref=e58]: Sifreli profil kasasi
+          - link "Operasyon Kuyruk, hata ve sync izleme" [ref=e59] [cursor=pointer]:
+            - /url: /operations
+            - img [ref=e60]
+            - generic [ref=e62]:
+              - strong [ref=e63]: Operasyon
+              - generic [ref=e64]: Kuyruk, hata ve sync izleme
+          - link "Ayarlar Runtime ve saglayici durumu" [ref=e65] [cursor=pointer]:
+            - /url: /settings
+            - img [ref=e66]
+            - generic [ref=e69]:
+              - strong [ref=e70]: Ayarlar
+              - generic [ref=e71]: Runtime ve saglayici durumu
+      - generic [ref=e73]:
+        - text: Baglanti skoru
+        - strong [ref=e74]: 0/2 canli
+    - generic [ref=e76]:
+      - generic [ref=e77]:
+        - generic [ref=e78]:
+          - heading "Kayitli bilgiler" [level=1] [ref=e79]
+          - paragraph [ref=e80]: Profil kasasindan API ve portal bilgilerini formlara aktar.
+        - generic "Ana islemler" [ref=e81]:
+          - button "Yenile" [disabled] [ref=e82]:
+            - img [ref=e83]
+            - text: Yenile
+          - button "Trendyol cek" [ref=e85] [cursor=pointer]:
+            - img [ref=e86]
+            - text: Trendyol cek
+          - group [ref=e89]:
+            - generic "Diger islemler" [ref=e90] [cursor=pointer]:
+              - img [ref=e91]
+              - text: Diger
+      - status [ref=e95]:
+        - generic [ref=e96]:
+          - img [ref=e97]
+          - generic [ref=e107]: Canli entegrasyon modu acik. Sahte veri uretilmez; baglanti yoksa islem hata verir.
+        - generic [ref=e108]: Canli mod kontrol ediliyor
+      - generic [ref=e110]:
+        - generic [ref=e111]:
+          - generic [ref=e112]:
+            - text: Kasa kilitli
+            - heading "Kayitli bilgileri ac" [level=2] [ref=e113]
+            - paragraph [ref=e114]: 2 kasa kayitli. Acmak istediginiz kasayi secip sifresini girin.
+          - img [ref=e115]
+        - generic [ref=e118]:
+          - textbox [ref=e119]: Kasa 2
+          - generic [ref=e120]:
+            - generic [ref=e121]: Kasa sec
+            - combobox "Kasa sec" [ref=e122]:
+              - option "Kasa 2" [selected]
+              - option "Varsayilan kasa"
+          - generic [ref=e123]:
+            - generic [ref=e124]: Kasa sifresi
+            - textbox "Kasa sifresi" [ref=e125]
+          - generic [ref=e126]:
+            - button "Kasayi ac" [ref=e127] [cursor=pointer]:
+              - img [ref=e128]
+              - text: Kasayi ac
+            - button "Yeni kasa" [ref=e132] [cursor=pointer]:
+              - img [ref=e133]
+              - text: Yeni kasa
+          - generic [ref=e134]:
+            - paragraph [ref=e135]: Kasa sifresini unuttuysaniz sadece secili kasa sifirlanir. Diger kasalar ve uygulama girisi etkilenmez.
+            - button "Secili kasayi sifirla" [ref=e136] [cursor=pointer]:
+              - img [ref=e137]
+              - text: Secili kasayi sifirla
